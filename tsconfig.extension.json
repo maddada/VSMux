@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "types": ["node"],
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": false,
+    "moduleDetection": "auto",
+    "noEmit": false,
+    "erasableSyntaxOnly": false,
+    "outDir": "out",
+    "rootDir": ".",
+    "sourceMap": true
+  },
+  "include": ["extension", "shared"],
+  "exclude": ["node_modules", ".vscode-test", "src"]
+}

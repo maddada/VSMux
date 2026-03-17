@@ -1,0 +1,180 @@
+:root {
+  --container-padding: 24px;
+  --surface-border: var(--vscode-widget-border, var(--vscode-editorWidget-border, transparent));
+  --surface-muted: var(--vscode-descriptionForeground);
+  --surface-background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --card-background: var(--vscode-input-background);
+  --shadow-color: rgba(0, 0, 0, 0.18);
+  --accent: var(--vscode-focusBorder);
+}
+
+body {
+  min-height: 100vh;
+  padding: var(--container-padding);
+  color: var(--vscode-foreground);
+  font-size: var(--vscode-font-size);
+  font-weight: var(--vscode-font-weight);
+  font-family: var(--vscode-font-family);
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--accent) 18%, transparent) 0%,
+      transparent 40%
+    ),
+    linear-gradient(180deg, var(--vscode-editor-background) 0%, var(--surface-background) 100%);
+}
+
+body[data-cat-theme="coding"] {
+  --accent: var(--vscode-terminal-ansiGreen, var(--vscode-focusBorder));
+}
+
+body[data-cat-theme="compiling"] {
+  --accent: var(--vscode-terminal-ansiYellow, var(--vscode-focusBorder));
+}
+
+body[data-cat-theme="testing"] {
+  --accent: var(--vscode-terminal-ansiBlue, var(--vscode-focusBorder));
+}
+
+body > * {
+  margin-block-start: 0;
+  margin-block-end: 0;
+}
+
+*:focus {
+  outline-color: var(--vscode-focusBorder) !important;
+}
+
+a {
+  color: var(--vscode-textLink-foreground);
+}
+
+a:hover,
+a:active {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+code {
+  font-size: var(--vscode-editor-font-size);
+  font-family: var(--vscode-editor-font-family);
+}
+
+.app {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid var(--surface-border);
+  border-top: 4px solid var(--accent);
+  border-radius: 24px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, var(--vscode-editor-background)) 0%,
+      var(--vscode-editor-background) 32%
+    ),
+    var(--vscode-editor-background);
+  box-shadow: 0 22px 50px var(--shadow-color);
+}
+
+.hero,
+.actions {
+  display: grid;
+  gap: 12px;
+}
+
+.eyebrow,
+.label {
+  color: var(--surface-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(2rem, 6vw, 3rem);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.subtitle,
+.hint {
+  color: var(--surface-muted);
+  line-height: 1.6;
+}
+
+.cat-gif {
+  display: block;
+  width: min(100%, 360px);
+  margin: 28px auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 20px;
+  background: var(--card-background);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  padding: 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  background: var(--card-background);
+}
+
+.stat strong {
+  display: block;
+  margin-top: 10px;
+  font-size: clamp(1.35rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+button {
+  border: none;
+  width: fit-content;
+  padding: 10px 16px;
+  text-align: center;
+  outline: 1px solid transparent;
+  outline-offset: 2px !important;
+  border-radius: 999px;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+button:hover {
+  cursor: pointer;
+  background: var(--vscode-button-hoverBackground);
+}
+
+button:focus {
+  outline-color: var(--vscode-focusBorder);
+}
+
+button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+
+button.secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .app {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .cat-gif {
+    margin: 24px auto;
+  }
+}
