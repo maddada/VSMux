@@ -904,7 +904,7 @@ button:disabled {
   opacity: 0;
   pointer-events: none;
   scale: 1;
-  translate: 4px -50%;
+  translate: -8px -50%;
   z-index: 2;
   transition:
     opacity 160ms ease,

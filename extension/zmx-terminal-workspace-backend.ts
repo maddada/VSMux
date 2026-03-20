@@ -34,6 +34,10 @@ import {
 } from "./terminal-workspace-helpers";
 import { ensureZmxBinary } from "./zmx-binary";
 import { parseZmxListSessionNames, toZmxSessionName } from "./zmx-session-utils";
+import {
+  createVisibleSessionReconcilePlan,
+  type VisibleSessionReconcilePlan,
+} from "../shared/session-grid-reconcile-plan";
 
 const ZMX_POLL_INTERVAL_MS = 750;
 const AGENT_STATE_FILE_NAME = "agent-state";
@@ -265,13 +269,16 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     snapshot: SessionGridSnapshot,
     preserveFocus = false,
   ): Promise<void> {
-    this.lastVisibleSnapshot = {
-      ...snapshot,
-      sessions: [...snapshot.sessions],
-      visibleSessionIds: [...snapshot.visibleSessionIds],
-    };
+    const previousSnapshot = this.lastVisibleSnapshot;
+    this.lastVisibleSnapshot = cloneSnapshot(snapshot);
 
     await this.runWithoutActivationEvents(async () => {
+      const plan = createVisibleSessionReconcilePlan(previousSnapshot, snapshot);
+      if (plan.strategy === "incremental" && this.canIncrementallyReconcile(previousSnapshot)) {
+        await this.reconcileVisibleTerminalsIncrementally(snapshot, plan, preserveFocus);
+        return;
+      }
+
       await this.reconcileVisibleTerminalsByRecreatingProjections(snapshot, preserveFocus);
     });
   }
@@ -288,7 +295,10 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       ),
     };
 
-    await this.reconcileVisibleTerminals(snapshot, true);
+    this.lastVisibleSnapshot = cloneSnapshot(snapshot);
+    await this.runWithoutActivationEvents(async () => {
+      await this.reconcileVisibleTerminalsByRecreatingProjections(snapshot, true);
+    });
   }
 
   public async restartSession(sessionRecord: SessionRecord): Promise<TerminalSessionSnapshot> {
@@ -342,6 +352,85 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       }
 
       await this.createProjection(sessionRecord, index, getSessionTabTitle(sessionRecord));
+    }
+
+    this.changeSessionsEmitter.fire();
+
+    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
+    if (focusedSessionId) {
+      await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
+    }
+  }
+
+  private canIncrementallyReconcile(snapshot: SessionGridSnapshot | undefined): boolean {
+    if (!snapshot) {
+      return false;
+    }
+
+    if (this.projections.size !== snapshot.visibleSessionIds.length) {
+      return false;
+    }
+
+    if (snapshot.visibleSessionIds.some((sessionId) => !this.projections.has(sessionId))) {
+      return false;
+    }
+
+    return this.canReuseVisibleLayout(snapshot);
+  }
+
+  private async reconcileVisibleTerminalsIncrementally(
+    snapshot: SessionGridSnapshot,
+    plan: Extract<VisibleSessionReconcilePlan, { strategy: "incremental" }>,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    if (!plan.hasChanges) {
+      const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
+      if (focusedSessionId) {
+        await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
+      }
+      return;
+    }
+
+    const sessionRecordById = new Map(
+      snapshot.sessions.map((session) => [session.sessionId, session]),
+    );
+    const outgoingProjectionBySessionId = new Map<string, SessionProjection>();
+
+    for (const outgoingSlot of plan.outgoingSlots) {
+      const projection = this.projections.get(outgoingSlot.sessionId);
+      if (projection) {
+        outgoingProjectionBySessionId.set(outgoingSlot.sessionId, projection);
+      }
+    }
+
+    for (const incomingSlot of plan.incomingSlots) {
+      const sessionRecord = sessionRecordById.get(incomingSlot.sessionId);
+      if (!sessionRecord) {
+        continue;
+      }
+
+      if (!(await this.options.ensureShellSpawnAllowed())) {
+        this.sessions.set(
+          sessionRecord.sessionId,
+          createBlockedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
+        );
+        continue;
+      }
+
+      await this.createProjection(
+        sessionRecord,
+        incomingSlot.slotIndex,
+        getSessionTabTitle(sessionRecord),
+      );
+    }
+
+    for (const outgoingSlot of plan.outgoingSlots) {
+      const outgoingProjection = outgoingProjectionBySessionId.get(outgoingSlot.sessionId);
+      if (!outgoingProjection) {
+        continue;
+      }
+
+      this.disposeProjectionTerminal(outgoingSlot.sessionId, outgoingProjection.terminal);
     }
 
     this.changeSessionsEmitter.fire();
@@ -470,9 +559,16 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       return;
     }
 
-    this.terminalToSessionId.delete(projection.terminal);
-    projection.terminal.dispose();
-    this.projections.delete(sessionId);
+    this.disposeProjectionTerminal(sessionId, projection.terminal);
+  }
+
+  private disposeProjectionTerminal(sessionId: string, terminal: vscode.Terminal): void {
+    this.terminalToSessionId.delete(terminal);
+    terminal.dispose();
+
+    if (this.projections.get(sessionId)?.terminal === terminal) {
+      this.projections.delete(sessionId);
+    }
   }
 
   private getRequiredZmxBinaryPath(): string {
@@ -724,6 +820,14 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       { mode: 0o600 },
     );
   }
+}
+
+function cloneSnapshot(snapshot: SessionGridSnapshot): SessionGridSnapshot {
+  return {
+    ...snapshot,
+    sessions: [...snapshot.sessions],
+    visibleSessionIds: [...snapshot.visibleSessionIds],
+  };
 }
 
 function getExperimentalZmxActionDelayMs(): number {
