@@ -1,12 +1,12 @@
 # ZMX Usage Notes
 
-This file explains how VSmux uses `zmx` on macOS/Linux, and how to
-inspect or attach to those sessions from a normal terminal outside VS Code.
+This file explains how VSmux uses `zmx` on supported platforms today, and how
+to inspect or attach to those sessions from a normal terminal outside VS Code.
 
 ## What VSmux Is Doing
 
-On macOS/Linux, VSmux uses `zmx` as the persistent terminal session
-backend.
+VSmux uses `zmx` as its persistent terminal session backend on supported
+platforms today.
 
 That means:
 

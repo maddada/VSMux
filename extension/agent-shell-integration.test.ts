@@ -44,9 +44,25 @@ describe("detectCodexLifecycleEventFromLogLine", () => {
     expect(eventType).toBe("start");
   });
 
+  test("should detect nested Codex task start events from payload.msg", () => {
+    const eventType = detectCodexLifecycleEventFromLogLine(
+      '{"ts":"2026-03-19T14:03:20.996Z","dir":"to_tui","kind":"codex_event","payload":{"id":"019d0668-7023-7963-8eb3-3e26c95c76ea","msg":{"type":"task_started","turn_id":"019d0668-7023-7963-8eb3-3e26c95c76ea"}}}',
+    );
+
+    expect(eventType).toBe("start");
+  });
+
   test("should detect current Codex task completion events", () => {
     const eventType = detectCodexLifecycleEventFromLogLine(
       '{"timestamp":"2026-03-02T22:59:37.361Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"019cb0c7-25ec-7582-908d-61b59ecdd86d"}}',
+    );
+
+    expect(eventType).toBe("stop");
+  });
+
+  test("should detect nested Codex abort events as completion", () => {
+    const eventType = detectCodexLifecycleEventFromLogLine(
+      '{"ts":"2026-03-19T14:03:24.883Z","dir":"to_tui","kind":"codex_event","payload":{"id":"019d0668-7023-7963-8eb3-3e26c95c76ea","msg":{"type":"turn_aborted","turn_id":"019d0668-7023-7963-8eb3-3e26c95c76ea","reason":"interrupted"}}}',
     );
 
     expect(eventType).toBe("stop");

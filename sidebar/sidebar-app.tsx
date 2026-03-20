@@ -393,6 +393,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                       stroke={1.8}
                     />
                   </ToolbarIconButton>
+                  <div
+                    aria-hidden="true"
+                    className="toolbar-divider"
+                    data-active={String(serverState.hud.isFocusModeActive)}
+                  />
                   {MODE_OPTIONS.map((mode) => (
                     <ModeButton
                       isDimmed={serverState.hud.isFocusModeActive}
@@ -462,9 +467,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
             </button>
           </div>
         </section>
-        <section className="card">
-          <div className="eyebrow" data-empty-space-blocking="true">
-            Groups
+        <section className="session-groups-panel">
+          <div className="section-titlebar" data-empty-space-blocking="true">
+            <div aria-hidden="true" className="section-titlebar-line" />
+            <span className="section-titlebar-label">Sessions</span>
+            <div aria-hidden="true" className="section-titlebar-line" />
           </div>
           <DragDropProvider onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
             <div className="group-list">
@@ -494,7 +501,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
             >
               {draggedSession ? (
                 <div
-                  className="session session-drag-overlay"
+                  className="session-frame"
                   data-activity={draggedSession.activity}
                   data-focused={String(draggedSession.isFocused)}
                   data-running={String(draggedSession.isRunning)}
@@ -505,11 +512,20 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                       : undefined
                   }
                 >
-                  <SessionCardContent
-                    session={draggedSession}
-                    showCloseButton={false}
-                    showHotkeys={serverState.hud.showHotkeysOnSessionCards}
-                  />
+                  <div
+                    className="session session-drag-overlay"
+                    data-activity={draggedSession.activity}
+                    data-focused={String(draggedSession.isFocused)}
+                    data-running={String(draggedSession.isRunning)}
+                    data-visible={String(draggedSession.isVisible)}
+                  >
+                    <SessionCardContent
+                      session={draggedSession}
+                      showCloseButton={false}
+                      showHotkeys={serverState.hud.showHotkeysOnSessionCards}
+                    />
+                  </div>
+                  <div aria-hidden className="session-status-dot" />
                 </div>
               ) : null}
             </DragOverlay>
@@ -618,7 +634,7 @@ function ModeButton({ isDimmed, mode, viewMode, visibleCount, vscode }: ModeButt
       ariaLabel={mode.tooltip}
       isDisabled={isDisabled}
       isDimmed={isDimmed}
-      isSelected={viewMode === mode.viewMode}
+      isSelected={!isDimmed && viewMode === mode.viewMode}
       onClick={() => {
         vscode.postMessage({ type: "setViewMode", viewMode: mode.viewMode });
       }}

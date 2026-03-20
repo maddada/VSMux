@@ -154,6 +154,12 @@ describe("normalizeSessionGridSnapshot", () => {
 });
 
 describe("session shortcut labels", () => {
+  test("should generate single-word default aliases", () => {
+    expect(createSessionAlias(1, 0)).toMatch(/^\S+$/);
+    expect(createSessionAlias(2, 1)).toMatch(/^\S+$/);
+    expect(createSessionAlias(3, 2)).toMatch(/^\S+$/);
+  });
+
   test("should format per-session shortcut text from the slot index", () => {
     expect(getSessionShortcutLabel(0, "mac")).toBe("⌘⌥1");
     expect(getSessionShortcutLabel(5, "mac")).toBe("⌘⌥6");

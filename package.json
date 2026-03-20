@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "VSmux - A VS Code extension",
-  "icon": "media/VSmux-marketplace-icon.png",
   "categories": [
     "Other"
   ],
@@ -21,7 +20,7 @@
   ],
   "main": "./out/extension/extension.js",
   "scripts": {
-    "vscode:prepublish": "vp run sidebar:build && tsc -p ./tsconfig.extension.json && ./scripts/copy-ruspty-native.zsh",
+    "vscode:prepublish": "vp run sidebar:build && tsc -p ./tsconfig.extension.json",
     "sidebar:build": "vp build --config vite.sidebar.config.ts",
     "storybook": "vp exec storybook dev -p 6006 --no-open",
     "storybook:build": "vp exec storybook build",
@@ -38,7 +37,6 @@
   "dependencies": {
     "@base-ui/react": "^1.3.0",
     "@dnd-kit/react": "^0.3.2",
-    "@replit/ruspty": "^3.6.0",
     "@tabler/icons-react": "^3.40.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
@@ -212,12 +210,14 @@
       "title": "VSmux",
       "properties": {
         "VSmux.backgroundSessionTimeoutMinutes": {
+          "title": "Background Session Timeout Minutes",
           "type": "number",
           "minimum": 0,
           "default": 5,
           "description": "How long detached background sessions stay alive after the last VSmux window disconnects. Set to 0 to keep sessions alive until they exit or are explicitly closed."
         },
         "VSmux.sidebarTheme": {
+          "title": "Sidebar Theme",
           "type": "string",
           "default": "auto",
           "enum": [
@@ -262,26 +262,38 @@
           "description": "Theme preset used by the VSmux sidebar app. Auto follows the active VS Code light or dark theme."
         },
         "VSmux.debuggingMode": {
+          "title": "Debugging Mode",
           "type": "boolean",
           "default": false,
           "description": "Show debugging UI such as the active terminal backend indicator in the status bar."
         },
         "VSmux.zmxBinaryPathOverride": {
+          "title": "Zmx Binary Path Override",
           "type": "string",
           "default": "",
           "description": "Absolute path to a custom zmx binary. When set, VSmux uses this binary instead of downloading the pinned upstream zmx release."
         },
+        "VSmux.experimentalZmxActionDelayMs": {
+          "title": "Experimental Zmx Action Delay (ms)",
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Experimental zmx debug setting: add this many milliseconds of delay before each VSmux terminal UI action. Set to 1000 to slow swaps down by 1 second per step so you can inspect layout behavior."
+        },
         "VSmux.showCloseButtonOnSessionCards": {
+          "title": "Show Close Button On Session Cards",
           "type": "boolean",
           "default": false,
           "description": "Show close button on session cards. You can always cmd + click or middle click on a card to close it."
         },
         "VSmux.showHotkeysOnSessionCards": {
+          "title": "Show Hotkeys On Session Cards",
           "type": "boolean",
           "default": false,
           "description": "Show hotkey labels on session cards all the time instead of only revealing them when you hover a card."
         },
         "VSmux.completionSound": {
+          "title": "Completion Sound",
           "type": "string",
           "default": "ping",
           "enum": [
@@ -311,6 +323,7 @@
           "description": "Sound played when an agent finishes and the per-project bell is enabled in the VSmux sidebar."
         },
         "VSmux.sendRenameCommandOnSidebarRename": {
+          "title": "Send Rename Command On Sidebar Rename",
           "type": "boolean",
           "default": true,
           "description": "When renaming a session from the sidebar, also stage `/rename <new name>` in that terminal and focus it without pressing Enter."
@@ -465,6 +478,7 @@
     "onStartupFinished",
     "onView:VSmux.sessions"
   ],
+  "icon": "media/VSmux-marketplace-icon.png",
   "engines": {
     "vscode": "^1.110.0"
   },

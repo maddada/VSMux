@@ -188,17 +188,17 @@ export function extractTerminalTextTailFromVtHistory(history: string): string | 
   return normalizePersistedSessionValue(strippedHistory.slice(-VT_TEXT_ACTIVITY_TAIL_LENGTH));
 }
 
-export function hasCodexWorkingStatusInVtHistory(
-  history: string,
-  title?: string,
-  agentName?: string,
-): boolean {
-  const normalizedTitle = title?.trim().toLowerCase();
-  const normalizedAgentName = agentName?.trim().toLowerCase();
-  if (!normalizedTitle?.includes("codex") && normalizedAgentName !== "codex") {
-    return false;
+export function extractClaudeCodeTitleFromVtHistory(history: string): string | undefined {
+  const tailText = extractTerminalTextTailFromVtHistory(history);
+  if (!tailText) {
+    return undefined;
   }
 
+  const match = /([✳*·]?\s*Claude Code)(?:\s+v[\w.-]+)?/iu.exec(tailText);
+  return normalizePersistedSessionValue(match?.[1]);
+}
+
+export function hasInterruptStatusInVtHistory(history: string): boolean {
   const tailText = extractTerminalTextTailFromVtHistory(history);
   if (!tailText) {
     return false;
@@ -216,6 +216,20 @@ export function hasCodexWorkingStatusInVtHistory(
   );
 
   return /\([^)]*esc to interrupt\)/iu.test(snippet) && /[a-z]/iu.test(snippet);
+}
+
+export function hasCodexWorkingStatusInVtHistory(
+  history: string,
+  title?: string,
+  agentName?: string,
+): boolean {
+  const normalizedTitle = title?.trim().toLowerCase();
+  const normalizedAgentName = agentName?.trim().toLowerCase();
+  if (!normalizedTitle?.includes("codex") && normalizedAgentName !== "codex") {
+    return false;
+  }
+
+  return hasInterruptStatusInVtHistory(history);
 }
 
 export function getSessionNumber(sessionId: string): number | undefined {
@@ -286,6 +300,22 @@ export async function focusEditorGroupByIndex(index: number): Promise<boolean> {
   return true;
 }
 
+export async function moveActiveTerminalToEditor(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
+}
+
+export async function moveActiveTerminalToPanel(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.terminal.moveToTerminalPanel");
+}
+
+export async function moveActiveEditorToNextGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.moveEditorToNextGroup");
+}
+
+export async function moveActiveEditorToPreviousGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.moveEditorToPreviousGroup");
+}
+
 export function matchesVisibleTerminalLayout(
   snapshot: SessionGridSnapshot,
   terminalTitleBySessionId: ReadonlyMap<string, string>,
@@ -316,6 +346,10 @@ export function getWorkspaceId(): string {
     "no-workspace";
 
   return createHash("sha1").update(workspaceKey).digest("hex").slice(0, 12);
+}
+
+export function getWorkspaceStorageKey(key: string, workspaceId: string): string {
+  return `${key}:${workspaceId}`;
 }
 
 const FOCUS_EDITOR_GROUP_COMMANDS = [

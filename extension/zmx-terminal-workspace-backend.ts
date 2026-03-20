@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { SessionGridSnapshot, SessionRecord } from "../shared/session-grid-contract";
@@ -18,12 +18,13 @@ import {
   applyEditorLayout,
   createBlockedSessionSnapshot,
   createDisconnectedSessionSnapshot,
+  extractClaudeCodeTitleFromVtHistory,
   extractTerminalTextTailFromVtHistory,
   extractLatestTerminalTitleFromVtHistory,
   focusEditorGroupByIndex,
   getDefaultShell,
   getDefaultWorkspaceCwd,
-  hasCodexWorkingStatusInVtHistory,
+  hasInterruptStatusInVtHistory,
   getSessionTabTitle,
   getViewColumn,
   matchesVisibleTerminalLayout,
@@ -36,6 +37,8 @@ import { parseZmxListSessionNames, toZmxSessionName } from "./zmx-session-utils"
 
 const ZMX_POLL_INTERVAL_MS = 750;
 const AGENT_STATE_FILE_NAME = "agent-state";
+const SETTINGS_SECTION = "VSmux";
+const EXPERIMENTAL_ZMX_ACTION_DELAY_MS_SETTING = "experimentalZmxActionDelayMs";
 
 type ZmxTerminalWorkspaceBackendOptions = {
   context: vscode.ExtensionContext;
@@ -49,14 +52,21 @@ type SessionProjection = {
 };
 
 type SessionHistoryState = {
-  hasCodexWorkingStatus: boolean;
+  hasClaudeSessionTitle: boolean;
+  hasInterruptStatus: boolean;
   textTail?: string;
   title?: string;
+};
+
+type ReadSessionAgentStateResult = {
+  modifiedAt?: number;
+  state: PersistedSessionState;
 };
 
 export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
   private agentShellIntegration: AgentShellIntegration | undefined;
   private readonly activateSessionEmitter = new vscode.EventEmitter<string>();
+  private readonly lastAgentStateModifiedAtBySessionId = new Map<string, number>();
   private readonly changeSessionsEmitter = new vscode.EventEmitter<void>();
   private readonly changeSessionTitleEmitter =
     new vscode.EventEmitter<TerminalWorkspaceBackendTitleChange>();
@@ -66,6 +76,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
   private readonly lastTerminalTextTailBySessionId = new Map<string, string>();
   private readonly sessions = new Map<string, TerminalSessionSnapshot>();
   private readonly sessionTitles = new Map<string, string>();
+  private suppressActivationEvents = 0;
   private readonly terminalToSessionId = new Map<vscode.Terminal, string>();
   private lastVisibleSnapshot: SessionGridSnapshot | undefined;
   private pollTimer: NodeJS.Timeout | undefined;
@@ -100,6 +111,10 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
 
     this.disposables.push(
       vscode.window.onDidChangeActiveTerminal((terminal) => {
+        if (this.suppressActivationEvents > 0) {
+          return;
+        }
+
         const sessionId = terminal ? this.terminalToSessionId.get(terminal) : undefined;
         if (sessionId) {
           this.activateSessionEmitter.fire(sessionId);
@@ -142,6 +157,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     }
 
     this.projections.clear();
+    this.lastAgentStateModifiedAtBySessionId.clear();
     this.lastTerminalActivityAtBySessionId.clear();
     this.lastTerminalTextTailBySessionId.clear();
     this.activateSessionEmitter.dispose();
@@ -185,11 +201,12 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
   }
 
   public canReuseVisibleLayout(snapshot: SessionGridSnapshot): boolean {
-    if (snapshot.visibleSessionIds.length !== this.projections.size) {
+    const editorProjections = this.getEditorProjections();
+    if (snapshot.visibleSessionIds.length !== editorProjections.size) {
       return false;
     }
 
-    const projectedSessionIds = new Set(this.projections.keys());
+    const projectedSessionIds = new Set(editorProjections.keys());
     if (snapshot.visibleSessionIds.some((sessionId) => !projectedSessionIds.has(sessionId))) {
       return false;
     }
@@ -197,7 +214,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     return matchesVisibleTerminalLayout(
       snapshot,
       new Map(
-        Array.from(this.projections.entries(), ([sessionId, projection]) => [
+        Array.from(editorProjections.entries(), ([sessionId, projection]) => [
           sessionId,
           projection.terminal.name,
         ]),
@@ -218,7 +235,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       }
     }
 
-    projection.terminal.show(preserveFocus);
+    await this.showTerminal(projection.terminal, preserveFocus);
     return true;
   }
 
@@ -254,41 +271,9 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       visibleSessionIds: [...snapshot.visibleSessionIds],
     };
 
-    for (const sessionId of Array.from(this.projections.keys())) {
-      this.disposeProjection(sessionId);
-    }
-
-    if (snapshot.visibleSessionIds.length === 0) {
-      return;
-    }
-
-    await applyEditorLayout(snapshot.visibleSessionIds.length, snapshot.viewMode);
-
-    for (let index = 0; index < snapshot.visibleSessionIds.length; index += 1) {
-      const sessionId = snapshot.visibleSessionIds[index];
-      const sessionRecord = snapshot.sessions.find((session) => session.sessionId === sessionId);
-      if (!sessionRecord) {
-        continue;
-      }
-
-      if (!(await this.options.ensureShellSpawnAllowed())) {
-        this.sessions.set(
-          sessionId,
-          createBlockedSessionSnapshot(sessionId, this.options.workspaceId),
-        );
-        this.changeSessionsEmitter.fire();
-        continue;
-      }
-
-      this.createProjection(sessionRecord, index, getSessionTabTitle(sessionRecord));
-    }
-
-    this.changeSessionsEmitter.fire();
-
-    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
-    if (focusedSessionId) {
-      this.projections.get(focusedSessionId)?.terminal.show(preserveFocus);
-    }
+    await this.runWithoutActivationEvents(async () => {
+      await this.reconcileVisibleTerminalsByRecreatingProjections(snapshot, preserveFocus);
+    });
   }
 
   public async renameSession(sessionRecord: SessionRecord): Promise<void> {
@@ -324,11 +309,54 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     projection.terminal.sendText(data, false);
   }
 
-  private createProjection(
+  private async reconcileVisibleTerminalsByRecreatingProjections(
+    snapshot: SessionGridSnapshot,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    for (const sessionId of Array.from(this.projections.keys())) {
+      this.disposeProjection(sessionId);
+    }
+
+    if (snapshot.visibleSessionIds.length === 0) {
+      return;
+    }
+
+    await this.runUiAction(() =>
+      applyEditorLayout(snapshot.visibleSessionIds.length, snapshot.viewMode),
+    );
+
+    for (let index = 0; index < snapshot.visibleSessionIds.length; index += 1) {
+      const sessionId = snapshot.visibleSessionIds[index];
+      const sessionRecord = snapshot.sessions.find((session) => session.sessionId === sessionId);
+      if (!sessionRecord) {
+        continue;
+      }
+
+      if (!(await this.options.ensureShellSpawnAllowed())) {
+        this.sessions.set(
+          sessionId,
+          createBlockedSessionSnapshot(sessionId, this.options.workspaceId),
+        );
+        this.changeSessionsEmitter.fire();
+        continue;
+      }
+
+      await this.createProjection(sessionRecord, index, getSessionTabTitle(sessionRecord));
+    }
+
+    this.changeSessionsEmitter.fire();
+
+    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
+    if (focusedSessionId) {
+      await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
+    }
+  }
+
+  private async createProjection(
     sessionRecord: SessionRecord,
     visibleIndex: number,
     terminalTitle: string,
-  ): SessionProjection {
+  ): Promise<SessionProjection> {
     const terminal = vscode.window.createTerminal({
       cwd: getDefaultWorkspaceCwd(),
       env: this.createTerminalEnvironment(sessionRecord.sessionId),
@@ -354,8 +382,39 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       sessionRecord.sessionId,
       this.createRunningSessionSnapshot(sessionRecord.sessionId),
     );
-    terminal.show(true);
+    await this.showTerminal(terminal, true);
     return projection;
+  }
+
+  private getEditorProjections(): Map<string, SessionProjection> {
+    return new Map(this.projections);
+  }
+
+  private async runWithoutActivationEvents<T>(callback: () => Promise<T>): Promise<T> {
+    this.suppressActivationEvents += 1;
+    try {
+      return await callback();
+    } finally {
+      this.suppressActivationEvents = Math.max(0, this.suppressActivationEvents - 1);
+    }
+  }
+
+  private async runUiAction<T>(callback: () => Promise<T> | T): Promise<T> {
+    await delay(getExperimentalZmxActionDelayMs());
+    return await callback();
+  }
+
+  private async showTerminal(
+    terminal: vscode.Terminal | undefined,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    if (!terminal) {
+      return;
+    }
+
+    await this.runUiAction(() => {
+      terminal.show(preserveFocus);
+    });
   }
 
   private createRunningSessionSnapshot(sessionId: string): TerminalSessionSnapshot {
@@ -454,11 +513,12 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       const agentState = await this.readSessionAgentState(sessionId);
       const previousTitle = this.sessionTitles.get(sessionId);
       const historyState = runningSessionNames.has(sessionName)
-        ? await this.readSessionHistoryState(sessionName, agentState)
+        ? await this.readSessionHistoryState(sessionName)
         : undefined;
-      const nextTitle = historyState?.title ?? agentState.title?.trim();
+      const nextTitle = historyState?.title ?? agentState.state.title?.trim();
       this.updateLastTerminalActivity(
         sessionId,
+        agentState,
         historyState,
         nextTitle,
         previousTitle,
@@ -469,27 +529,40 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
         : previousSession?.status === "running"
           ? "exited"
           : (previousSession?.status ?? "disconnected");
+      const hasClaudeWorkingStatus =
+        Boolean(historyState?.hasClaudeSessionTitle) && Boolean(historyState?.hasInterruptStatus);
+      const hasClaudeAttentionStatus =
+        Boolean(historyState?.hasClaudeSessionTitle) &&
+        !historyState?.hasInterruptStatus &&
+        previousSession?.agentName === "claude" &&
+        previousSession.agentStatus === "working";
       const nextAgentStatus =
-        runningSessionNames.has(sessionName) && historyState?.hasCodexWorkingStatus
+        runningSessionNames.has(sessionName) && hasClaudeWorkingStatus
           ? "working"
-          : agentState.agentStatus;
+          : runningSessionNames.has(sessionName) && hasClaudeAttentionStatus
+            ? "attention"
+            : agentState.state.agentStatus;
       const nextSession: TerminalSessionSnapshot = runningSessionNames.has(sessionName)
         ? {
             ...this.createRunningSessionSnapshot(sessionId),
             agentName:
-              agentState.agentName ??
-              (historyState?.hasCodexWorkingStatus ? "codex" : undefined) ??
+              agentState.state.agentName ??
+              (hasClaudeWorkingStatus ||
+              hasClaudeAttentionStatus ||
+              historyState?.hasClaudeSessionTitle
+                ? "claude"
+                : undefined) ??
               previousSession?.agentName,
             agentStatus: nextAgentStatus,
           }
         : {
             ...(previousSession ??
               createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
-            agentName: agentState.agentName ?? previousSession?.agentName,
+            agentName: agentState.state.agentName ?? previousSession?.agentName,
             agentStatus:
-              nextStatus === "exited" && agentState.agentStatus === "working"
+              nextStatus === "exited" && agentState.state.agentStatus === "working"
                 ? "idle"
-                : agentState.agentStatus,
+                : agentState.state.agentStatus,
             endedAt:
               nextStatus === "exited"
                 ? (previousSession?.endedAt ?? new Date().toISOString())
@@ -553,19 +626,17 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
 
   private async readSessionHistoryState(
     sessionName: string,
-    agentState: PersistedSessionState,
   ): Promise<SessionHistoryState | undefined> {
     try {
       const history = await this.runZmxCommand(["history", sessionName, "--vt"]);
-      const title = extractLatestTerminalTitleFromVtHistory(history);
+      const historyTitle =
+        extractLatestTerminalTitleFromVtHistory(history) ??
+        extractClaudeCodeTitleFromVtHistory(history);
       return {
-        hasCodexWorkingStatus: hasCodexWorkingStatusInVtHistory(
-          history,
-          title ?? agentState.title,
-          agentState.agentName,
-        ),
+        hasClaudeSessionTitle: Boolean(historyTitle?.includes("Claude Code")),
+        hasInterruptStatus: hasInterruptStatusInVtHistory(history),
         textTail: extractTerminalTextTailFromVtHistory(history),
-        title,
+        title: historyTitle,
       };
     } catch {
       return undefined;
@@ -574,11 +645,24 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
 
   private updateLastTerminalActivity(
     sessionId: string,
+    agentState: ReadSessionAgentStateResult,
     historyState: SessionHistoryState | undefined,
     nextTitle: string | undefined,
     previousTitle: string | undefined,
     observedAt: number,
   ): void {
+    const previousAgentStateModifiedAt = this.lastAgentStateModifiedAtBySessionId.get(sessionId);
+    const nextAgentStateModifiedAt = agentState.modifiedAt;
+    if (nextAgentStateModifiedAt !== undefined) {
+      this.lastAgentStateModifiedAtBySessionId.set(sessionId, nextAgentStateModifiedAt);
+      if (nextAgentStateModifiedAt !== previousAgentStateModifiedAt) {
+        this.lastTerminalActivityAtBySessionId.set(sessionId, observedAt);
+        return;
+      }
+    } else {
+      this.lastAgentStateModifiedAtBySessionId.delete(sessionId);
+    }
+
     const previousTextTail = this.lastTerminalTextTailBySessionId.get(sessionId);
     const nextTextTail = historyState?.textTail;
     if (nextTextTail) {
@@ -599,15 +683,25 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     }
   }
 
-  private async readSessionAgentState(sessionId: string): Promise<PersistedSessionState> {
+  private async readSessionAgentState(sessionId: string): Promise<ReadSessionAgentStateResult> {
+    const stateFilePath = this.getSessionAgentStateFilePath(sessionId);
     try {
-      const rawState = await readFile(this.getSessionAgentStateFilePath(sessionId), "utf8");
-      return parsePersistedSessionState(rawState);
+      const [rawState, fileStats] = await Promise.all([
+        readFile(stateFilePath, "utf8"),
+        stat(stateFilePath),
+      ]);
+      return {
+        modifiedAt: Number.isFinite(fileStats.mtimeMs) ? fileStats.mtimeMs : undefined,
+        state: parsePersistedSessionState(rawState),
+      };
     } catch {
       return {
-        agentName: undefined,
-        agentStatus: "idle",
-        title: undefined,
+        modifiedAt: undefined,
+        state: {
+          agentName: undefined,
+          agentStatus: "idle",
+          title: undefined,
+        },
       };
     }
   }
@@ -625,9 +719,24 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       serializePersistedSessionState({
         agentName,
         agentStatus,
-        title: title === undefined ? existingState.title : (title ?? undefined),
+        title: title === undefined ? existingState.state.title : (title ?? undefined),
       }),
       { mode: 0o600 },
     );
   }
+}
+
+function getExperimentalZmxActionDelayMs(): number {
+  const configuredDelay =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(EXPERIMENTAL_ZMX_ACTION_DELAY_MS_SETTING, 0) ?? 0;
+
+  return Number.isFinite(configuredDelay) ? Math.max(0, configuredDelay) : 0;
+}
+
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, timeoutMs);
+  });
 }

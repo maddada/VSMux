@@ -28,9 +28,6 @@ export function SessionCardContent({
 
   return (
     <>
-      {session.activity === "attention" ? (
-        <div aria-hidden className="session-attention-dot" />
-      ) : null}
       <div className="session-head">
         <OverflowTooltipText
           className="session-alias-heading"

@@ -1,8 +1,11 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { createSessionRecord } from "../shared/session-grid-contract";
 import {
+  extractClaudeCodeTitleFromVtHistory,
   extractLatestTerminalTitleFromVtHistory,
   getSessionTabTitle,
+  getWorkspaceStorageKey,
+  hasInterruptStatusInVtHistory,
   hasCodexWorkingStatusInVtHistory,
   parsePersistedSessionState,
   serializePersistedSessionState,
@@ -37,6 +40,14 @@ describe("getSessionTabTitle", () => {
         alias: "API",
       }),
     ).toBe("API");
+  });
+});
+
+describe("getWorkspaceStorageKey", () => {
+  test("should scope persisted values to a workspace id", () => {
+    expect(getWorkspaceStorageKey("VSmux.completionBellEnabled", "abc123def456")).toBe(
+      "VSmux.completionBellEnabled:abc123def456",
+    );
   });
 });
 
@@ -179,5 +190,29 @@ describe("hasCodexWorkingStatusInVtHistory", () => {
         "Claude Code",
       ),
     ).toBe(false);
+  });
+});
+
+describe("Claude VT fallbacks", () => {
+  test("should extract a Claude Code title from the rendered screen when no OSC title exists", () => {
+    expect(
+      extractClaudeCodeTitleFromVtHistory(
+        `╭─── Claude Code v2.1.79 ───╮\n│ Tips for getting started │\nCtx: 2.0%\n`,
+      ),
+    ).toBe("Claude Code");
+  });
+
+  test("should preserve Claude activity markers when extracting a screen title", () => {
+    expect(extractClaudeCodeTitleFromVtHistory(`Status line\n· Claude Code\nCtx: 2.0%\n`)).toBe(
+      "· Claude Code",
+    );
+  });
+
+  test("should detect interrupt status lines generically from VT history", () => {
+    expect(
+      hasInterruptStatusInVtHistory(
+        `\u001b[38;2;211;218;224m•\u001b[0m Updating codebase plan \u001b[2m(5s • esc to interrupt)\u001b[0m`,
+      ),
+    ).toBe(true);
   });
 });

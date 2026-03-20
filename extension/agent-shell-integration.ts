@@ -29,9 +29,13 @@ const NOTIFY_SCRIPT_NAME = "notify.sh";
 const OPENCODE_PLUGIN_FILE_NAME = "VSmux-notify.js";
 const CODEX_START_LOG_PATTERNS = [
   [`"type":"event_msg"`, `"payload":{"type":"task_started"`],
+  [`"msg":{"type":"task_started"`],
+  [`"msg":{"type":"exec_command_begin"`],
 ] as const;
 const CODEX_STOP_LOG_PATTERNS = [
   [`"type":"event_msg"`, `"payload":{"type":"task_complete"`],
+  [`"msg":{"type":"task_complete"`],
+  [`"msg":{"type":"turn_aborted"`],
 ] as const;
 
 const integrationPromises = new Map<string, Promise<AgentShellIntegration>>();
@@ -257,12 +261,21 @@ function matchesLogPattern(line: string, patterns: readonly (readonly string[])[
   return patterns.some((pattern) => pattern.every((fragment) => line.includes(fragment)));
 }
 
-function createShellCasePattern(pattern: readonly string[]): string {
-  return pattern.map((fragment) => `*${quoteShellCaseFragment(fragment)}`).join("");
-}
-
-function quoteShellCaseFragment(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("*", "\\*");
+function createShellLogMatchExpression(
+  lineVariableName: string,
+  patterns: readonly (readonly string[])[],
+): string {
+  return patterns
+    .map((pattern) =>
+      pattern
+        .map(
+          (fragment) =>
+            `printf '%s\\n' "$${lineVariableName}" | grep -F -- ${quoteShellLiteral(fragment)} >/dev/null`,
+        )
+        .join(" && "),
+    )
+    .map((patternExpression) => `( ${patternExpression} )`)
+    .join(" || ");
 }
 
 function getNotifyScriptContent(): string {
@@ -444,8 +457,14 @@ function getCodexWrapperContent(binDir: string, notifyPath: string): string {
   const quotedBinDir = quoteShellLiteral(binDir);
   const quotedNotifyPath = quoteShellLiteral(notifyPath);
   const notifyConfigValue = JSON.stringify(["sh", notifyPath]);
-  const codexTaskStartedPattern = createShellCasePattern(CODEX_START_LOG_PATTERNS[0]);
-  const codexTaskCompletePattern = createShellCasePattern(CODEX_STOP_LOG_PATTERNS[0]);
+  const codexTaskStartedCheck = createShellLogMatchExpression(
+    "_vsmux_line",
+    CODEX_START_LOG_PATTERNS,
+  );
+  const codexTaskCompleteCheck = createShellLogMatchExpression(
+    "_vsmux_line",
+    CODEX_STOP_LOG_PATTERNS,
+  );
 
   return `#!/bin/bash
 # VSmux codex wrapper
@@ -529,24 +548,24 @@ if [ -f ${quotedNotifyPath} ]; then
     fi
 
     tail -n +1 -F "$_vsmux_log" 2>/dev/null | while IFS= read -r _vsmux_line; do
-      case "$_vsmux_line" in
-        ${codexTaskStartedPattern})
-          _vsmux_turn_id=$(printf '%s\\n' "$_vsmux_line" | awk -F'"turn_id":"' 'NF > 1 { sub(/".*/, "", $2); print $2; exit }')
-          [ -n "$_vsmux_turn_id" ] || _vsmux_turn_id="task_started"
-          if [ "$_vsmux_turn_id" != "$_vsmux_last_turn_id" ]; then
-            _vsmux_last_turn_id="$_vsmux_turn_id"
-            _vsmux_emit_event "Start"
-          fi
-          ;;
-        ${codexTaskCompletePattern})
-          _vsmux_completed_turn_id=$(printf '%s\\n' "$_vsmux_line" | awk -F'"turn_id":"' 'NF > 1 { sub(/".*/, "", $2); print $2; exit }')
-          [ -n "$_vsmux_completed_turn_id" ] || _vsmux_completed_turn_id="task_complete"
-          if [ "$_vsmux_completed_turn_id" != "$_vsmux_last_completed_turn_id" ]; then
-            _vsmux_last_completed_turn_id="$_vsmux_completed_turn_id"
-            _vsmux_emit_event "Stop"
-          fi
-          ;;
-      esac
+      if ${codexTaskStartedCheck}; then
+        _vsmux_turn_id=$(printf '%s\\n' "$_vsmux_line" | awk -F'"turn_id":"' 'NF > 1 { sub(/".*/, "", $2); print $2; exit }')
+        [ -n "$_vsmux_turn_id" ] || _vsmux_turn_id="task_started"
+        if [ "$_vsmux_turn_id" != "$_vsmux_last_turn_id" ]; then
+          _vsmux_last_turn_id="$_vsmux_turn_id"
+          _vsmux_emit_event "Start"
+        fi
+        continue
+      fi
+
+      if ${codexTaskCompleteCheck}; then
+        _vsmux_completed_turn_id=$(printf '%s\\n' "$_vsmux_line" | awk -F'"turn_id":"' 'NF > 1 { sub(/".*/, "", $2); print $2; exit }')
+        [ -n "$_vsmux_completed_turn_id" ] || _vsmux_completed_turn_id="task_complete"
+        if [ "$_vsmux_completed_turn_id" != "$_vsmux_last_completed_turn_id" ]; then
+          _vsmux_last_completed_turn_id="$_vsmux_completed_turn_id"
+          _vsmux_emit_event "Stop"
+        fi
+      fi
     done
   ) &
   VSMUX_CODEX_WATCHER_PID=$!

@@ -2,21 +2,19 @@
 
 ## Goal
 
-Replace the macOS/Linux terminal restore path with `zmx` so hidden/show, reload, and reconnect flows restore real terminal state instead of replaying raw PTY history into a fresh pseudoterminal.
-
-Windows keeps the existing ruspty daemon path for now.
+Use `zmx` as the terminal backend so hidden/show, reload, and reconnect flows restore real terminal state instead of replaying raw PTY history into a fresh pseudoterminal.
 
 ## Key Decisions
 
-### 1. Use backend selection by platform
+### 1. Use a single zmx backend
 
-- `win32` uses the existing ruspty-backed pseudoterminal backend.
-- `darwin` and `linux` use a new `zmx` backend.
+- VSmux now uses `zmx` as its only terminal backend.
+- Supported platforms are the ones the pinned `zmx` build supports today.
 
 Reason:
 
-- This isolates the new macOS/Linux behavior without destabilizing the current Windows path.
-- It also gives the controller one stable interface instead of mixing two terminal models in a single class.
+- This removes the remaining pseudoterminal bridge path entirely.
+- It also keeps the controller on one stable terminal model instead of maintaining two backends.
 
 ### 2. Use real VS Code shell terminals for the zmx path
 
@@ -26,7 +24,7 @@ Reason:
 
 Reason:
 
-- This removes the extension’s PTY text replay layer entirely for macOS/Linux.
+- This removes the extension’s PTY text replay layer entirely.
 - The visible VS Code terminal now attaches directly to `zmx`, which owns the durable terminal state.
 - This is the main fix for the duplicated prompt/input corruption shown in the original bug report.
 
@@ -40,7 +38,7 @@ Reason:
 - The previous corruption came from rebuilding pseudoterminals and replaying text, plus output race/escape-sequence problems in the extension-owned PTY bridge.
 - Removing the extension from the terminal-data path is the most stable fix.
 
-### 4. Download zmx at runtime on first macOS/Linux activation
+### 4. Download zmx at runtime on first supported-platform activation
 
 - `zmx` is installed into extension global storage on demand.
 - The version is pinned to `0.4.2`.
@@ -53,7 +51,7 @@ Reason:
 
 Tradeoff:
 
-- First use on macOS/Linux requires network access.
+- First use on a supported platform requires network access.
 - If we later need offline installs, the next step should be packaging the binaries into the VSIX instead of changing the runtime model again.
 
 ### 5. Namespace zmx sessions by workspace id
@@ -94,11 +92,11 @@ Reason:
 
 ### 7. Poll zmx for running-session state
 
-- The sidebar running/exited state on macOS/Linux is refreshed from `zmx list --short` on a short polling interval.
+- The sidebar running/exited state is refreshed from `zmx list --short` on a short polling interval.
 
 Reason:
 
-- On the zmx path the extension is not in the terminal output stream, so it needs a backend-native way to know whether a session still exists.
+- The extension is not in the terminal output stream, so it needs a backend-native way to know whether a session still exists.
 - Polling `zmx list --short` is simple and robust enough for the small session counts in this extension.
 
 ### 8. Keep shell-spawn trust gating in the controller
@@ -124,9 +122,9 @@ Tradeoff:
 - Title updates are now dependent on what native VS Code terminal state events expose.
 - This is weaker than the old OSC parser, but far safer than rebuilding from raw replay.
 
-### 10. Accept a small feature reduction on macOS/Linux for now
+### 10. Accept a small feature reduction for now
 
-These Windows-only behaviors are not currently mirrored by the zmx backend:
+These older pseudoterminal-only behaviors are not mirrored by the zmx backend:
 
 - agent activity parsing from shell integration OSC markers
 - title-flash indicator when activating a session from the sidebar
@@ -149,9 +147,9 @@ The reported bugs were:
 - duplicated text/input UI after hide/show
 - raw control-sequence garbage appearing after re-showing a terminal
 
-The old macOS/Linux behavior recreated a fresh pseudoterminal projection and replayed stored history. That is fundamentally incorrect for interactive terminal UIs.
+The old behavior recreated a fresh pseudoterminal projection and replayed stored history. That is fundamentally incorrect for interactive terminal UIs.
 
-The new macOS/Linux behavior attaches native VS Code terminals directly to persistent `zmx` sessions, so:
+The current behavior attaches native VS Code terminals directly to persistent `zmx` sessions, so:
 
 - hide/show reconnects to terminal state instead of replaying text
 - reload reconnects to terminal state instead of replaying text

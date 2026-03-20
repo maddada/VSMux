@@ -29,7 +29,6 @@ import type {
   TerminalAgentStatus,
   TerminalSessionSnapshot,
 } from "../shared/terminal-host-protocol";
-import { RusptyTerminalWorkspaceBackend } from "./ruspty-terminal-workspace-backend";
 import { SessionGridStore } from "./session-grid-store";
 import { SessionSidebarViewProvider } from "./session-sidebar-view";
 import {
@@ -44,6 +43,7 @@ import {
   createEmptyWorkspaceSessionSnapshot,
   getSessionActivityLabel,
   getWorkspaceId,
+  getWorkspaceStorageKey,
 } from "./terminal-workspace-helpers";
 import { ZmxTerminalWorkspaceBackend } from "./zmx-terminal-workspace-backend";
 
@@ -59,7 +59,7 @@ export const SESSIONS_VIEW_ID = "VSmux.sessions";
 const SHORTCUT_LABEL_PLATFORM = process.platform === "darwin" ? "mac" : "default";
 const WORKING_ACTIVITY_STALE_TIMEOUT_MS = 10_000;
 
-type NativeTerminalWorkspaceBackendKind = "ruspty" | "zmx";
+type NativeTerminalWorkspaceBackendKind = "zmx";
 
 export type NativeTerminalWorkspaceDebugState = {
   backend: NativeTerminalWorkspaceBackendKind;
@@ -70,7 +70,7 @@ export type NativeTerminalWorkspaceDebugState = {
 export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private hasApprovedUntrustedShells = vscode.workspace.isTrusted;
   private readonly backend: TerminalWorkspaceBackend;
-  private readonly backendKind: NativeTerminalWorkspaceBackendKind;
+  private readonly backendKind: NativeTerminalWorkspaceBackendKind = "zmx";
   private readonly disposables: vscode.Disposable[] = [];
   private readonly lastKnownActivityBySessionId = new Map<string, TerminalAgentStatus>();
   private readonly store: SessionGridStore;
@@ -82,19 +82,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   public constructor(private readonly context: vscode.ExtensionContext) {
     this.store = new SessionGridStore(context);
     this.workspaceId = getWorkspaceId();
-    this.backendKind = process.platform === "win32" ? "ruspty" : "zmx";
-    this.backend =
-      this.backendKind === "zmx"
-        ? new ZmxTerminalWorkspaceBackend({
-            context,
-            ensureShellSpawnAllowed: () => this.ensureShellSpawnAllowed(),
-            workspaceId: this.workspaceId,
-          })
-        : new RusptyTerminalWorkspaceBackend({
-            context,
-            ensureShellSpawnAllowed: () => this.ensureShellSpawnAllowed(),
-            workspaceId: this.workspaceId,
-          });
+    this.backend = new ZmxTerminalWorkspaceBackend({
+      context,
+      ensureShellSpawnAllowed: () => this.ensureShellSpawnAllowed(),
+      workspaceId: this.workspaceId,
+    });
     this.sidebarProvider = new SessionSidebarViewProvider({
       onMessage: async (message) => this.handleSidebarMessage(message),
     });
@@ -132,6 +124,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   public async initialize(): Promise<void> {
+    await this.migrateCompletionBellPreference();
     await this.backend.syncConfiguration();
     await this.backend.initialize(this.getAllSessionRecords());
     await this.backend.reconcileVisibleTerminals(this.getActiveSnapshot());
@@ -142,10 +135,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     return {
       backend: this.backendKind,
       platform: process.platform,
-      terminalUiPath:
-        this.backendKind === "zmx"
-          ? "VS Code native shell terminal"
-          : "VS Code Pseudoterminal bridge",
+      terminalUiPath: "VS Code native shell terminal",
     };
   }
 
@@ -374,10 +364,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   public async toggleCompletionBell(): Promise<void> {
-    await this.context.workspaceState.update(
-      COMPLETION_BELL_ENABLED_KEY,
-      !this.getCompletionBellEnabled(),
-    );
+    const nextValue = !this.getCompletionBellEnabled();
+    await this.context.globalState.update(this.getCompletionBellEnabledStorageKey(), nextValue);
+    await this.context.workspaceState.update(COMPLETION_BELL_ENABLED_KEY, nextValue);
     await this.refreshSidebar();
   }
 
@@ -800,7 +789,30 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private getCompletionBellEnabled(): boolean {
-    return this.context.workspaceState.get<boolean>(COMPLETION_BELL_ENABLED_KEY, false) ?? false;
+    return (
+      this.context.globalState.get<boolean>(
+        this.getCompletionBellEnabledStorageKey(),
+        this.context.workspaceState.get<boolean>(COMPLETION_BELL_ENABLED_KEY, false) ?? false,
+      ) ?? false
+    );
+  }
+
+  private getCompletionBellEnabledStorageKey(): string {
+    return getWorkspaceStorageKey(COMPLETION_BELL_ENABLED_KEY, this.workspaceId);
+  }
+
+  private async migrateCompletionBellPreference(): Promise<void> {
+    const globalStorageKey = this.getCompletionBellEnabledStorageKey();
+    if (this.context.globalState.get<boolean>(globalStorageKey) !== undefined) {
+      return;
+    }
+
+    const legacyPreference = this.context.workspaceState.get<boolean>(COMPLETION_BELL_ENABLED_KEY);
+    if (legacyPreference === undefined) {
+      return;
+    }
+
+    await this.context.globalState.update(globalStorageKey, legacyPreference);
   }
 
   private async syncKnownSessionActivities(playSound: boolean): Promise<void> {

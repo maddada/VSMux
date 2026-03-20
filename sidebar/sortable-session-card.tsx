@@ -158,58 +158,67 @@ export function SortableSessionCard({
 
   return (
     <>
-      <article
-        aria-expanded={contextMenuPosition ? true : undefined}
-        aria-haspopup="menu"
-        aria-pressed={session.isFocused}
-        className="session"
+      <div
+        className="session-frame"
         data-activity={session.activity}
-        data-dragging={String(Boolean(sortable.isDragging))}
         data-focused={String(session.isFocused)}
         data-running={String(session.isRunning)}
-        data-sidebar-session-id={session.sessionId}
         data-visible={String(session.isVisible)}
-        onAuxClick={(event) => {
-          if (event.button !== 1) {
-            return;
-          }
+      >
+        <article
+          aria-expanded={contextMenuPosition ? true : undefined}
+          aria-haspopup="menu"
+          aria-pressed={session.isFocused}
+          className="session"
+          data-activity={session.activity}
+          data-dragging={String(Boolean(sortable.isDragging))}
+          data-focused={String(session.isFocused)}
+          data-running={String(session.isRunning)}
+          data-sidebar-session-id={session.sessionId}
+          data-visible={String(session.isVisible)}
+          onAuxClick={(event) => {
+            if (event.button !== 1) {
+              return;
+            }
 
-          event.preventDefault();
-          requestClose();
-        }}
-        onClick={(event) => {
-          event.stopPropagation();
-
-          if (event.metaKey) {
             event.preventDefault();
             requestClose();
-            return;
-          }
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
 
-          vscode.postMessage({
-            sessionId: session.sessionId,
-            type: "focusSession",
-          });
-        }}
-        onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openContextMenu(event.clientX, event.clientY);
-        }}
-        onKeyDown={handleKeyDown}
-        ref={sortable.ref}
-        role="button"
-        tabIndex={0}
-      >
-        <SessionCardContent
-          aliasHeadingRef={aliasHeadingRef}
-          onClose={requestClose}
-          secondaryRef={secondaryRef}
-          session={session}
-          showCloseButton={showCloseButton}
-          showHotkeys={showHotkeys}
-        />
-      </article>
+            if (event.metaKey) {
+              event.preventDefault();
+              requestClose();
+              return;
+            }
+
+            vscode.postMessage({
+              sessionId: session.sessionId,
+              type: "focusSession",
+            });
+          }}
+          onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openContextMenu(event.clientX, event.clientY);
+          }}
+          onKeyDown={handleKeyDown}
+          ref={sortable.ref}
+          role="button"
+          tabIndex={0}
+        >
+          <SessionCardContent
+            aliasHeadingRef={aliasHeadingRef}
+            onClose={requestClose}
+            secondaryRef={secondaryRef}
+            session={session}
+            showCloseButton={showCloseButton}
+            showHotkeys={showHotkeys}
+          />
+        </article>
+        <div aria-hidden className="session-status-dot" />
+      </div>
       {contextMenuPosition
         ? createPortal(
             <div

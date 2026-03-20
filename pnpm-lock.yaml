@@ -18,9 +18,6 @@ importers:
       '@dnd-kit/react':
         specifier: ^0.3.2
         version: 0.3.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@replit/ruspty':
-        specifier: ^3.6.0
-        version: 3.6.0
       '@tabler/icons-react':
         specifier: ^3.40.0
         version: 3.40.0(react@19.2.4)
@@ -940,27 +937,6 @@ packages:
 
   '@preact/signals-core@1.14.0':
     resolution: {integrity: sha512-AowtCcCU/33lFlh1zRFf/u+12rfrhtNakj7UpaGEsmMwUKpKWMVvcktOGcwBBNiB4lWrZWc01LhiyyzVklJyaQ==}
-
-  '@replit/ruspty-darwin-arm64@3.6.0':
-    resolution: {integrity: sha512-KuWv8Gf700sMC7xteAqmAgVFQ9uGIw2OHiR1dwivlGhj1LqLXcV22qYsoCscxzMjbqLEsn5qhfjWgFPFzq9lkA==}
-    engines: {node: '>= 10'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@replit/ruspty-darwin-x64@3.6.0':
-    resolution: {integrity: sha512-xXkrZd4XhraqCx/cDmMM8lItZzoKxXZSXEcuzRMkFXmt9RNEiYfsXCghJfqxq4DS9sQpjVepn8x3HpIlJHsE1g==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@replit/ruspty-linux-x64-gnu@3.6.0':
-    resolution: {integrity: sha512-lXuTTdL7rhSiV284GcpFYMhs1UjOOFEOQqaigFOGGK3W5cwV/EdKuiC34B6yEilVPXqbGOQRVxCHR6OY1MabnA==}
-    engines: {node: '>= 10'}
-    cpu: [x64]
-    os: [linux]
-
-  '@replit/ruspty@3.6.0':
-    resolution: {integrity: sha512-RkPhX6/fnvqJDxWo0n+XaL6ztIDnRT5uNpvnekj9crecLxsaPqjY3sIhbVb4x4+w5fpgBP5z8n3M+Fbbf40gdg==}
 
   '@rolldown/pluginutils@1.0.0-rc.7':
     resolution: {integrity: sha512-qujRfC8sFVInYSPPMLQByRh7zhwkGFS4+tyMQ83srV1qrxL4g8E2tyxVVyxd0+8QeBM1mIk9KbWxkegRr76XzA==}
@@ -4772,21 +4748,6 @@ snapshots:
   '@polka/url@1.0.0-next.29': {}
 
   '@preact/signals-core@1.14.0': {}
-
-  '@replit/ruspty-darwin-arm64@3.6.0':
-    optional: true
-
-  '@replit/ruspty-darwin-x64@3.6.0':
-    optional: true
-
-  '@replit/ruspty-linux-x64-gnu@3.6.0':
-    optional: true
-
-  '@replit/ruspty@3.6.0':
-    optionalDependencies:
-      '@replit/ruspty-darwin-arm64': 3.6.0
-      '@replit/ruspty-darwin-x64': 3.6.0
-      '@replit/ruspty-linux-x64-gnu': 3.6.0
 
   '@rolldown/pluginutils@1.0.0-rc.7': {}
 

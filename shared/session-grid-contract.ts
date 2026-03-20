@@ -352,21 +352,7 @@ export function getSessionShortcutLabel(slotIndex: number, platform: "default" |
 }
 
 export function createSessionAlias(sessionNumber: number, slotIndex: number): string {
-  const adjectives = [
-    "Amber",
-    "Cinder",
-    "Golden",
-    "Harbor",
-    "Indigo",
-    "Juniper",
-    "Marble",
-    "Nova",
-    "Paper",
-    "Quiet",
-    "River",
-    "Solar",
-  ];
-  const nouns = [
+  const words = [
     "Atlas",
     "Beacon",
     "Comet",
@@ -380,10 +366,8 @@ export function createSessionAlias(sessionNumber: number, slotIndex: number): st
     "Signal",
     "Vale",
   ];
-  const adjective = adjectives[(sessionNumber * 7 + slotIndex) % adjectives.length];
-  const noun = nouns[(sessionNumber * 11 + slotIndex * 3) % nouns.length];
 
-  return `${adjective} ${noun}`;
+  return words[(sessionNumber * 11 + slotIndex * 3) % words.length] ?? words[0]!;
 }
 
 export function createSessionRecord(sessionNumber: number, slotIndex: number): SessionRecord {

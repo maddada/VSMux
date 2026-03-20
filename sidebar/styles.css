@@ -337,6 +337,17 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.toolbar-divider {
+  align-self: stretch;
+  width: 1px;
+  background: color-mix(in srgb, var(--app-border) 72%, transparent);
+  margin: 2px 2px;
+}
+
+.toolbar-divider[data-active="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 45%, var(--app-border) 55%);
+}
+
 .button-group-end {
   margin-left: auto;
 }
@@ -385,7 +396,11 @@ button:disabled {
   color: var(--app-button-foreground);
 }
 
-.toolbar-button[data-disabled="true"],
+.toolbar-button[data-disabled="true"] {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .toolbar-button[data-dimmed="true"] {
   cursor: default;
   opacity: 0.7;
@@ -400,6 +415,52 @@ button:disabled {
   gap: 8px;
 }
 
+.session-groups-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.section-titlebar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.section-titlebar-label {
+  color: color-mix(in srgb, var(--app-foreground) 74%, var(--app-muted) 26%);
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: center;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.section-titlebar-line {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, #8a8a8a 22%, transparent),
+    color-mix(in srgb, #8a8a8a 5%, transparent)
+  );
+  border-radius: 999px;
+  flex: 1 1 auto;
+  height: 0.5px;
+  min-width: 0;
+  opacity: 0.72;
+}
+
+.section-titlebar-line:first-child {
+  background: linear-gradient(
+    270deg,
+    color-mix(in srgb, #8a8a8a 22%, transparent),
+    color-mix(in srgb, #8a8a8a 5%, transparent)
+  );
+}
+
 .primary,
 .secondary {
   padding: 7px 10px;
@@ -407,7 +468,7 @@ button:disabled {
 
 .group-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .group {
@@ -418,7 +479,7 @@ button:disabled {
   cursor: pointer;
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 12px;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -431,6 +492,9 @@ button:disabled {
 
 .group[data-active="true"] {
   background: color-mix(in srgb, var(--app-card) 94%, transparent);
+  box-shadow:
+    0 16px 36px color-mix(in srgb, var(--app-shadow) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 10%, transparent);
 }
 
 .group[data-drop-target="true"] {
@@ -707,6 +771,10 @@ button:disabled {
   text-align: center;
 }
 
+.session-frame {
+  position: relative;
+}
+
 .session {
   --session-surface: linear-gradient(
     180deg,
@@ -714,6 +782,7 @@ button:disabled {
     color-mix(in srgb, var(--app-card) 98%, #000000 2%)
   );
   --session-glow: transparent;
+  anchor-name: --session-card;
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--app-border);
@@ -778,6 +847,10 @@ button:disabled {
   opacity: 0.58;
 }
 
+.session-frame[data-running="false"] {
+  opacity: 0.58;
+}
+
 .session[data-visible="true"] {
   --session-surface: linear-gradient(
     160deg,
@@ -808,89 +881,46 @@ button:disabled {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-button-background) 88%, transparent);
 }
 
-.session[data-activity="working"] {
-  border-color: color-mix(in srgb, var(--working-primary) 64%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--working-primary) 44%, transparent),
-    0 12px 24px color-mix(in srgb, var(--working-primary) 12%, transparent);
-}
-
-.session[data-activity="working"]::before {
-  inset: -2px;
-  padding: 2px;
-  opacity: 0.95;
-  background: conic-gradient(
-    from 0deg,
-    color-mix(in srgb, var(--working-primary) 8%, transparent) 0deg,
-    var(--working-primary) 70deg,
-    var(--working-secondary) 150deg,
-    color-mix(in srgb, var(--working-primary) 10%, transparent) 220deg,
-    var(--working-primary) 310deg,
-    color-mix(in srgb, var(--working-primary) 8%, transparent) 360deg
-  );
-  -webkit-mask:
-    linear-gradient(#ffffff 0 0) content-box,
-    linear-gradient(#ffffff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#ffffff 0 0) content-box,
-    linear-gradient(#ffffff 0 0);
-  mask-composite: exclude;
-  animation: session-working-orbit 2.8s linear infinite;
-}
-
-.session[data-activity="working"]::after {
-  opacity: 1;
-}
-
-.session[data-activity="attention"] {
-  padding-left: 28px;
-  border-color: color-mix(in srgb, var(--attention-primary) 74%, var(--app-border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--attention-primary) 52%, transparent),
-    0 12px 24px color-mix(in srgb, var(--attention-primary) 10%, transparent);
-}
-
-.session[data-activity="attention"]::before {
-  inset: -2px;
-  padding: 2px;
-  opacity: 0.78;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--attention-primary) 82%, transparent),
-    color-mix(in srgb, var(--attention-secondary) 88%, transparent)
-  );
-  -webkit-mask:
-    linear-gradient(#ffffff 0 0) content-box,
-    linear-gradient(#ffffff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#ffffff 0 0) content-box,
-    linear-gradient(#ffffff 0 0);
-  mask-composite: exclude;
-}
-
-.session[data-activity="attention"]::after {
-  opacity: 1;
-}
-
 .session:focus-visible {
   outline-color: color-mix(in srgb, var(--app-button-background) 72%, #ffffff 28%);
 }
 
-.session-attention-dot {
+.session-status-dot {
+  --session-status-dot-color: var(--attention-dot);
   position: absolute;
-  left: 12px;
-  top: 14px;
-  width: 10px;
-  height: 10px;
+  left: 0;
+  top: 50%;
+  position-anchor: --session-card;
+  left: anchor(left);
+  top: anchor(center);
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
-  background: var(--attention-dot);
+  background-color: var(--session-status-dot-color);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--app-card) 82%, transparent),
-    0 0 0 5px color-mix(in srgb, var(--attention-dot) 12%, transparent),
-    0 6px 16px color-mix(in srgb, var(--attention-dot) 18%, transparent);
-  z-index: 1;
+    0 0 0 6px color-mix(in srgb, var(--session-status-dot-color) 12%, transparent),
+    0 6px 16px color-mix(in srgb, var(--session-status-dot-color) 18%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  scale: 1;
+  translate: 4px -50%;
+  z-index: 2;
+  transition:
+    opacity 160ms ease,
+    background-color 500ms ease,
+    box-shadow 500ms ease,
+    scale 160ms ease;
+}
+
+.session-frame[data-activity="working"] .session-status-dot,
+.session-frame[data-activity="attention"] .session-status-dot {
+  opacity: 1;
+}
+
+.session-frame[data-activity="working"] .session-status-dot {
+  --session-status-dot-color: #ffb454;
+  animation: session-status-dot-pulse 1.35s ease-in-out infinite;
 }
 
 .session-head {
@@ -995,7 +1025,7 @@ button:disabled {
 }
 
 .session-activity-badge[data-activity="working"]::before {
-  animation: session-working-pulse 1.35s ease-in-out infinite;
+  animation: session-status-dot-pulse 1.35s ease-in-out infinite;
 }
 
 .session-activity-badge[data-activity="attention"] {
@@ -1153,25 +1183,15 @@ button:disabled {
   color: var(--app-tooltip-background);
 }
 
-@keyframes session-working-orbit {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes session-working-pulse {
+@keyframes session-status-dot-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 14%, transparent);
-    transform: scale(0.92);
+    opacity: 0.78;
+    scale: 0.92;
   }
 
   50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent);
-    transform: scale(1);
+    opacity: 1;
+    scale: 1;
   }
 }
