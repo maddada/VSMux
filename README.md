@@ -6,9 +6,7 @@
 
 ---
 
-Early version video showing the core experience of VSmux (will create a new video soon showing all of the new stuff):
-
-https://x.com/i/status/2034602427442503890
+Early version video showing the core experience of VSmux (will create a new video soon showing all of the new stuff): https://x.com/i/status/2034602427442503890
 
 ---
 
