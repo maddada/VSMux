@@ -1,10 +1,25 @@
-# VSmux
+# VSMux: Manage all your AI coding sessions in 1 place.  
 
-![VSmux demo](demo.gif)
+Inspired by Codex app, T3Code, CMux, and Superset + many more.
 
-VSmux turns VS Code into a fast multi-session terminal workspace. It keeps up to nine shell sessions organized in a logical `3x3` grid, lets you show `1`, `2`, `3`, `4`, `6`, or `9` sessions at a time, and gives you quick layout switching between horizontal, vertical, and grid views.
+Based on zmx (tmux alternative) & ghostty 1.3. Persistent terminal sessions. Works with Claude Code/Codex CLI/OpenCode/PI/etc.
 
-Unlike a normal terminal tab workflow, VSmux is built for keeping several long-running agent, coding, or shell sessions alive and easy to jump between. Sessions can stay attached to the workspace across reloads and restarts, and the sidebar gives you a compact control surface for focusing, renaming, reordering, and managing them.
+Works great with my other tool that shows all running agent sessions: https://github.com/maddada/agent-manager-x
+
+Contributions welcome 🙏🏻
+
+<img width="3322" height="2054" alt="Code 2026-03-21 05 05 53" src="https://github.com/user-attachments/assets/24248a2e-a3e8-4178-abad-9d09f13c86d8" />
+
+Early version video showing the core experience (will create a new one soon showing all the new stuff):
+https://x.com/i/status/2034602427442503890
+
+---
+
+## A Sloplanation by GPT 5.4:
+
+VS-AGENT-MUX turns VS Code into a fast multi-session terminal workspace. It keeps up to nine shell sessions organized in a logical `3x3` grid, lets you show `1`, `2`, `3`, `4`, `6`, or `9` sessions at a time, and gives you quick layout switching between horizontal, vertical, and grid views.
+
+Unlike a normal terminal tab workflow, VS-AGENT-MUX is built for keeping several long-running agent, coding, or shell sessions alive and easy to jump between. Sessions can stay attached to the workspace across reloads and restarts, and the sidebar gives you a compact control surface for focusing, renaming, reordering, and managing them.
 
 ## What It Does
 
@@ -23,7 +38,7 @@ Unlike a normal terminal tab workflow, VSmux is built for keeping several long-r
 
 If you are on macOS, turn on VS Code's `window.nativeTabs` setting.
 
-This makes it much easier to switch between projects, repos, and worktrees because each VS Code window can live in the same native tab strip. Instead of juggling separate windows, you can keep multiple VSmux workspaces open and move between them quickly with the normal macOS tab workflow.
+This makes it much easier to switch between projects, repos, and worktrees because each VS Code window can live in the same native tab strip. Instead of juggling separate windows, you can keep multiple VS-AGENT-MUX workspaces open and move between them quickly with the normal macOS tab workflow.
 
 ### 2. Turn On Repositories Explorer for Worktrees
 
@@ -46,7 +61,7 @@ On macOS, the extension ships with these default shortcuts:
 - `cmd + option + v` = vertical layout
 - `cmd + option + g` = grid layout
 - `cmd + option + r` = rename active session
-- `cmd + option + f` = full screen the focused VSmux terminal session, or fall back to VS Code panel/editor maximize when a terminal is not focused
+- `cmd + option + f` = full screen the focused VS-AGENT-MUX terminal session, or fall back to VS Code panel/editor maximize when a terminal is not focused
 - `cmd + option + =` = increase terminal font size only
 - `cmd + option + -` = decrease terminal font size only
 
@@ -60,81 +75,81 @@ Paste this into your VS Code `keybindings.json` on macOS (find replace cmd with 
 [
   {
     "key": "ctrl+alt+shift+1",
-    "command": "VSmux.focusGroup1",
+    "command": "VS-AGENT-MUX.focusGroup1",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "ctrl+alt+shift+2",
-    "command": "VSmux.focusGroup2",
+    "command": "VS-AGENT-MUX.focusGroup2",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "ctrl+alt+shift+3",
-    "command": "VSmux.focusGroup3",
+    "command": "VS-AGENT-MUX.focusGroup3",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "ctrl+alt+shift+4",
-    "command": "VSmux.focusGroup4",
+    "command": "VS-AGENT-MUX.focusGroup4",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+1",
-    "command": "VSmux.focusSessionSlot",
+    "command": "VS-AGENT-MUX.focusSessionSlot",
     "args": 1,
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+2",
-    "command": "VSmux.focusSessionSlot",
+    "command": "VS-AGENT-MUX.focusSessionSlot",
     "args": 2,
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+3",
-    "command": "VSmux.focusSessionSlot",
+    "command": "VS-AGENT-MUX.focusSessionSlot",
     "args": 3,
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+4",
-    "command": "VSmux.focusSessionSlot",
+    "command": "VS-AGENT-MUX.focusSessionSlot",
     "args": 4,
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+6",
-    "command": "VSmux.showSix",
+    "command": "VS-AGENT-MUX.showSix",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+9",
-    "command": "VSmux.showNine",
+    "command": "VS-AGENT-MUX.showNine",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+h",
-    "command": "VSmux.setHorizontalView",
+    "command": "VS-AGENT-MUX.setHorizontalView",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+v",
-    "command": "VSmux.setVerticalView",
+    "command": "VS-AGENT-MUX.setVerticalView",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+g",
-    "command": "VSmux.setGridView",
+    "command": "VS-AGENT-MUX.setGridView",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+r",
-    "command": "VSmux.renameActiveSession",
+    "command": "VS-AGENT-MUX.renameActiveSession",
     "when": "!inputFocus || terminalFocus"
   },
   {
     "key": "cmd+alt+f",
-    "command": "VSmux.toggleFullscreenSession",
+    "command": "VS-AGENT-MUX.toggleFullscreenSession",
     "when": "terminalFocus"
   },
   {
@@ -163,14 +178,13 @@ Paste this into your VS Code `keybindings.json` on macOS (find replace cmd with 
 ## Getting Started
 
 1. Open the Command Palette.
-2. Run `VSmux: Open Workspace`.
+2. Run `VS-AGENT-MUX: Open Workspace`.
 3. Create your first session.
 4. Use the sidebar and hotkeys to change the number of visible sessions and switch layouts.
 
 ## Settings
 
-- `VSmux.backgroundSessionTimeoutMinutes`: controls how long detached background sessions stay alive after the last VSmux window disconnects
-- `VSmux.sidebarTheme`: changes the sidebar theme preset
-- `VSmux.experimentalZmxActionDelayMs`: experimental zmx-only debug delay added before each VSmux terminal UI action; set it to `1000` to slow the sequence by 1 second per step
-- `VSmux.showCloseButtonOnSessionCards`: shows or hides the close button on session cards
-- `VSmux.sendRenameCommandOnSidebarRename`: stages `/rename <new name>` in the terminal when you rename from the sidebar
+- `VS-AGENT-MUX.backgroundSessionTimeoutMinutes`: controls how long detached background sessions stay alive after the last VS-AGENT-MUX window disconnects
+- `VS-AGENT-MUX.sidebarTheme`: changes the sidebar theme preset
+- `VS-AGENT-MUX.showCloseButtonOnSessionCards`: shows or hides the close button on session cards
+- `VS-AGENT-MUX.sendRenameCommandOnSidebarRename`: stages `/rename <new name>` in the terminal when you rename from the sidebar
