@@ -12,7 +12,7 @@ Early version video showing the core experience of VSmux (will create a new vide
 
 ## The shpeel:
 
-This tool is for you if:
+This extension is for you if:
 
 - You like to code using multiple agent CLIs in parallel.
 - You don't want to be locked into a tool like conductor or superset or w/e.
