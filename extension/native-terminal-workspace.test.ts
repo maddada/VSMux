@@ -99,8 +99,8 @@ vi.mock("./session-sidebar-view", () => ({
   },
 }));
 
-vi.mock("./zmx-terminal-workspace-backend", () => ({
-  ZmxTerminalWorkspaceBackend: class ZmxTerminalWorkspaceBackend {
+vi.mock("./native-terminal-workspace-backend", () => ({
+  NativeTerminalWorkspaceBackend: class NativeTerminalWorkspaceBackend {
     public constructor() {
       testState.backend = {
         acknowledgeAttention: vi.fn(async () => false),
@@ -292,6 +292,105 @@ describe("NativeTerminalWorkspaceController rename session", () => {
       }),
     );
     expect(testState.backend?.writeText).toHaveBeenCalledWith("session-4", "codex", true);
+  });
+
+  test("should recreate a missing terminal when clicking an already-focused exited session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    workspaceSnapshot.groups[0]!.snapshot.focusedSessionId = session.sessionId;
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    testState.backend?.getSessionSnapshot.mockReturnValue({
+      status: "exited",
+    });
+
+    await controller.focusSession(session.sessionId);
+
+    expect(testState.backend?.focusSession).not.toHaveBeenCalled();
+    expect(testState.backend?.reconcileVisibleTerminals).toHaveBeenCalledTimes(1);
+  });
+
+  test("should re-focus the running terminal when clicking an already-focused live session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    workspaceSnapshot.groups[0]!.snapshot.focusedSessionId = session.sessionId;
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    testState.backend?.getSessionSnapshot.mockReturnValue({
+      status: "running",
+    });
+    testState.backend?.focusSession.mockResolvedValue(true);
+
+    await controller.focusSession(session.sessionId);
+
+    expect(testState.backend?.focusSession).toHaveBeenCalledWith(session.sessionId, false);
+    expect(testState.backend?.reconcileVisibleTerminals).not.toHaveBeenCalled();
+  });
+
+  test("should send a codex resume command after recreating a closed sidebar-agent session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("codex");
+
+    testState.backend?.writeText.mockClear();
+    testState.backend?.getSessionSnapshot.mockReturnValue({
+      status: "exited",
+    });
+
+    await controller.focusSession("session-4");
+
+    expect(testState.backend?.reconcileVisibleTerminals).toHaveBeenCalled();
+    expect(testState.backend?.writeText).toHaveBeenCalledWith(
+      "session-4",
+      `codex resume '${generatedAlias}'`,
+      true,
+    );
+  });
+
+  test("should send a claude resume command after recreating a closed claude session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("claude");
+
+    testState.backend?.writeText.mockClear();
+    testState.backend?.getSessionSnapshot.mockReturnValue({
+      status: "exited",
+    });
+
+    await controller.focusSession("session-4");
+
+    expect(testState.backend?.writeText).toHaveBeenCalledWith(
+      "session-4",
+      `claude -r '${generatedAlias}'`,
+      true,
+    );
+  });
+
+  test("should send an opencode continue command after recreating a closed opencode session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    await controller.runSidebarAgent("opencode");
+
+    testState.backend?.writeText.mockClear();
+    testState.backend?.getSessionSnapshot.mockReturnValue({
+      status: "exited",
+    });
+
+    await controller.focusSession("session-4");
+
+    expect(testState.backend?.writeText).toHaveBeenCalledWith(
+      "session-4",
+      "opencode --continue",
+      true,
+    );
   });
 });
 

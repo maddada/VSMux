@@ -522,7 +522,7 @@ _vsmux_write_title() {
   mv "$_vsmux_tmp_file" "$_vsmux_state_file" >/dev/null 2>&1 || true
 }
 
-_vsmux_write_title "OpenAI Codex"
+_vsmux_write_title "Codex"
 
 if [ -f ${quotedNotifyPath} ]; then
   (

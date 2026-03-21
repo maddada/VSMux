@@ -14,12 +14,7 @@ export type AgentConfigModalProps = {
   onSave: (draft: AgentConfigDraft) => void;
 };
 
-export function AgentConfigModal({
-  draft,
-  isOpen,
-  onCancel,
-  onSave,
-}: AgentConfigModalProps) {
+export function AgentConfigModal({ draft, isOpen, onCancel, onSave }: AgentConfigModalProps) {
   const [command, setCommand] = useState(draft.command);
   const [name, setName] = useState(draft.name);
   const descriptionId = useId();
@@ -58,51 +53,51 @@ export function AgentConfigModal({
   const isSaveDisabled = name.trim().length === 0 || command.trim().length === 0;
 
   return createPortal(
-    <div className='confirm-modal-root' role='presentation'>
-      <button className='confirm-modal-backdrop' onClick={onCancel} type='button' />
+    <div className="confirm-modal-root" role="presentation">
+      <button className="confirm-modal-backdrop" onClick={onCancel} type="button" />
       <div
         aria-describedby={descriptionId}
         aria-labelledby={titleId}
-        aria-modal='true'
-        className='confirm-modal command-config-modal'
-        role='dialog'
+        aria-modal="true"
+        className="confirm-modal command-config-modal"
+        role="dialog"
       >
-        <div className='confirm-modal-header'>
-          <div className='confirm-modal-title' id={titleId}>
+        <div className="confirm-modal-header">
+          <div className="confirm-modal-title" id={titleId}>
             Configure agent
           </div>
-          <div className='confirm-modal-description' id={descriptionId}>
+          <div className="confirm-modal-description" id={descriptionId}>
             Launches a new VSmux session and runs this agent command in it.
           </div>
         </div>
-        <div className='command-config-fields'>
-          <label className='command-config-field'>
-            <span className='command-config-label'>Name</span>
+        <div className="command-config-fields">
+          <label className="command-config-field">
+            <span className="command-config-label">Name</span>
             <input
               autoFocus
-              className='group-title-input command-config-input'
+              className="group-title-input command-config-input"
               onChange={(event) => setName(event.currentTarget.value)}
-              placeholder='Codex CLI'
+              placeholder="Codex"
               value={name}
             />
           </label>
-          <label className='command-config-field'>
-            <span className='command-config-label'>Command</span>
+          <label className="command-config-field">
+            <span className="command-config-label">Command</span>
             <textarea
-              className='group-title-input command-config-input command-config-textarea'
+              className="group-title-input command-config-input command-config-textarea"
               onChange={(event) => setCommand(event.currentTarget.value)}
-              placeholder='codex'
+              placeholder="codex"
               rows={3}
               value={command}
             />
           </label>
         </div>
-        <div className='confirm-modal-actions'>
-          <button className='secondary confirm-modal-button' onClick={onCancel} type='button'>
+        <div className="confirm-modal-actions">
+          <button className="secondary confirm-modal-button" onClick={onCancel} type="button">
             Cancel
           </button>
           <button
-            className='primary confirm-modal-button'
+            className="primary confirm-modal-button"
             disabled={isSaveDisabled}
             onClick={() =>
               onSave({
@@ -111,13 +106,13 @@ export function AgentConfigModal({
                 name: name.trim(),
               })
             }
-            type='button'
+            type="button"
           >
             Save
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

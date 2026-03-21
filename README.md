@@ -23,14 +23,10 @@ This extension is for you if:
 Then this is the extension for you! You get a very nice interface to work with your agents without having to jump between the editor and the ADE tool.
 
 > Inspired by Antigravity agent panel, Codex app, T3Code, CMux, and Superset + many more.
->
-> Based on zmx (tmux alternative) & ghostty 1.3. Persistent terminal sessions. Works with any agent CLI (Claude Code/Codex CLI/OpenCode/PI/etc.)
-
-Btw can work with worktrees in VS Code very easily by enabling these setting:
 
 ---
 
-## Recommended VS Code Setup
+## Highly recommended VS Code Setup to work with worktrees and parallel agents
 
 ### 1. Enable Native Tabs
 
@@ -60,3 +56,17 @@ VSmux works great with my other tool that shows all running agent sessions in a 
 ---
 
 ## Contributions welcome 🙏🏻
+
+## Getting Started
+
+1. Open the Command Palette.
+2. Run `VSmux: Open Workspace`.
+3. Create your first session.
+4. Use the sidebar and hotkeys to change the number of visible sessions and switch layouts.
+
+## Settings
+
+- `VSmux.backgroundSessionTimeoutMinutes`: controls how long detached background sessions stay alive after the last VSmux window disconnects
+- `VSmux.sidebarTheme`: changes the sidebar theme preset
+- `VSmux.showCloseButtonOnSessionCards`: shows or hides the close button on session cards
+- `VSmux.sendRenameCommandOnSidebarRename`: stages `/rename <new name>` in the terminal when you rename from the sidebar

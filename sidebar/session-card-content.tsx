@@ -1,8 +1,16 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
+import { getSidebarAgentNameByIcon, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
+
+const AGENT_SECONDARY_LABELS: Record<SidebarAgentIcon, readonly string[]> = {
+  claude: ["claude", "claude code"],
+  codex: ["codex", "codex cli", "openai codex"],
+  gemini: ["gemini"],
+  opencode: ["open code", "opencode"],
+};
 
 export type SessionCardContentProps = {
   aliasHeadingRef?: RefObject<HTMLDivElement | null>;
@@ -21,9 +29,15 @@ export function SessionCardContent({
   showCloseButton,
   showHotkeys,
 }: SessionCardContentProps) {
+  const terminalTitle = getAgentSecondaryText(session.terminalTitle, session.agentIcon);
+  const primaryTitle = getAgentSecondaryText(session.primaryTitle, session.agentIcon);
   const secondaryText =
-    session.detail ?? session.terminalTitle ?? session.primaryTitle ?? session.activityLabel;
-  const secondaryTitle = [session.terminalTitle, session.primaryTitle, session.detail]
+    session.detail ??
+    terminalTitle ??
+    primaryTitle ??
+    session.activityLabel ??
+    getSidebarAgentNameByIcon(session.agentIcon);
+  const secondaryTitle = [terminalTitle, primaryTitle, session.detail]
     .filter((value) => value && value.length > 0)
     .join("\n");
 
@@ -78,6 +92,29 @@ export function SessionCardContent({
       </div>
     </>
   );
+}
+
+function getAgentSecondaryText(
+  value: string | undefined,
+  agentIcon: SidebarSessionItem["agentIcon"],
+): string | undefined {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) {
+    return undefined;
+  }
+
+  if (!agentIcon) {
+    return normalizedValue;
+  }
+
+  const matchingGenericLabel = AGENT_SECONDARY_LABELS[agentIcon].includes(
+    normalizedValue.toLowerCase(),
+  );
+  if (matchingGenericLabel) {
+    return getSidebarAgentNameByIcon(agentIcon);
+  }
+
+  return normalizedValue;
 }
 
 type OverflowTooltipTextProps = {
