@@ -36,7 +36,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
-    "@dnd-kit/react": "^0.3.2",
+    "@dnd-kit/abstract": "0.3.2",
+    "@dnd-kit/dom": "0.3.2",
+    "@dnd-kit/helpers": "0.3.2",
+    "@dnd-kit/react": "0.3.2",
     "@tabler/icons-react": "^3.40.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
@@ -279,12 +282,6 @@
           "minimum": 0,
           "default": 0,
           "description": "Experimental zmx debug setting: add this many milliseconds of delay before each VSmux terminal UI action. Set to 1000 to slow swaps down by 1 second per step so you can inspect layout behavior."
-        },
-        "VSmux.experimentalParkHiddenZmxTerminalsInPanel": {
-          "title": "Experimental Park Hidden Zmx Terminals In Panel",
-          "type": "boolean",
-          "default": false,
-          "description": "Experimental zmx setting: keep hidden sessions alive in the terminal panel and move them into editor groups when they become visible instead of recreating VS Code terminals. Incoming sessions are promoted before outgoing sessions are demoted to reduce layout shifting."
         },
         "VSmux.showCloseButtonOnSessionCards": {
           "title": "Show Close Button On Session Cards",

@@ -138,6 +138,7 @@ export function reduceSidebarStoryWorkspace(
         workspace.snapshot,
         message.sessionId,
         message.groupId,
+        message.targetIndex,
       );
       return result.changed ? { ...workspace, snapshot: result.snapshot } : undefined;
     }
@@ -249,6 +250,29 @@ export function reduceSidebarStoryWorkspace(
           ),
         },
       };
+
+    case "syncSidebarCommandOrder": {
+      const commandById = new Map(
+        workspace.options.commands.map((command) => [command.commandId, command] as const),
+      );
+      const nextCommands = message.commandIds
+        .map((commandId) => commandById.get(commandId))
+        .filter((command): command is SidebarCommandButton => command !== undefined);
+
+      for (const command of workspace.options.commands) {
+        if (!nextCommands.some((candidate) => candidate.commandId === command.commandId)) {
+          nextCommands.push(command);
+        }
+      }
+
+      return {
+        ...workspace,
+        options: {
+          ...workspace.options,
+          commands: nextCommands,
+        },
+      };
+    }
 
     case "deleteSidebarAgent":
       return {

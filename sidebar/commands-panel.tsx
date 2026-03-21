@@ -1,7 +1,15 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { DragDropProvider } from "@dnd-kit/react";
+import { isSortable, useSortable } from "@dnd-kit/react/sortable";
+import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import { CommandConfigModal, type CommandConfigDraft } from "./command-config-modal";
@@ -13,6 +21,7 @@ const CONTEXT_MENU_HEIGHT_PX = 110;
 
 type CommandsPanelProps = {
   commands: SidebarCommandButton[];
+  createRequestId: number;
   vscode: WebviewApi;
 };
 
@@ -24,6 +33,11 @@ type ContextMenuPosition = {
 type CommandMenuState = {
   command: SidebarCommandButton;
   position: ContextMenuPosition;
+};
+
+type CommandDragData = {
+  commandId: string;
+  kind: "sidebar-command";
 };
 
 function clampContextMenuPosition(clientX: number, clientY: number): ContextMenuPosition {
@@ -39,8 +53,28 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
   };
 }
 
-export function CommandsPanel({ commands, vscode }: CommandsPanelProps) {
+function createCommandDragData(commandId: string): CommandDragData {
+  return {
+    commandId,
+    kind: "sidebar-command",
+  };
+}
+
+function getCommandDragData(candidate: { data?: unknown } | null | undefined) {
+  const data = candidate?.data;
+  if (!data || typeof data !== "object" || !("kind" in data)) {
+    return undefined;
+  }
+
+  const parsedData = data as Partial<CommandDragData>;
+  return parsedData.kind === "sidebar-command" && typeof parsedData.commandId === "string"
+    ? (parsedData as CommandDragData)
+    : undefined;
+}
+
+export function CommandsPanel({ commands, createRequestId, vscode }: CommandsPanelProps) {
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
+  const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +147,78 @@ export function CommandsPanel({ commands, vscode }: CommandsPanelProps) {
     });
   };
 
+  useEffect(() => {
+    setDraftCommandIds((previousDraft) => reconcileDraftCommandIds(previousDraft, commands));
+  }, [commands]);
+
+  useEffect(() => {
+    if (createRequestId === 0) {
+      return;
+    }
+
+    setContextMenu(undefined);
+    setEditingCommand({
+      closeTerminalOnExit: false,
+      command: "",
+      commandId: undefined,
+      name: "",
+    });
+  }, [createRequestId]);
+
+  const orderedCommands = useMemo(() => {
+    const commandById = new Map(commands.map((command) => [command.commandId, command] as const));
+    const orderedCommandIds = draftCommandIds
+      ? mergeCommandIds(
+          draftCommandIds,
+          commands.map((command) => command.commandId),
+        )
+      : commands.map((command) => command.commandId);
+
+    return orderedCommandIds
+      .map((commandId) => commandById.get(commandId))
+      .filter((command): command is SidebarCommandButton => command !== undefined);
+  }, [commands, draftCommandIds]);
+
+  const handleDragEnd = (event: {
+    canceled?: boolean;
+    operation: {
+      source: unknown;
+      target: unknown;
+    };
+  }) => {
+    if (event.canceled) {
+      return;
+    }
+
+    const { source, target } = event.operation;
+    if (!isSortable(source) || !isSortable(target)) {
+      return;
+    }
+
+    const sourceData = getCommandDragData(source);
+    const targetData = getCommandDragData(target as { data?: unknown });
+    if (!sourceData || !targetData || sourceData.commandId === targetData.commandId) {
+      return;
+    }
+
+    const { initialIndex } = source;
+    const targetIndex = target.index;
+    if (targetIndex == null || initialIndex === targetIndex) {
+      return;
+    }
+
+    const nextCommandIds = moveCommandId(
+      orderedCommands.map((command) => command.commandId),
+      initialIndex,
+      targetIndex,
+    );
+    setDraftCommandIds(nextCommandIds);
+    vscode.postMessage({
+      commandIds: nextCommandIds,
+      type: "syncSidebarCommandOrder",
+    });
+  };
+
   return (
     <>
       <section className="commands-section">
@@ -123,64 +229,27 @@ export function CommandsPanel({ commands, vscode }: CommandsPanelProps) {
         </div>
         <div className="card commands-panel">
           <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
-            <div className="commands-grid">
-              {commands.map((command) => (
-                <Tooltip.Root key={command.commandId}>
-                  <Tooltip.Trigger
-                    render={
-                      <button
-                        aria-label={
-                          command.command
-                            ? `Run ${command.name}`
-                            : `Configure ${command.name} command`
-                        }
-                        className="command-button"
-                        data-configured={String(Boolean(command.command))}
-                        data-default={String(command.isDefault)}
-                        data-empty-space-blocking="true"
-                        onClick={() => runOrConfigureCommand(command)}
-                        onContextMenu={(event: ReactMouseEvent<HTMLButtonElement>) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setContextMenu({
-                            command,
-                            position: clampContextMenuPosition(event.clientX, event.clientY),
-                          });
-                        }}
-                        type="button"
-                      >
-                        <span className="command-button-label">{command.name}</span>
-                      </button>
-                    }
+            <DragDropProvider onDragEnd={handleDragEnd}>
+              <div className="commands-grid">
+                {orderedCommands.map((command, index) => (
+                  <SortableCommandButton
+                    command={command}
+                    index={index}
+                    isContextMenuOpen={contextMenu?.command.commandId === command.commandId}
+                    key={command.commandId}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setContextMenu({
+                        command,
+                        position: clampContextMenuPosition(event.clientX, event.clientY),
+                      });
+                    }}
+                    onRun={() => runOrConfigureCommand(command)}
                   />
-                  <Tooltip.Portal>
-                    <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
-                      <Tooltip.Popup className="tooltip-popup">
-                        {command.command
-                          ? `${command.name}: ${command.command}`
-                          : `Configure ${command.name}`}
-                      </Tooltip.Popup>
-                    </Tooltip.Positioner>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              ))}
-              <button
-                aria-label="Add command"
-                className="command-button command-button-add"
-                data-empty-space-blocking="true"
-                onClick={() =>
-                  setEditingCommand({
-                    closeTerminalOnExit: false,
-                    command: "",
-                    commandId: undefined,
-                    name: "",
-                  })
-                }
-                type="button"
-              >
-                <IconPlus aria-hidden="true" size={16} stroke={1.8} />
-              </button>
-            </div>
+                ))}
+              </div>
+            </DragDropProvider>
           </Tooltip.Provider>
         </div>
       </section>
@@ -213,23 +282,21 @@ export function CommandsPanel({ commands, vscode }: CommandsPanelProps) {
                 <IconPencil aria-hidden="true" className="session-context-menu-icon" size={14} />
                 Configure Command
               </button>
-              {contextMenu.command.command || !contextMenu.command.isDefault ? (
-                <button
-                  className="session-context-menu-item session-context-menu-item-danger"
-                  onClick={() => {
-                    setContextMenu(undefined);
-                    vscode.postMessage({
-                      commandId: contextMenu.command.commandId,
-                      type: "deleteSidebarCommand",
-                    });
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  <IconTrash aria-hidden="true" className="session-context-menu-icon" size={14} />
-                  {contextMenu.command.isDefault ? "Reset Command" : "Remove Command"}
-                </button>
-              ) : null}
+              <button
+                className="session-context-menu-item session-context-menu-item-danger"
+                onClick={() => {
+                  setContextMenu(undefined);
+                  vscode.postMessage({
+                    commandId: contextMenu.command.commandId,
+                    type: "deleteSidebarCommand",
+                  });
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconTrash aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Remove Command
+              </button>
             </div>,
             document.body,
           )
@@ -253,4 +320,111 @@ export function CommandsPanel({ commands, vscode }: CommandsPanelProps) {
       ) : null}
     </>
   );
+}
+
+type SortableCommandButtonProps = {
+  command: SidebarCommandButton;
+  index: number;
+  isContextMenuOpen: boolean;
+  onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRun: () => void;
+};
+
+function SortableCommandButton({
+  command,
+  index,
+  isContextMenuOpen,
+  onContextMenu,
+  onRun,
+}: SortableCommandButtonProps) {
+  const sortable = useSortable({
+    accept: "sidebar-command",
+    data: createCommandDragData(command.commandId),
+    disabled: isContextMenuOpen,
+    group: "sidebar-commands",
+    id: command.commandId,
+    index,
+    type: "sidebar-command",
+  });
+
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        render={
+          <button
+            aria-label={
+              command.command ? `Run ${command.name}` : `Configure ${command.name} command`
+            }
+            className="command-button"
+            data-configured={String(Boolean(command.command))}
+            data-default={String(command.isDefault)}
+            data-dragging={String(Boolean(sortable.isDragging))}
+            data-empty-space-blocking="true"
+            onClick={onRun}
+            onContextMenu={onContextMenu}
+            ref={sortable.ref}
+            type="button"
+          >
+            <span className="command-button-label">{command.name}</span>
+          </button>
+        }
+      />
+      <Tooltip.Portal>
+        <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
+          <Tooltip.Popup className="tooltip-popup">
+            {command.command ? `${command.name}: ${command.command}` : `Configure ${command.name}`}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
+function moveCommandId(commandIds: readonly string[], initialIndex: number, index: number): string[] {
+  const nextCommandIds = [...commandIds];
+  const [commandId] = nextCommandIds.splice(initialIndex, 1);
+
+  if (commandId === undefined) {
+    return nextCommandIds;
+  }
+
+  nextCommandIds.splice(index, 0, commandId);
+  return nextCommandIds;
+}
+
+function mergeCommandIds(
+  draftCommandIds: readonly string[],
+  syncedCommandIds: readonly string[],
+): string[] {
+  const syncedCommandIdSet = new Set(syncedCommandIds);
+  const mergedCommandIds = draftCommandIds.filter((commandId) => syncedCommandIdSet.has(commandId));
+
+  for (const commandId of syncedCommandIds) {
+    if (!mergedCommandIds.includes(commandId)) {
+      mergedCommandIds.push(commandId);
+    }
+  }
+
+  return mergedCommandIds;
+}
+
+function reconcileDraftCommandIds(
+  draftCommandIds: readonly string[] | undefined,
+  commands: readonly SidebarCommandButton[],
+): string[] | undefined {
+  if (!draftCommandIds) {
+    return undefined;
+  }
+
+  const syncedCommandIds = commands.map((command) => command.commandId);
+  const nextDraftCommandIds = mergeCommandIds(draftCommandIds, syncedCommandIds);
+  return haveSameCommandOrder(nextDraftCommandIds, syncedCommandIds) ? undefined : nextDraftCommandIds;
+}
+
+function haveSameCommandOrder(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((commandId, index) => commandId === right[index]);
 }

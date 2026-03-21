@@ -1,11 +1,9 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import claudeLogo from "../src/assets/claude.svg";
-import codexLogo from "../src/assets/codex.svg";
-import opencodeLogo from "../src/assets/opencode.svg";
-import type { SidebarAgentButton, SidebarAgentIcon } from "../shared/sidebar-agents";
+import type { SidebarAgentButton } from "../shared/sidebar-agents";
+import { AGENT_LOGOS } from "./agent-logos";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import { AgentConfigModal, type AgentConfigDraft } from "./agent-config-modal";
 import type { WebviewApi } from "./webview-api";
@@ -16,6 +14,7 @@ const CONTEXT_MENU_HEIGHT_PX = 110;
 
 type AgentsPanelProps = {
   agents: SidebarAgentButton[];
+  createRequestId: number;
   vscode: WebviewApi;
 };
 
@@ -27,12 +26,6 @@ type ContextMenuPosition = {
 type AgentMenuState = {
   agent: SidebarAgentButton;
   position: ContextMenuPosition;
-};
-
-const AGENT_LOGOS: Record<SidebarAgentIcon, string> = {
-  claude: claudeLogo,
-  codex: codexLogo,
-  opencode: opencodeLogo,
 };
 
 function clampContextMenuPosition(clientX: number, clientY: number): ContextMenuPosition {
@@ -48,7 +41,7 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
   };
 }
 
-export function AgentsPanel({ agents, vscode }: AgentsPanelProps) {
+export function AgentsPanel({ agents, createRequestId, vscode }: AgentsPanelProps) {
   const [contextMenu, setContextMenu] = useState<AgentMenuState>();
   const [editingAgent, setEditingAgent] = useState<AgentConfigDraft>();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -109,6 +102,19 @@ export function AgentsPanel({ agents, vscode }: AgentsPanelProps) {
     });
   };
 
+  useEffect(() => {
+    if (createRequestId === 0) {
+      return;
+    }
+
+    setContextMenu(undefined);
+    setEditingAgent({
+      agentId: undefined,
+      command: "",
+      name: "",
+    });
+  }, [createRequestId]);
+
   return (
     <>
       <section className="commands-section">
@@ -159,6 +165,7 @@ export function AgentsPanel({ agents, vscode }: AgentsPanelProps) {
                                 alt=""
                                 aria-hidden="true"
                                 className="agent-button-icon"
+                                data-agent-icon={agent.icon}
                                 src={AGENT_LOGOS[agent.icon]}
                               />
                             ) : (
@@ -183,21 +190,6 @@ export function AgentsPanel({ agents, vscode }: AgentsPanelProps) {
                   </Tooltip.Root>
                 );
               })}
-              <button
-                aria-label="Add agent"
-                className="agent-button command-button-add"
-                data-empty-space-blocking="true"
-                onClick={() =>
-                  setEditingAgent({
-                    agentId: undefined,
-                    command: "",
-                    name: "",
-                  })
-                }
-                type="button"
-              >
-                <IconPlus aria-hidden="true" size={16} stroke={1.8} />
-              </button>
             </div>
           </Tooltip.Provider>
         </div>

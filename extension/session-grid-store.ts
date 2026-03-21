@@ -231,8 +231,12 @@ export class SessionGridStore {
     return result.changed;
   }
 
-  public async moveSessionToGroup(sessionId: string, groupId: string): Promise<boolean> {
-    const result = moveSessionToGroupInWorkspace(this.snapshot, sessionId, groupId);
+  public async moveSessionToGroup(
+    sessionId: string,
+    groupId: string,
+    targetIndex?: number,
+  ): Promise<boolean> {
+    const result = moveSessionToGroupInWorkspace(this.snapshot, sessionId, groupId, targetIndex);
     this.snapshot = result.snapshot;
     if (result.changed) {
       await this.persist();

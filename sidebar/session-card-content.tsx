@@ -1,6 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
+import { AGENT_LOGOS } from "./agent-logos";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 
 export type SessionCardContentProps = {
@@ -28,6 +29,17 @@ export function SessionCardContent({
 
   return (
     <>
+      {session.agentIcon ? (
+        <span
+          aria-hidden="true"
+          className="session-agent-watermark"
+          style={
+            {
+              "--session-agent-logo": `url("${AGENT_LOGOS[session.agentIcon]}")`,
+            } as CSSProperties
+          }
+        />
+      ) : null}
       <div className="session-head">
         <OverflowTooltipText
           className="session-alias-heading"

@@ -109,7 +109,31 @@ export const DragToReorderWithinGroup: Story = {
       '[data-sidebar-session-id="session-2"]',
       "session-2 card",
     );
+    const firstGroupTwoSession = await findRequiredElement(
+      storyRoot,
+      '[data-sidebar-session-id="session-4"]',
+      "session-4 card",
+    );
+    const secondGroupTwoSession = await findRequiredElement(
+      storyRoot,
+      '[data-sidebar-session-id="session-5"]',
+      "session-5 card",
+    );
     resetSidebarStoryMessages();
+
+    await step("keep each group-2 frame mapped to a single session while hovering", async () => {
+      const dragState = await dragToHover(firstGroupTwoSession, secondGroupTwoSession);
+
+      await waitFor(() => {
+        const frameSessionCounts = Array.from(
+          storyRoot.querySelectorAll('[data-sidebar-group-id="group-2"] .session-frame'),
+        ).map((frame) => frame.querySelectorAll(".session").length);
+
+        return expect(frameSessionCounts).toEqual([1, 1]);
+      });
+
+      await releaseDrag(secondGroupTwoSession, dragState);
+    });
 
     await step("reorder sessions inside a group", async () => {
       await dragAndDrop(firstSession, secondSession);
@@ -136,23 +160,24 @@ export const DragToMoveAcrossGroups: Story = {
       '[data-sidebar-session-id="session-3"]',
       "session-3 card",
     );
-    const targetGroup = await findRequiredElement(
+    const targetSession = await findRequiredElement(
       storyRoot,
-      '[data-sidebar-group-id="group-2"]',
-      "group-2 section",
+      '[data-sidebar-session-id="session-4"]',
+      "session-4 card",
     );
     resetSidebarStoryMessages();
 
-    await step("move a session into another group", async () => {
-      await dragAndDrop(sourceSession, targetGroup);
+    await step("move a session into another group at the hovered slot", async () => {
+      await dragAndDrop(sourceSession, targetSession);
 
       await expectMessage({
         groupId: "group-2",
         sessionId: "session-3",
+        targetIndex: 0,
         type: "moveSessionToGroup",
       });
       await expectSessionMembership(storyRoot, "group-1", ["session-1", "session-2"]);
-      await expectSessionMembership(storyRoot, "group-2", ["session-4", "session-3", "session-5"]);
+      await expectSessionMembership(storyRoot, "group-2", ["session-3", "session-4", "session-5"]);
     });
   },
 };
@@ -178,9 +203,10 @@ export const DragAcrossGroupsRepeatedly: Story = {
       await expectMessage({
         groupId: "group-2",
         sessionId: "session-3",
+        targetIndex: 0,
         type: "moveSessionToGroup",
       });
-      await expectSessionMembership(storyRoot, "group-2", ["session-4", "session-3", "session-5"]);
+      await expectSessionMembership(storyRoot, "group-2", ["session-3", "session-4", "session-5"]);
 
       resetSidebarStoryMessages();
       await dragAndDrop(
@@ -198,6 +224,7 @@ export const DragAcrossGroupsRepeatedly: Story = {
       await expectMessage({
         groupId: "group-1",
         sessionId: "session-3",
+        targetIndex: 0,
         type: "moveSessionToGroup",
       });
       await expectSessionMembership(storyRoot, "group-1", ["session-3", "session-1", "session-2"]);
@@ -258,6 +285,11 @@ async function expectMessage(expectedMessage: Partial<SidebarToExtensionMessage>
 }
 
 async function dragAndDrop(source: HTMLElement, target: HTMLElement) {
+  const dragState = await dragToHover(source, target);
+  await releaseDrag(target, dragState);
+}
+
+async function dragToHover(source: HTMLElement, target: HTMLElement) {
   const sourcePosition = getCenter(source);
   const targetPosition = getCenter(target);
   const pointerData = {
@@ -289,14 +321,31 @@ async function dragAndDrop(source: HTMLElement, target: HTMLElement) {
     clientY: targetPosition.y,
   });
   await nextFrame(source.ownerDocument.defaultView);
+
+  return { pointerData, targetPosition };
+}
+
+async function releaseDrag(
+  target: HTMLElement,
+  dragState: {
+    pointerData: {
+      button: number;
+      buttons: number;
+      isPrimary: boolean;
+      pointerId: number;
+      pointerType: string;
+    };
+    targetPosition: { x: number; y: number };
+  },
+) {
   await fireEvent.pointerUp(target, {
-    ...pointerData,
+    ...dragState.pointerData,
     buttons: 0,
     bubbles: true,
-    clientX: targetPosition.x,
-    clientY: targetPosition.y,
+    clientX: dragState.targetPosition.x,
+    clientY: dragState.targetPosition.y,
   });
-  await nextFrame(source.ownerDocument.defaultView);
+  await nextFrame(target.ownerDocument.defaultView);
 }
 
 function getCenter(element: HTMLElement) {
@@ -329,6 +378,7 @@ async function dragSessionToGroup(root: ParentNode, sessionId: string, groupId: 
   await expectMessage({
     groupId,
     sessionId,
+    targetIndex: 0,
     type: "moveSessionToGroup",
   });
 }
@@ -343,7 +393,7 @@ async function expectSessionMembership(
       root.querySelectorAll(`[data-sidebar-group-id="${groupId}"] [data-sidebar-session-id]`),
     ).map((element) => element.getAttribute("data-sidebar-session-id"));
 
-    return expect([...groupSessionIds].sort()).toEqual([...expectedSessionIds].sort());
+    return expect(groupSessionIds).toEqual(expectedSessionIds);
   });
 }
 

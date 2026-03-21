@@ -22,27 +22,18 @@ import {
   extractTerminalTextTailFromVtHistory,
   extractLatestTerminalTitleFromVtHistory,
   focusEditorGroupByIndex,
-  getActiveEditorGroupViewColumn,
   getDefaultShell,
   getDefaultWorkspaceCwd,
   hasInterruptStatusInVtHistory,
   getSessionTabTitle,
   getViewColumn,
   matchesVisibleTerminalLayout,
-  moveActiveEditorToNextGroup,
-  moveActiveEditorToPreviousGroup,
-  moveActiveTerminalToEditor,
-  moveActiveTerminalToPanel,
   parsePersistedSessionState,
   serializePersistedSessionState,
   type PersistedSessionState,
 } from "./terminal-workspace-helpers";
 import { ensureZmxBinary } from "./zmx-binary";
 import { parseZmxListSessionNames, toZmxSessionName } from "./zmx-session-utils";
-import {
-  createParkedTerminalReconcilePlan,
-  type ParkedTerminalReconcilePlan,
-} from "../shared/session-grid-parked-terminal-plan";
 import {
   createVisibleSessionReconcilePlan,
   type VisibleSessionReconcilePlan,
@@ -51,8 +42,6 @@ import {
 const ZMX_POLL_INTERVAL_MS = 750;
 const AGENT_STATE_FILE_NAME = "agent-state";
 const SETTINGS_SECTION = "VSmux";
-const EXPERIMENTAL_PARK_HIDDEN_ZMX_TERMINALS_IN_PANEL_SETTING =
-  "experimentalParkHiddenZmxTerminalsInPanel";
 const EXPERIMENTAL_ZMX_ACTION_DELAY_MS_SETTING = "experimentalZmxActionDelayMs";
 
 type ZmxTerminalWorkspaceBackendOptions = {
@@ -62,14 +51,6 @@ type ZmxTerminalWorkspaceBackendOptions = {
 };
 
 type SessionProjection = {
-  location:
-    | {
-        type: "editor";
-        visibleIndex: number;
-      }
-    | {
-        type: "panel";
-      };
   sessionId: string;
   terminal: vscode.Terminal;
 };
@@ -224,12 +205,11 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
   }
 
   public canReuseVisibleLayout(snapshot: SessionGridSnapshot): boolean {
-    const editorProjections = this.getEditorProjections();
-    if (snapshot.visibleSessionIds.length !== editorProjections.size) {
+    if (snapshot.visibleSessionIds.length !== this.projections.size) {
       return false;
     }
 
-    const projectedSessionIds = new Set(editorProjections.keys());
+    const projectedSessionIds = new Set(this.projections.keys());
     if (snapshot.visibleSessionIds.some((sessionId) => !projectedSessionIds.has(sessionId))) {
       return false;
     }
@@ -237,7 +217,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     return matchesVisibleTerminalLayout(
       snapshot,
       new Map(
-        Array.from(editorProjections.entries(), ([sessionId, projection]) => [
+        Array.from(this.projections.entries(), ([sessionId, projection]) => [
           sessionId,
           projection.terminal.name,
         ]),
@@ -292,15 +272,6 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     this.lastVisibleSnapshot = cloneSnapshot(snapshot);
 
     await this.runWithoutActivationEvents(async () => {
-      if (shouldParkHiddenZmxTerminalsInPanel()) {
-        await this.reconcileVisibleTerminalsWithParkedProjections(
-          previousSnapshot,
-          snapshot,
-          preserveFocus,
-        );
-        return;
-      }
-
       const plan = createVisibleSessionReconcilePlan(previousSnapshot, snapshot);
       if (plan.strategy === "incremental" && this.canIncrementallyReconcile(previousSnapshot)) {
         await this.reconcileVisibleTerminalsIncrementally(snapshot, plan, preserveFocus);
@@ -325,13 +296,6 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     };
 
     this.lastVisibleSnapshot = cloneSnapshot(snapshot);
-
-    if (shouldParkHiddenZmxTerminalsInPanel()) {
-      await this.runWithoutActivationEvents(async () => {
-        await this.recreateProjectionForRenamedSession(sessionRecord, projection.location);
-      });
-      return;
-    }
 
     await this.runWithoutActivationEvents(async () => {
       await this.reconcileVisibleTerminalsByRecreatingProjections(snapshot, true);
@@ -401,205 +365,6 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
     if (focusedSessionId) {
       await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
     }
-  }
-
-  private async reconcileVisibleTerminalsWithParkedProjections(
-    previousSnapshot: SessionGridSnapshot | undefined,
-    snapshot: SessionGridSnapshot,
-    preserveFocus: boolean,
-  ): Promise<void> {
-    const restorablePanelTerminal = this.getRestorableActivePanelTerminal();
-    await this.ensureParkedProjections(snapshot.sessions);
-
-    const plan = createParkedTerminalReconcilePlan(previousSnapshot, snapshot);
-    if (
-      plan.strategy === "transfer" &&
-      this.canIncrementallyReconcileWithParkedProjections(previousSnapshot)
-    ) {
-      await this.applyParkedTerminalTransferPlan(snapshot, plan, preserveFocus);
-    } else {
-      await this.reconcileVisibleTerminalsByMovingParkedProjections(snapshot, preserveFocus);
-    }
-
-    await this.restoreActivePanelTerminal(restorablePanelTerminal);
-  }
-
-  private async ensureParkedProjections(sessionRecords: readonly SessionRecord[]): Promise<void> {
-    let changed = false;
-
-    for (const sessionRecord of sessionRecords) {
-      if (this.projections.has(sessionRecord.sessionId)) {
-        continue;
-      }
-
-      if (!(await this.options.ensureShellSpawnAllowed())) {
-        this.sessions.set(
-          sessionRecord.sessionId,
-          createBlockedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
-        );
-        changed = true;
-        continue;
-      }
-
-      await this.createProjection(sessionRecord, "panel", getSessionTabTitle(sessionRecord));
-      changed = true;
-    }
-
-    if (changed) {
-      this.changeSessionsEmitter.fire();
-    }
-  }
-
-  private canIncrementallyReconcileWithParkedProjections(
-    snapshot: SessionGridSnapshot | undefined,
-  ): boolean {
-    if (!snapshot) {
-      return false;
-    }
-
-    const editorProjections = this.getEditorProjections();
-    if (editorProjections.size !== snapshot.visibleSessionIds.length) {
-      return false;
-    }
-
-    if (snapshot.visibleSessionIds.some((sessionId) => !editorProjections.has(sessionId))) {
-      return false;
-    }
-
-    return this.canReuseVisibleLayout(snapshot);
-  }
-
-  private async applyParkedTerminalTransferPlan(
-    snapshot: SessionGridSnapshot,
-    plan: Extract<ParkedTerminalReconcilePlan, { strategy: "transfer" }>,
-    preserveFocus: boolean,
-  ): Promise<void> {
-    if (!plan.hasChanges) {
-      const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
-      if (focusedSessionId) {
-        await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
-      }
-      return;
-    }
-
-    for (const step of plan.steps) {
-      if (step.type === "promote") {
-        await this.moveProjectionToEditor(step.sessionId, step.slotIndex);
-        continue;
-      }
-
-      await this.moveProjectionToPanel(step.sessionId);
-    }
-
-    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
-    if (focusedSessionId) {
-      await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
-    }
-  }
-
-  private async reconcileVisibleTerminalsByMovingParkedProjections(
-    snapshot: SessionGridSnapshot,
-    preserveFocus: boolean,
-  ): Promise<void> {
-    for (const projection of this.getEditorProjections().values()) {
-      await this.moveProjectionToPanel(projection.sessionId);
-    }
-
-    if (snapshot.visibleSessionIds.length === 0) {
-      return;
-    }
-
-    await this.runUiAction(() =>
-      applyEditorLayout(snapshot.visibleSessionIds.length, snapshot.viewMode),
-    );
-
-    for (let index = 0; index < snapshot.visibleSessionIds.length; index += 1) {
-      const sessionId = snapshot.visibleSessionIds[index];
-      await this.moveProjectionToEditor(sessionId, index);
-    }
-
-    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
-    if (focusedSessionId) {
-      await this.showTerminal(this.projections.get(focusedSessionId)?.terminal, preserveFocus);
-    }
-  }
-
-  private async moveProjectionToEditor(sessionId: string, visibleIndex: number): Promise<void> {
-    const projection = this.projections.get(sessionId);
-    if (!projection) {
-      return;
-    }
-
-    if (
-      projection.location.type === "editor" &&
-      projection.location.visibleIndex === visibleIndex
-    ) {
-      return;
-    }
-
-    await this.runUiAction(async () => {
-      await focusEditorGroupByIndex(visibleIndex);
-    });
-    // Keep editor focus on the destination group while activating the terminal.
-    // Focusing the panel first can cause moveToEditor to materialize a brand new
-    // editor group instead of populating the intended one.
-    await this.showTerminal(projection.terminal, true);
-    await this.runUiAction(() => moveActiveTerminalToEditor());
-    await this.alignActiveEditorGroupToVisibleIndex(visibleIndex);
-    projection.location = {
-      type: "editor",
-      visibleIndex,
-    };
-  }
-
-  private async alignActiveEditorGroupToVisibleIndex(visibleIndex: number): Promise<void> {
-    const expectedViewColumn = getViewColumn(visibleIndex);
-    let activeViewColumn = getActiveEditorGroupViewColumn();
-    let safetyCounter = 0;
-
-    while (
-      activeViewColumn !== undefined &&
-      activeViewColumn > expectedViewColumn &&
-      safetyCounter < 8
-    ) {
-      await this.runUiAction(() => moveActiveEditorToPreviousGroup());
-      activeViewColumn = getActiveEditorGroupViewColumn();
-      safetyCounter += 1;
-    }
-
-    while (
-      activeViewColumn !== undefined &&
-      activeViewColumn < expectedViewColumn &&
-      safetyCounter < 8
-    ) {
-      await this.runUiAction(() => moveActiveEditorToNextGroup());
-      activeViewColumn = getActiveEditorGroupViewColumn();
-      safetyCounter += 1;
-    }
-  }
-
-  private async moveProjectionToPanel(sessionId: string): Promise<void> {
-    const projection = this.projections.get(sessionId);
-    if (!projection || projection.location.type === "panel") {
-      return;
-    }
-
-    await this.showTerminal(projection.terminal, false);
-    await this.runUiAction(() => moveActiveTerminalToPanel());
-    projection.location = { type: "panel" };
-  }
-
-  private async recreateProjectionForRenamedSession(
-    sessionRecord: SessionRecord,
-    location: SessionProjection["location"],
-  ): Promise<void> {
-    this.disposeProjection(sessionRecord.sessionId);
-    await this.createProjection(
-      sessionRecord,
-      location.type === "panel" ? "panel" : { visibleIndex: location.visibleIndex },
-      getSessionTabTitle(sessionRecord),
-    );
-    this.changeSessionsEmitter.fire();
   }
 
   private canIncrementallyReconcile(snapshot: SessionGridSnapshot | undefined): boolean {
@@ -683,7 +448,7 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
 
   private async createProjection(
     sessionRecord: SessionRecord,
-    location: "panel" | { visibleIndex: number },
+    location: { visibleIndex: number },
     terminalTitle: string,
   ): Promise<SessionProjection> {
     const terminal = vscode.window.createTerminal({
@@ -691,26 +456,16 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       env: this.createTerminalEnvironment(sessionRecord.sessionId),
       iconPath: new vscode.ThemeIcon("terminal"),
       isTransient: true,
-      location:
-        location === "panel"
-          ? vscode.TerminalLocation.Panel
-          : {
-              preserveFocus: true,
-              viewColumn: getViewColumn(location.visibleIndex),
-            },
+      location: {
+        preserveFocus: true,
+        viewColumn: getViewColumn(location.visibleIndex),
+      },
       name: terminalTitle,
       shellArgs: this.createAttachShellArgs(sessionRecord.sessionId),
       shellPath: this.getRequiredZmxBinaryPath(),
     });
 
     const projection = {
-      location:
-        location === "panel"
-          ? ({ type: "panel" } as const)
-          : ({
-              type: "editor",
-              visibleIndex: location.visibleIndex,
-            } as const),
       sessionId: sessionRecord.sessionId,
       terminal,
     };
@@ -721,45 +476,8 @@ export class ZmxTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
       sessionRecord.sessionId,
       this.createRunningSessionSnapshot(sessionRecord.sessionId),
     );
-    if (location !== "panel") {
-      await this.showTerminal(terminal, true);
-    }
-    return projection;
-  }
-
-  private getEditorProjections(): Map<string, SessionProjection> {
-    return new Map(
-      Array.from(this.projections.entries()).filter(
-        ([, projection]) => projection.location.type === "editor",
-      ),
-    );
-  }
-
-  private getRestorableActivePanelTerminal(): vscode.Terminal | undefined {
-    const activeTerminal = vscode.window.activeTerminal;
-    if (!activeTerminal) {
-      return undefined;
-    }
-
-    const projection = Array.from(this.projections.values()).find(
-      (candidate) => candidate.terminal === activeTerminal,
-    );
-    return projection?.location.type === "panel" ? activeTerminal : undefined;
-  }
-
-  private async restoreActivePanelTerminal(terminal: vscode.Terminal | undefined): Promise<void> {
-    if (!terminal) {
-      return;
-    }
-
-    const projection = Array.from(this.projections.values()).find(
-      (candidate) => candidate.terminal === terminal,
-    );
-    if (!projection || projection.location.type !== "panel") {
-      return;
-    }
-
     await this.showTerminal(terminal, true);
+    return projection;
   }
 
   private async runWithoutActivationEvents<T>(callback: () => Promise<T>): Promise<T> {
@@ -1120,14 +838,6 @@ function getExperimentalZmxActionDelayMs(): number {
       .get<number>(EXPERIMENTAL_ZMX_ACTION_DELAY_MS_SETTING, 0) ?? 0;
 
   return Number.isFinite(configuredDelay) ? Math.max(0, configuredDelay) : 0;
-}
-
-function shouldParkHiddenZmxTerminalsInPanel(): boolean {
-  return (
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<boolean>(EXPERIMENTAL_PARK_HIDDEN_ZMX_TERMINALS_IN_PANEL_SETTING, false) ?? false
-  );
 }
 
 function delay(timeoutMs: number): Promise<void> {

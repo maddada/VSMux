@@ -26,6 +26,7 @@ import {
   type TerminalViewMode,
   type VisibleSessionCount,
 } from "../shared/session-grid-contract";
+import { getSidebarAgentIconById, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import type {
   TerminalAgentStatus,
   TerminalSessionSnapshot,
@@ -43,6 +44,7 @@ import {
   getSidebarCommandButtonById,
   getSidebarCommandButtons,
   saveSidebarCommandPreference,
+  syncSidebarCommandOrderPreference,
 } from "./sidebar-command-preferences";
 import {
   getTitleDerivedSessionActivity,
@@ -64,8 +66,6 @@ import { ZmxTerminalWorkspaceBackend } from "./zmx-terminal-workspace-backend";
 
 const SETTINGS_SECTION = "VSmux";
 const BACKGROUND_SESSION_TIMEOUT_MINUTES_SETTING = "backgroundSessionTimeoutMinutes";
-const EXPERIMENTAL_PARK_HIDDEN_ZMX_TERMINALS_IN_PANEL_SETTING =
-  "experimentalParkHiddenZmxTerminalsInPanel";
 const SEND_RENAME_COMMAND_ON_SIDEBAR_RENAME_SETTING = "sendRenameCommandOnSidebarRename";
 const SIDEBAR_THEME_SETTING = "sidebarTheme";
 const SHOW_CLOSE_BUTTON_ON_SESSION_CARDS_SETTING = "showCloseButtonOnSessionCards";
@@ -92,6 +92,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private readonly backendKind: NativeTerminalWorkspaceBackendKind = "zmx";
   private readonly disposables: vscode.Disposable[] = [];
   private readonly lastKnownActivityBySessionId = new Map<string, TerminalAgentStatus>();
+  private readonly sidebarAgentIconBySessionId = new Map<string, SidebarAgentIcon>();
   private readonly store: SessionGridStore;
   private readonly terminalTitleBySessionId = new Map<string, string>();
   private readonly titleDerivedActivityBySessionId = new Map<string, TitleDerivedSessionActivity>();
@@ -125,12 +126,6 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(getBackgroundSessionTimeoutConfigurationKey())) {
           void this.backend.syncConfiguration();
-        }
-
-        if (
-          event.affectsConfiguration(getExperimentalParkHiddenZmxTerminalsInPanelConfigurationKey())
-        ) {
-          void this.handleExperimentalLayoutModeChanged();
         }
 
         if (
@@ -261,6 +256,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
     this.terminalTitleBySessionId.clear();
     this.titleDerivedActivityBySessionId.clear();
+    this.sidebarAgentIconBySessionId.clear();
     await this.store.reset();
     await this.backend.reconcileVisibleTerminals(this.getActiveSnapshot());
     await this.refreshSidebar();
@@ -360,6 +356,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.backend.killSession(sessionId);
     this.terminalTitleBySessionId.delete(sessionId);
     this.titleDerivedActivityBySessionId.delete(sessionId);
+    this.sidebarAgentIconBySessionId.delete(sessionId);
     const snapshot = this.getActiveSnapshot();
     const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
 
@@ -441,9 +438,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       return;
     }
 
-    const nextAlias = agentButton.name.trim();
-    if (nextAlias) {
-      await this.store.renameSessionAlias(sessionRecord.sessionId, nextAlias);
+    if (agentButton.icon) {
+      this.sidebarAgentIconBySessionId.set(sessionRecord.sessionId, agentButton.icon);
     }
 
     const nextSessionRecord = this.store.getSession(sessionRecord.sessionId) ?? sessionRecord;
@@ -470,6 +466,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
   public async deleteSidebarCommand(commandId: string): Promise<void> {
     await deleteSidebarCommandPreference(this.context, commandId);
+    await this.refreshSidebar();
+  }
+
+  public async syncSidebarCommandOrder(commandIds: readonly string[]): Promise<void> {
+    await syncSidebarCommandOrderPreference(this.context, commandIds);
     await this.refreshSidebar();
   }
 
@@ -545,9 +546,13 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.refreshSidebar();
   }
 
-  public async moveSessionToGroup(sessionId: string, groupId: string): Promise<void> {
+  public async moveSessionToGroup(
+    sessionId: string,
+    groupId: string,
+    targetIndex?: number,
+  ): Promise<void> {
     const previousVisibleSessionIds = this.getActiveSnapshot().visibleSessionIds;
-    const changed = await this.store.moveSessionToGroup(sessionId, groupId);
+    const changed = await this.store.moveSessionToGroup(sessionId, groupId, targetIndex);
     if (!changed) {
       return;
     }
@@ -598,6 +603,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       await this.backend.killSession(sessionRecord.sessionId);
       this.terminalTitleBySessionId.delete(sessionRecord.sessionId);
       this.titleDerivedActivityBySessionId.delete(sessionRecord.sessionId);
+      this.sidebarAgentIconBySessionId.delete(sessionRecord.sessionId);
     }
 
     const removed = await this.store.removeGroup(groupId);
@@ -664,6 +670,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         effectiveActivity.activity,
         effectiveActivity.agentName,
       ),
+      agentIcon:
+        this.sidebarAgentIconBySessionId.get(sessionRecord.sessionId) ??
+        getSidebarAgentIconById(sessionSnapshot.agentName) ??
+        getSidebarAgentIconById(effectiveActivity.agentName),
       alias: sessionRecord.alias,
       column: sessionRecord.column,
       detail: sessionSnapshot.errorMessage,
@@ -764,6 +774,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         await this.deleteSidebarCommand(message.commandId);
         return;
 
+      case "syncSidebarCommandOrder":
+        await this.syncSidebarCommandOrder(message.commandIds);
+        return;
+
       case "focusSession":
         if (message.sessionId) {
           await this.focusSession(message.sessionId, message.preserveFocus === true);
@@ -803,7 +817,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         return;
 
       case "moveSessionToGroup":
-        await this.moveSessionToGroup(message.sessionId, message.groupId);
+        await this.moveSessionToGroup(message.sessionId, message.groupId, message.targetIndex);
         return;
 
       case "createGroupFromSession":
@@ -1082,12 +1096,6 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.backend.reconcileVisibleTerminals(snapshot, preserveFocus);
   }
 
-  private async handleExperimentalLayoutModeChanged(): Promise<void> {
-    await this.backend.syncConfiguration();
-    await this.backend.reconcileVisibleTerminals(this.getActiveSnapshot(), true);
-    await this.refreshSidebar();
-  }
-
   private async promptForSessionId(title: string): Promise<string | undefined> {
     const sessions = this.store.getSnapshot().groups.flatMap((group) =>
       getOrderedSessions(group.snapshot).map((session) => ({
@@ -1191,10 +1199,6 @@ function getVisibleTerminalTitle(title: string | undefined): string | undefined 
 
 function getBackgroundSessionTimeoutConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${BACKGROUND_SESSION_TIMEOUT_MINUTES_SETTING}`;
-}
-
-function getExperimentalParkHiddenZmxTerminalsInPanelConfigurationKey(): string {
-  return `${SETTINGS_SECTION}.${EXPERIMENTAL_PARK_HIDDEN_ZMX_TERMINALS_IN_PANEL_SETTING}`;
 }
 
 function getSidebarThemeConfigurationKey(): string {

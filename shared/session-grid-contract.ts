@@ -6,11 +6,9 @@ import {
 import {
   createDefaultSidebarAgentButtons,
   type SidebarAgentButton,
+  type SidebarAgentIcon,
 } from "./sidebar-agents";
-import {
-  createDefaultSidebarCommandButtons,
-  type SidebarCommandButton,
-} from "./sidebar-commands";
+import { createDefaultSidebarCommandButtons, type SidebarCommandButton } from "./sidebar-commands";
 
 export const GRID_COLUMN_COUNT = 3;
 export const MAX_SESSION_COUNT = GRID_COLUMN_COUNT * GRID_COLUMN_COUNT;
@@ -89,6 +87,7 @@ export type GroupedSessionWorkspaceSnapshot = {
 export type SidebarSessionItem = {
   activity: SidebarSessionActivityState;
   activityLabel?: string;
+  agentIcon?: SidebarAgentIcon;
   sessionId: string;
   primaryTitle?: string;
   terminalTitle?: string;
@@ -210,6 +209,7 @@ export type SidebarToExtensionMessage =
       type: "moveSessionToGroup";
       groupId: string;
       sessionId: string;
+      targetIndex?: number;
     }
   | {
       type: "createGroupFromSession";
@@ -246,6 +246,10 @@ export type SidebarToExtensionMessage =
   | {
       type: "deleteSidebarCommand";
       commandId: string;
+    }
+  | {
+      type: "syncSidebarCommandOrder";
+      commandIds: string[];
     }
   | {
       type: "runSidebarAgent";
@@ -484,6 +488,7 @@ export function createSidebarSessionItems(
     alias: session.alias,
     activity: "idle",
     activityLabel: undefined,
+    agentIcon: undefined,
     column: session.column,
     detail: undefined,
     isFocused: snapshot.focusedSessionId === session.sessionId,

@@ -89,6 +89,11 @@ export function isDefaultSidebarAgentId(agentId: string): boolean {
   return DEFAULT_SIDEBAR_AGENTS.some((agent) => agent.agentId === agentId);
 }
 
+export function getSidebarAgentIconById(agentId: string | undefined): SidebarAgentIcon | undefined {
+  const normalizedAgentId = agentId?.trim().toLowerCase();
+  return DEFAULT_SIDEBAR_AGENTS.find((agent) => agent.agentId === normalizedAgentId)?.icon;
+}
+
 export function normalizeStoredSidebarAgents(candidate: unknown): StoredSidebarAgent[] {
   if (!Array.isArray(candidate)) {
     return [];
@@ -128,5 +133,8 @@ export function normalizeStoredSidebarAgents(candidate: unknown): StoredSidebarA
 }
 
 function isSidebarAgentIcon(candidate: unknown): candidate is SidebarAgentIcon {
-  return typeof candidate === "string" && DEFAULT_SIDEBAR_AGENTS.some((agent) => agent.icon === candidate);
+  return (
+    typeof candidate === "string" &&
+    DEFAULT_SIDEBAR_AGENTS.some((agent) => agent.icon === candidate)
+  );
 }

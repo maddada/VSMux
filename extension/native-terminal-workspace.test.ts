@@ -32,6 +32,9 @@ const testState = vi.hoisted(() => ({
     show: ReturnType<typeof vi.fn>;
   }>,
   executeCommand: vi.fn(),
+  activeColorTheme: {
+    kind: 1,
+  },
   onDidChangeActiveColorTheme: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
   showInformationMessage: vi.fn(),
@@ -42,6 +45,9 @@ const testState = vi.hoisted(() => ({
 }));
 
 vi.mock("vscode", () => ({
+  ColorThemeKind: {
+    Light: 1,
+  },
   ThemeIcon: class ThemeIcon {},
   ViewColumn: {
     One: 1,
@@ -54,6 +60,7 @@ vi.mock("vscode", () => ({
     executeCommand: testState.executeCommand,
   },
   window: {
+    activeColorTheme: testState.activeColorTheme,
     createTerminal: testState.createTerminal,
     onDidChangeActiveColorTheme: testState.onDidChangeActiveColorTheme,
     showInformationMessage: testState.showInformationMessage,
@@ -122,6 +129,7 @@ vi.mock("./zmx-terminal-workspace-backend", () => ({
 
 import type { GroupedSessionWorkspaceSnapshot } from "../shared/session-grid-contract";
 import {
+  createSessionAlias,
   createDefaultGroupedSessionWorkspaceSnapshot,
   createDefaultSessionGridSnapshot,
   createSessionRecord,
@@ -252,6 +260,38 @@ describe("NativeTerminalWorkspaceController rename session", () => {
 
     expect(terminal?.dispose).toHaveBeenCalledTimes(1);
     expect(testState.backend?.writeText).not.toHaveBeenCalled();
+  });
+
+  test("should keep the generated alias and attach the selected agent icon for sidebar agents", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("codex");
+
+    expect(testState.backend?.createOrAttachSession).toHaveBeenCalledTimes(1);
+    expect(testState.backend?.createOrAttachSession.mock.calls[0]?.[0]).toMatchObject({
+      alias: generatedAlias,
+      sessionId: "session-4",
+      title: "Session 4",
+    });
+    expect(testState.sidebarPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groups: expect.arrayContaining([
+          expect.objectContaining({
+            sessions: expect.arrayContaining([
+              expect.objectContaining({
+                agentIcon: "codex",
+                alias: generatedAlias,
+                sessionId: "session-4",
+              }),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(testState.backend?.writeText).toHaveBeenCalledWith("session-4", "codex", true);
   });
 });
 

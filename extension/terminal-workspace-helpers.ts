@@ -290,10 +290,6 @@ export function getViewColumn(index: number): vscode.ViewColumn {
   return Math.max(vscode.ViewColumn.One, Math.min(index + 1, vscode.ViewColumn.Nine));
 }
 
-export function getActiveEditorGroupViewColumn(): vscode.ViewColumn | undefined {
-  return vscode.window.tabGroups.activeTabGroup?.viewColumn;
-}
-
 export async function focusEditorGroupByIndex(index: number): Promise<boolean> {
   const command = FOCUS_EDITOR_GROUP_COMMANDS[index];
   if (!command) {
@@ -302,22 +298,6 @@ export async function focusEditorGroupByIndex(index: number): Promise<boolean> {
 
   await vscode.commands.executeCommand(command);
   return true;
-}
-
-export async function moveActiveTerminalToEditor(): Promise<void> {
-  await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
-}
-
-export async function moveActiveTerminalToPanel(): Promise<void> {
-  await vscode.commands.executeCommand("workbench.action.terminal.moveToTerminalPanel");
-}
-
-export async function moveActiveEditorToNextGroup(): Promise<void> {
-  await vscode.commands.executeCommand("workbench.action.moveEditorToNextGroup");
-}
-
-export async function moveActiveEditorToPreviousGroup(): Promise<void> {
-  await vscode.commands.executeCommand("workbench.action.moveEditorToPreviousGroup");
 }
 
 export function matchesVisibleTerminalLayout(

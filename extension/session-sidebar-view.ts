@@ -169,6 +169,14 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
     case "deleteSidebarCommand":
       return typeof message.commandId === "string" && message.commandId.length > 0;
 
+    case "syncSidebarCommandOrder":
+      return (
+        Array.isArray(message.commandIds) &&
+        message.commandIds.every(
+          (commandId) => typeof commandId === "string" && commandId.length > 0,
+        )
+      );
+
     case "runSidebarAgent":
     case "deleteSidebarAgent":
       return typeof message.agentId === "string" && message.agentId.length > 0;
@@ -222,7 +230,11 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
         typeof message.sessionId === "string" &&
         message.sessionId.length > 0 &&
         typeof message.groupId === "string" &&
-        message.groupId.length > 0
+        message.groupId.length > 0 &&
+        (message.targetIndex === undefined ||
+          (typeof message.targetIndex === "number" &&
+            Number.isInteger(message.targetIndex) &&
+            message.targetIndex >= 0))
       );
 
     case "createGroupFromSession":

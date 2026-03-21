@@ -1,5 +1,5 @@
 import { IconFocusCentered, IconPencil, IconPlus, IconX } from "@tabler/icons-react";
-import { useDroppable } from "@dnd-kit/react";
+import { CollisionPriority } from "@dnd-kit/abstract";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -115,15 +115,10 @@ export function SessionGroupSection({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const sessionDropTarget = useDroppable({
-    accept: "session",
-    data: createGroupDropData(group.groupId),
-    id: `${group.groupId}-session-drop`,
-  });
   const sortable = useSortable({
-    accept: "group",
+    accept: ["group", "session"],
+    collisionPriority: CollisionPriority.Low,
     data: createGroupDropData(group.groupId),
-    group: "groups",
     id: group.groupId,
     index,
     type: "group",
@@ -270,7 +265,7 @@ export function SessionGroupSection({
         className="group"
         data-active={String(group.isActive)}
         data-dragging={String(Boolean(sortable.isDragging))}
-        data-drop-target={String(sortable.isDropTarget || sessionDropTarget.isDropTarget)}
+        data-drop-target={String(sortable.isDropTarget)}
         data-sidebar-group-id={group.groupId}
         onClick={() => {
           requestFocusGroup();
@@ -351,11 +346,7 @@ export function SessionGroupSection({
             )}
           </div>
         </div>
-        <div
-          className="group-sessions"
-          data-drop-target={String(sessionDropTarget.isDropTarget)}
-          ref={sessionDropTarget.ref}
-        >
+        <div className="group-sessions" data-drop-target={String(sortable.isDropTarget)}>
           {orderedSessions.length > 0 ? (
             orderedSessions.map((session, sessionIndex) => (
               <SortableSessionCard
@@ -371,7 +362,7 @@ export function SessionGroupSection({
           ) : (
             <div
               className="group-empty-drop-target"
-              data-drop-target={String(sessionDropTarget.isDropTarget)}
+              data-drop-target={String(sortable.isDropTarget)}
             >
               <div className="group-empty-state">No sessions in this group yet.</div>
             </div>

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   createSidebarCommandButtons,
+  normalizeStoredSidebarCommandOrder,
   normalizeStoredSidebarCommands,
 } from "./sidebar-commands";
 
@@ -94,6 +95,78 @@ describe("createSidebarCommandButtons", () => {
       },
     ]);
   });
+
+  test("should respect a stored command order for defaults and custom commands", () => {
+    expect(
+      createSidebarCommandButtons(
+        [
+          {
+            closeTerminalOnExit: true,
+            command: "vp run docs",
+            commandId: "custom-docs",
+            isDefault: false,
+            name: "Docs",
+          },
+        ],
+        ["test", "custom-docs", "dev"],
+      ),
+    ).toEqual([
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "test",
+        isDefault: true,
+        name: "Test",
+      },
+      {
+        closeTerminalOnExit: true,
+        command: "vp run docs",
+        commandId: "custom-docs",
+        isDefault: false,
+        name: "Docs",
+      },
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "dev",
+        isDefault: true,
+        name: "Dev",
+      },
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "build",
+        isDefault: true,
+        name: "Build",
+      },
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "setup",
+        isDefault: true,
+        name: "Setup",
+      },
+    ]);
+  });
+
+  test("should hide deleted default commands", () => {
+    expect(createSidebarCommandButtons([], [], ["build", "test"])).toEqual([
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "dev",
+        isDefault: true,
+        name: "Dev",
+      },
+      {
+        closeTerminalOnExit: false,
+        command: undefined,
+        commandId: "setup",
+        isDefault: true,
+        name: "Setup",
+      },
+    ]);
+  });
 });
 
 describe("normalizeStoredSidebarCommands", () => {
@@ -124,5 +197,13 @@ describe("normalizeStoredSidebarCommands", () => {
         name: "Dev server",
       },
     ]);
+  });
+});
+
+describe("normalizeStoredSidebarCommandOrder", () => {
+  test("should ignore invalid ids, trim values, and dedupe entries", () => {
+    expect(
+      normalizeStoredSidebarCommandOrder([" test ", "", "dev", "test", 42, null]),
+    ).toEqual(["test", "dev"]);
   });
 });

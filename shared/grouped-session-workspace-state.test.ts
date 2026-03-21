@@ -132,6 +132,52 @@ describe("moveSessionToGroupInWorkspace", () => {
     ).toEqual(["session-3", "session-2"]);
     expect(result.snapshot.groups[1]?.snapshot.focusedSessionId).toBe("session-2");
   });
+
+  test("should insert the moved session at the requested index in the target group", () => {
+    const result = moveSessionToGroupInWorkspace(
+      {
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: "session-1",
+              sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: ["session-1", "session-2"],
+            },
+            title: "Main",
+          },
+          {
+            groupId: "group-2",
+            snapshot: {
+              focusedSessionId: "session-3",
+              sessions: [createSessionRecord(3, 0), createSessionRecord(4, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: ["session-3", "session-4"],
+            },
+            title: "Backend",
+          },
+        ],
+        nextGroupNumber: 3,
+        nextSessionNumber: 5,
+      },
+      "session-2",
+      "group-2",
+      1,
+    );
+
+    expect(result.changed).toBe(true);
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual(["session-1"]);
+    expect(
+      result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual(["session-3", "session-2", "session-4"]);
+    expect(result.snapshot.groups[1]?.snapshot.focusedSessionId).toBe("session-2");
+  });
 });
 
 describe("focusSessionInWorkspace", () => {

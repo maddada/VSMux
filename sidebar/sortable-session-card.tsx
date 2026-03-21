@@ -164,6 +164,7 @@ export function SortableSessionCard({
         data-focused={String(session.isFocused)}
         data-running={String(session.isRunning)}
         data-visible={String(session.isVisible)}
+        ref={sortable.ref}
       >
         <article
           aria-expanded={contextMenuPosition ? true : undefined}
@@ -171,6 +172,7 @@ export function SortableSessionCard({
           aria-pressed={session.isFocused}
           className="session"
           data-activity={session.activity}
+          data-has-agent-icon={String(Boolean(session.agentIcon))}
           data-dragging={String(Boolean(sortable.isDragging))}
           data-focused={String(session.isFocused)}
           data-running={String(session.isRunning)}
@@ -204,7 +206,7 @@ export function SortableSessionCard({
             openContextMenu(event.clientX, event.clientY);
           }}
           onKeyDown={handleKeyDown}
-          ref={sortable.ref}
+          ref={sortable.sourceRef}
           role="button"
           tabIndex={0}
         >

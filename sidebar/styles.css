@@ -373,8 +373,8 @@ button:disabled {
   /* background: color-mix(in srgb, var(--app-card) 88%, transparent); */
   /* backdrop-filter: blur(10px); */
   /* box-shadow: */
-    /* 0 10px 18px color-mix(in srgb, #000000 14%, transparent), */
-    /* 0 0 0 1px color-mix(in srgb, #ffffff 3%, transparent); */
+  /* 0 10px 18px color-mix(in srgb, #000000 14%, transparent), */
+  /* 0 0 0 1px color-mix(in srgb, #ffffff 3%, transparent); */
 }
 
 .floating-toolbar-button .toolbar-icon,
@@ -506,6 +506,13 @@ button:disabled {
   width: 18px;
 }
 
+body[data-sidebar-theme="plain-dark"] .agent-button-icon[data-agent-icon="codex"],
+body[data-sidebar-theme="plain-dark"] .agent-button-icon[data-agent-icon="opencode"],
+body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="codex"],
+body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="opencode"] {
+  filter: brightness(0) invert(1);
+}
+
 .agent-button-monogram {
   align-items: center;
   background: color-mix(in srgb, var(--app-button-background) 20%, var(--app-card-active) 80%);
@@ -529,6 +536,10 @@ button:disabled {
 .command-button[data-configured="false"] {
   border-style: dashed;
   color: color-mix(in srgb, var(--app-muted) 90%, var(--app-foreground) 10%);
+}
+
+.command-button[data-dragging="true"] {
+  opacity: 0.6;
 }
 
 .command-button-add {
@@ -999,7 +1010,6 @@ button:disabled {
     color-mix(in srgb, var(--app-card) 98%, #000000 2%)
   );
   --session-glow: transparent;
-  anchor-name: --session-card;
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--app-border);
@@ -1107,9 +1117,6 @@ button:disabled {
   position: absolute;
   left: 0;
   top: 50%;
-  position-anchor: --session-card;
-  left: anchor(left);
-  top: anchor(center);
   width: 12px;
   height: 12px;
   border-radius: 999px;
@@ -1165,6 +1172,33 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-agent-watermark {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  translate: 0 -50%;
+  background: color-mix(in srgb, var(--app-button-background) 54%, var(--app-foreground) 46%);
+  opacity: 0.16;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask-image: var(--session-agent-logo);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-image: var(--session-agent-logo);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+.session-head,
+.session-footer {
+  position: relative;
+  z-index: 1;
 }
 
 .session-visibility-badge {

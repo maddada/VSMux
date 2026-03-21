@@ -366,6 +366,7 @@ export function moveSessionToGroupInWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   sessionId: string,
   targetGroupId: string,
+  targetIndex?: number,
 ): { changed: boolean; snapshot: GroupedSessionWorkspaceSnapshot } {
   const normalizedSnapshot = normalizeGroupedSessionWorkspaceSnapshot(snapshot);
   const sourceLocation = findGroupContainingSession(normalizedSnapshot, sessionId);
@@ -383,8 +384,8 @@ export function moveSessionToGroupInWorkspace(
     sourceLocation.group.snapshot,
     sessionId,
   ).snapshot;
-  const appendedTargetSnapshot = appendSessionToGroup(targetGroup.snapshot, sessionRecord);
-  const focusedTargetSnapshot = focusSessionInSnapshot(appendedTargetSnapshot, sessionId).snapshot;
+  const targetSnapshot = insertSessionIntoGroup(targetGroup.snapshot, sessionRecord, targetIndex);
+  const focusedTargetSnapshot = focusSessionInSnapshot(targetSnapshot, sessionId).snapshot;
 
   const nextGroups = normalizedSnapshot.groups.map((group) => {
     if (group.groupId === sourceLocation.group.groupId) {
@@ -440,7 +441,7 @@ export function createGroupFromSessionInWorkspace(
   const groupId = `group-${normalizedSnapshot.nextGroupNumber}`;
   const groupTitle = `Group ${normalizedSnapshot.nextGroupNumber}`;
   const nextGroupSnapshot = focusSessionInSnapshot(
-    appendSessionToGroup(createDefaultSessionGridSnapshot(), sessionRecord),
+    insertSessionIntoGroup(createDefaultSessionGridSnapshot(), sessionRecord),
     sessionId,
   ).snapshot;
 
@@ -470,13 +471,22 @@ export function createGroupFromSessionInWorkspace(
   };
 }
 
-function appendSessionToGroup(
+function insertSessionIntoGroup(
   snapshot: SessionGridSnapshot,
   sessionRecord: SessionRecord,
+  targetIndex?: number,
 ): SessionGridSnapshot {
+  const orderedSessions = getOrderedSessions(snapshot);
+  const insertionIndex =
+    typeof targetIndex === "number"
+      ? Math.max(0, Math.min(targetIndex, orderedSessions.length))
+      : orderedSessions.length;
+  const nextSessions = [...orderedSessions];
+  nextSessions.splice(insertionIndex, 0, sessionRecord);
+
   return normalizeSessionGridSnapshot({
     ...snapshot,
-    sessions: [...getOrderedSessions(snapshot), sessionRecord],
+    sessions: nextSessions,
   });
 }
 

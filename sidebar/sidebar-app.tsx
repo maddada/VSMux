@@ -1,7 +1,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { DragDropProvider, DragOverlay } from "@dnd-kit/react";
-import { isSortable } from "@dnd-kit/react/sortable";
-import { IconBell, IconBellOff, IconFocusCentered, IconSettings } from "@tabler/icons-react";
+import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { move } from "@dnd-kit/helpers";
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
+import {
+  IconBell,
+  IconBellOff,
+  IconFocusCentered,
+  IconPlus,
+  IconSettings,
+} from "@tabler/icons-react";
 import {
   startTransition,
   useEffect,
@@ -15,9 +22,11 @@ import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
 import {
   MAX_GROUP_COUNT,
   type ExtensionToSidebarMessage,
+  type SidebarHydrateMessage,
   type SidebarHudState,
   type SidebarSessionGroup,
   type SidebarSessionItem,
+  type SidebarSessionStateMessage,
   type SidebarTheme,
   type TerminalViewMode,
   type VisibleSessionCount,
@@ -26,7 +35,6 @@ import { playCompletionSound } from "./completion-sound-player";
 import { AgentsPanel } from "./agents-panel";
 import { CommandsPanel } from "./commands-panel";
 import { CreateGroupDropTarget } from "./create-group-drop-target";
-import { SessionCardContent } from "./session-card-content";
 import { getSidebarDropData } from "./sidebar-dnd";
 import { SessionGroupSection } from "./session-group-section";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
@@ -40,6 +48,8 @@ type SidebarState = {
   groups: SidebarSessionGroup[];
   hud: SidebarHudState;
 };
+
+type SessionIdsByGroup = Record<string, string[]>;
 
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
 const MODE_OPTIONS: { tooltip: string; viewMode: TerminalViewMode }[] = [
@@ -80,6 +90,19 @@ const SIDEBAR_EMPTY_SPACE_BLOCKER_SELECTOR = [
   "[data-empty-space-blocking='true']",
 ].join(", ");
 
+const sensors = [
+  PointerSensor.configure({
+    activationConstraints(event) {
+      if (event.pointerType === "touch") {
+        return [new PointerActivationConstraints.Delay({ tolerance: 5, value: 250 })];
+      }
+
+      return [new PointerActivationConstraints.Distance({ value: 6 })];
+    },
+  }),
+  KeyboardSensor,
+];
+
 function getInitialSidebarTheme(): SidebarTheme {
   return document.body.classList.contains("vscode-light") ||
     document.body.classList.contains("vscode-high-contrast-light")
@@ -90,15 +113,54 @@ function getInitialSidebarTheme(): SidebarTheme {
 export function SidebarApp({ vscode }: SidebarAppProps) {
   const [serverState, setServerState] = useState<SidebarState>(INITIAL_STATE);
   const [autoEditingGroupId, setAutoEditingGroupId] = useState<string>();
-  const [draftGroupIds, setDraftGroupIds] = useState<string[] | undefined>();
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [sessionIdsByGroup, setSessionIdsByGroup] = useState<SessionIdsByGroup>({});
   const [draggedSessionId, setDraggedSessionId] = useState<string>();
-  const [draggedSessionWidth, setDraggedSessionWidth] = useState<number>();
+  const [agentCreateRequestId, setAgentCreateRequestId] = useState(0);
+  const [commandCreateRequestId, setCommandCreateRequestId] = useState(0);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
-  const [draftSessionIdsByGroup, setDraftSessionIdsByGroup] = useState<
-    Record<string, string[] | undefined>
-  >({});
   const pendingCreateGroupRef = useRef(false);
   const floatingControlsRef = useRef<HTMLDivElement>(null);
+  const draggedSessionIdRef = useRef<string>();
+  const groupIdsRef = useRef<string[]>([]);
+  const sessionIdsByGroupRef = useRef<SessionIdsByGroup>({});
+  const sessionDragSnapshotRef = useRef<SessionIdsByGroup>();
+  const deferredSidebarMessageRef = useRef<SidebarHydrateMessage | SidebarSessionStateMessage>();
+
+  const applySidebarMessage = (message: SidebarHydrateMessage | SidebarSessionStateMessage) => {
+    startTransition(() => {
+      setServerState((previous) => {
+        if (pendingCreateGroupRef.current) {
+          const nextGroupId = findCreatedGroupId(previous.groups, message.groups);
+          if (nextGroupId) {
+            setAutoEditingGroupId(nextGroupId);
+            pendingCreateGroupRef.current = false;
+          }
+        }
+
+        return {
+          groups: message.groups,
+          hud: message.hud,
+        };
+      });
+      setGroupIds(message.groups.map((group) => group.groupId));
+      setSessionIdsByGroup(createSessionIdsByGroup(message.groups));
+    });
+  };
+
+  const flushDeferredSidebarMessage = () => {
+    if (draggedSessionIdRef.current) {
+      return;
+    }
+
+    const nextMessage = deferredSidebarMessageRef.current;
+    if (!nextMessage) {
+      return;
+    }
+
+    deferredSidebarMessageRef.current = undefined;
+    applySidebarMessage(nextMessage);
+  };
 
   const requestNewSession = () => {
     vscode.postMessage({ type: "createSession" });
@@ -128,28 +190,12 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
         return;
       }
 
-      startTransition(() => {
-        setServerState((previous) => {
-          if (pendingCreateGroupRef.current) {
-            const nextGroupId = findCreatedGroupId(previous.groups, event.data.groups);
-            if (nextGroupId) {
-              setAutoEditingGroupId(nextGroupId);
-              pendingCreateGroupRef.current = false;
-            }
-          }
+      if (draggedSessionIdRef.current) {
+        deferredSidebarMessageRef.current = event.data;
+        return;
+      }
 
-          return {
-            groups: event.data.groups,
-            hud: event.data.hud,
-          };
-        });
-        setDraftGroupIds((previousDraft) =>
-          reconcileDraftGroupIds(previousDraft, event.data.groups),
-        );
-        setDraftSessionIdsByGroup((previousDraft) =>
-          reconcileDraftSessionIdsByGroup(previousDraft, event.data.groups),
-        );
-      });
+      applySidebarMessage(event.data);
     };
 
     window.addEventListener("message", handleMessage);
@@ -158,6 +204,19 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       window.removeEventListener("message", handleMessage);
     };
   }, []);
+
+  useEffect(() => {
+    draggedSessionIdRef.current = draggedSessionId;
+    flushDeferredSidebarMessage();
+  }, [draggedSessionId]);
+
+  useEffect(() => {
+    groupIdsRef.current = groupIds;
+  }, [groupIds]);
+
+  useEffect(() => {
+    sessionIdsByGroupRef.current = sessionIdsByGroup;
+  }, [sessionIdsByGroup]);
 
   useEffect(() => {
     vscode.postMessage({ type: "ready" });
@@ -206,133 +265,66 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
 
   const orderedGroups = useMemo(() => {
     const groupById = new Map(serverState.groups.map((group) => [group.groupId, group] as const));
-    const orderedGroupIds = draftGroupIds
-      ? mergeDraftSessionIds(
-          draftGroupIds,
-          serverState.groups.map((group) => group.groupId),
-        )
-      : serverState.groups.map((group) => group.groupId);
+    const sessionById = new Map(
+      serverState.groups.flatMap((group) =>
+        group.sessions.map((session) => [session.sessionId, session] as const),
+      ),
+    );
 
-    return orderedGroupIds
+    return groupIds
       .map((groupId) => groupById.get(groupId))
       .filter((group): group is SidebarSessionGroup => group !== undefined)
       .map((group) => ({
         ...group,
-        orderedSessions: applyDraftSessionOrder(group, draftSessionIdsByGroup[group.groupId]),
+        orderedSessions: applySessionOrder(sessionById, sessionIdsByGroup[group.groupId]),
       }));
-  }, [draftGroupIds, draftSessionIdsByGroup, serverState.groups]);
+  }, [groupIds, serverState.groups, sessionIdsByGroup]);
 
-  const draggedSession = useMemo(() => {
-    if (!draggedSessionId) {
-      return undefined;
-    }
-
-    return orderedGroups
-      .flatMap((group) => group.orderedSessions)
-      .find((session) => session.sessionId === draggedSessionId);
-  }, [draggedSessionId, orderedGroups]);
-
-  const applyCrossGroupSessionMoveDraft = (
-    sessionId: string,
-    sourceGroupId: string,
-    targetGroupId: string,
-  ) => {
-    if (sourceGroupId === targetGroupId) {
-      return;
-    }
-
-    const sourceGroup = orderedGroups.find((group) => group.groupId === sourceGroupId);
-    const targetGroup = orderedGroups.find((group) => group.groupId === targetGroupId);
-    if (!sourceGroup || !targetGroup) {
-      return;
-    }
-
-    const nextSourceSessionIds = sourceGroup.orderedSessions
-      .map((session) => session.sessionId)
-      .filter((candidateSessionId) => candidateSessionId !== sessionId);
-    const nextTargetSessionIds = [
-      ...targetGroup.orderedSessions
-        .map((session) => session.sessionId)
-        .filter((candidateSessionId) => candidateSessionId !== sessionId),
-      sessionId,
-    ];
-
-    startTransition(() => {
-      setDraftSessionIdsByGroup((previousDraft) => ({
-        ...previousDraft,
-        [sourceGroupId]: nextSourceSessionIds,
-        [targetGroupId]: nextTargetSessionIds,
-      }));
-    });
-  };
-
-  const handleDragStart = (event: {
-    operation: {
-      source: unknown;
-    };
-  }) => {
-    if (isSortable(event.operation.source)) {
-      const sourceElement = event.operation.source.element;
-      if (sourceElement instanceof HTMLElement) {
-        setDraggedSessionWidth(sourceElement.getBoundingClientRect().width);
-      }
-    }
-
+  const handleDragStart = ((event) => {
     const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
-    if (sourceData?.kind === "group") {
-      return;
-    }
-
     if (sourceData?.kind !== "session") {
       return;
     }
 
+    sessionDragSnapshotRef.current = cloneSessionIdsByGroup(sessionIdsByGroupRef.current);
     setDraggedSessionId(sourceData.sessionId);
-  };
+  }) satisfies DragDropEventHandlers["onDragStart"];
 
-  const handleDragEnd = (event: {
-    canceled?: boolean;
-    operation: {
-      source: unknown;
-      target: unknown;
-    };
-  }) => {
-    setDraggedSessionId(undefined);
-    setDraggedSessionWidth(undefined);
-
+  const handleDragOver = ((event) => {
     if (event.canceled) {
       return;
     }
 
-    const { source, target } = event.operation;
-    if (!isSortable(source)) {
+    const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
+    const targetData = getSidebarDropData(event.operation.target as { data?: unknown });
+    if (sourceData?.kind !== "session" || !targetData || targetData.kind === "create-group") {
       return;
     }
 
-    const sourceData = getSidebarDropData(source);
-    const targetData = getSidebarDropData(target as { data?: unknown });
-    if (!sourceData || !targetData) {
+    setSessionIdsByGroup((items) => move(items, event));
+  }) satisfies DragDropEventHandlers["onDragOver"];
+
+  const handleDragEnd = ((event) => {
+    setDraggedSessionId(undefined);
+
+    const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
+    const targetData = getSidebarDropData(event.operation.target as { data?: unknown });
+    if (!sourceData) {
       return;
     }
 
     if (sourceData.kind === "group") {
-      if (targetData.kind !== "group" || !isSortable(target)) {
+      if (event.canceled || targetData?.kind !== "group") {
         return;
       }
 
-      const { initialIndex } = source;
-      const targetIndex = target.index;
-      if (targetIndex == null || initialIndex === targetIndex) {
+      const nextGroupIds = move(groupIdsRef.current, event);
+      if (haveSameSessionOrder(groupIdsRef.current, nextGroupIds)) {
         return;
       }
 
-      const nextGroupIds = moveSessionId(
-        orderedGroups.map((group) => group.groupId),
-        initialIndex,
-        targetIndex,
-      );
       startTransition(() => {
-        setDraftGroupIds(nextGroupIds);
+        setGroupIds(nextGroupIds);
       });
       vscode.postMessage({
         groupIds: nextGroupIds,
@@ -341,7 +333,30 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       return;
     }
 
-    if (targetData.kind === "create-group") {
+    if (sourceData.kind !== "session") {
+      return;
+    }
+
+    const snapshot = sessionDragSnapshotRef.current;
+    const restoreSnapshot = () => {
+      if (!snapshot) {
+        return;
+      }
+
+      startTransition(() => {
+        setSessionIdsByGroup(snapshot);
+      });
+    };
+
+    if (event.canceled) {
+      restoreSnapshot();
+      sessionDragSnapshotRef.current = undefined;
+      return;
+    }
+
+    if (targetData?.kind === "create-group") {
+      restoreSnapshot();
+      sessionDragSnapshotRef.current = undefined;
       pendingCreateGroupRef.current = true;
       vscode.postMessage({
         sessionId: sourceData.sessionId,
@@ -350,59 +365,57 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       return;
     }
 
-    if (targetData.kind === "group") {
-      if (sourceData.groupId === targetData.groupId) {
+    if (!targetData) {
+      restoreSnapshot();
+      sessionDragSnapshotRef.current = undefined;
+      return;
+    }
+
+    const nextSessionIdsByGroup = move(sessionIdsByGroupRef.current, event);
+    if (!haveSameSessionIdsByGroup(sessionIdsByGroupRef.current, nextSessionIdsByGroup)) {
+      startTransition(() => {
+        setSessionIdsByGroup(nextSessionIdsByGroup);
+      });
+    }
+
+    sessionDragSnapshotRef.current = undefined;
+
+    const previousSessionIdsByGroup = snapshot ?? sessionIdsByGroupRef.current;
+    const previousGroupId = findSessionGroupId(previousSessionIdsByGroup, sourceData.sessionId);
+    const nextGroupId = findSessionGroupId(nextSessionIdsByGroup, sourceData.sessionId);
+    if (!previousGroupId || !nextGroupId) {
+      restoreSnapshot();
+      return;
+    }
+
+    if (previousGroupId !== nextGroupId) {
+      const targetIndex = nextSessionIdsByGroup[nextGroupId]?.indexOf(sourceData.sessionId);
+      if (targetIndex == null || targetIndex < 0) {
+        restoreSnapshot();
         return;
       }
 
-      applyCrossGroupSessionMoveDraft(sourceData.sessionId, sourceData.groupId, targetData.groupId);
       vscode.postMessage({
-        groupId: targetData.groupId,
+        groupId: nextGroupId,
         sessionId: sourceData.sessionId,
+        targetIndex,
         type: "moveSessionToGroup",
       });
       return;
     }
 
-    if (!isSortable(target) || sourceData.groupId !== targetData.groupId) {
-      applyCrossGroupSessionMoveDraft(sourceData.sessionId, sourceData.groupId, targetData.groupId);
-      vscode.postMessage({
-        groupId: targetData.groupId,
-        sessionId: sourceData.sessionId,
-        type: "moveSessionToGroup",
-      });
+    const previousSessionIds = previousSessionIdsByGroup[nextGroupId] ?? [];
+    const nextSessionIds = nextSessionIdsByGroup[nextGroupId] ?? [];
+    if (haveSameSessionOrder(previousSessionIds, nextSessionIds)) {
       return;
     }
-
-    const { index, initialIndex } = source;
-    const targetIndex = target.index;
-    if (index == null || initialIndex === targetIndex || targetIndex == null) {
-      return;
-    }
-
-    const group = orderedGroups.find((candidate) => candidate.groupId === sourceData.groupId);
-    if (!group) {
-      return;
-    }
-
-    const nextSessionIds = moveSessionId(
-      group.orderedSessions.map((session) => session.sessionId),
-      initialIndex,
-      targetIndex,
-    );
-    startTransition(() => {
-      setDraftSessionIdsByGroup((previousDraft) => ({
-        ...previousDraft,
-        [group.groupId]: nextSessionIds,
-      }));
-    });
 
     vscode.postMessage({
-      groupId: group.groupId,
+      groupId: nextGroupId,
       sessionIds: nextSessionIds,
       type: "syncSessionOrder",
     });
-  };
+  }) satisfies DragDropEventHandlers["onDragEnd"];
 
   return (
     <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
@@ -436,6 +449,30 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
               id="sidebar-overflow-menu"
               role="menu"
             >
+              <button
+                className="session-context-menu-item"
+                onClick={() => {
+                  setIsOverflowMenuOpen(false);
+                  setAgentCreateRequestId((previous) => previous + 1);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Add Agent
+              </button>
+              <button
+                className="session-context-menu-item"
+                onClick={() => {
+                  setIsOverflowMenuOpen(false);
+                  setCommandCreateRequestId((previous) => previous + 1);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Add Command
+              </button>
               <button
                 className="session-context-menu-item"
                 onClick={() => {
@@ -536,15 +573,28 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
             </div>
           </div>
         </section>
-        <AgentsPanel agents={serverState.hud.agents} vscode={vscode} />
-        <CommandsPanel commands={serverState.hud.commands} vscode={vscode} />
+        <AgentsPanel
+          agents={serverState.hud.agents}
+          createRequestId={agentCreateRequestId}
+          vscode={vscode}
+        />
+        <CommandsPanel
+          commands={serverState.hud.commands}
+          createRequestId={commandCreateRequestId}
+          vscode={vscode}
+        />
         <section className="session-groups-panel">
           <div className="section-titlebar" data-empty-space-blocking="true">
             <div aria-hidden="true" className="section-titlebar-line" />
             <span className="section-titlebar-label">Sessions</span>
             <div aria-hidden="true" className="section-titlebar-line" />
           </div>
-          <DragDropProvider onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+          <DragDropProvider
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
+            onDragStart={handleDragStart}
+            sensors={sensors}
+          >
             <div className="group-list">
               {orderedGroups.map((group, groupIndex) => (
                 <SessionGroupSection
@@ -564,42 +614,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                 isVisible={Boolean(draggedSessionId) && orderedGroups.length < MAX_GROUP_COUNT}
               />
             </div>
-            <DragOverlay
-              dropAnimation={{
-                duration: 220,
-                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
-            >
-              {draggedSession ? (
-                <div
-                  className="session-frame"
-                  data-activity={draggedSession.activity}
-                  data-focused={String(draggedSession.isFocused)}
-                  data-running={String(draggedSession.isRunning)}
-                  data-visible={String(draggedSession.isVisible)}
-                  style={
-                    draggedSessionWidth
-                      ? { width: `${Math.round(draggedSessionWidth)}px` }
-                      : undefined
-                  }
-                >
-                  <div
-                    className="session session-drag-overlay"
-                    data-activity={draggedSession.activity}
-                    data-focused={String(draggedSession.isFocused)}
-                    data-running={String(draggedSession.isRunning)}
-                    data-visible={String(draggedSession.isVisible)}
-                  >
-                    <SessionCardContent
-                      session={draggedSession}
-                      showCloseButton={false}
-                      showHotkeys={serverState.hud.showHotkeysOnSessionCards}
-                    />
-                  </div>
-                  <div aria-hidden className="session-status-dot" />
-                </div>
-              ) : null}
-            </DragOverlay>
           </DragDropProvider>
           {orderedGroups.every((group) => group.sessions.length === 0) ? (
             <div className="empty" data-empty-space-blocking="true">
@@ -726,91 +740,50 @@ function ModeButton({ isDimmed, mode, viewMode, visibleCount, vscode }: ModeButt
   );
 }
 
-function moveSessionId(
-  sessionIds: readonly string[],
-  initialIndex: number,
-  index: number,
-): string[] {
-  const nextSessionIds = [...sessionIds];
-  const [sessionId] = nextSessionIds.splice(initialIndex, 1);
-
-  if (sessionId === undefined) {
-    return nextSessionIds;
-  }
-
-  nextSessionIds.splice(index, 0, sessionId);
-  return nextSessionIds;
-}
-
-function mergeDraftSessionIds(
-  draftSessionIds: readonly string[],
-  syncedSessionIds: readonly string[],
-): string[] {
-  const syncedSessionIdSet = new Set(syncedSessionIds);
-  const mergedSessionIds = draftSessionIds.filter((sessionId) => syncedSessionIdSet.has(sessionId));
-
-  for (const sessionId of syncedSessionIds) {
-    if (!mergedSessionIds.includes(sessionId)) {
-      mergedSessionIds.push(sessionId);
-    }
-  }
-
-  return mergedSessionIds;
-}
-
-function applyDraftSessionOrder(
-  group: SidebarSessionGroup,
-  draftSessionIds: readonly string[] | undefined,
-): SidebarSessionItem[] {
-  if (!draftSessionIds) {
-    return group.sessions;
-  }
-
-  const sessionById = new Map(
-    group.sessions.map((session) => [session.sessionId, session] as const),
+function createSessionIdsByGroup(groups: readonly SidebarSessionGroup[]): SessionIdsByGroup {
+  return Object.fromEntries(
+    groups.map((group) => [group.groupId, group.sessions.map((session) => session.sessionId)]),
   );
-  return mergeDraftSessionIds(
-    draftSessionIds,
-    group.sessions.map((session) => session.sessionId),
-  )
+}
+
+function cloneSessionIdsByGroup(sessionIdsByGroup: SessionIdsByGroup): SessionIdsByGroup {
+  return Object.fromEntries(
+    Object.entries(sessionIdsByGroup).map(([groupId, sessionIds]) => [groupId, [...sessionIds]]),
+  );
+}
+
+function applySessionOrder(
+  sessionById: ReadonlyMap<string, SidebarSessionItem>,
+  orderedSessionIds: readonly string[] | undefined,
+): SidebarSessionItem[] {
+  if (!orderedSessionIds) {
+    return [];
+  }
+
+  return orderedSessionIds
     .map((sessionId) => sessionById.get(sessionId))
     .filter((session): session is SidebarSessionItem => session !== undefined);
 }
 
-function reconcileDraftSessionIdsByGroup(
-  draftSessionIdsByGroup: Readonly<Record<string, string[] | undefined>>,
-  groups: readonly SidebarSessionGroup[],
-): Record<string, string[] | undefined> {
-  const nextDraftSessionIdsByGroup: Record<string, string[] | undefined> = {};
-
-  for (const group of groups) {
-    const previousDraft = draftSessionIdsByGroup[group.groupId];
-    if (!previousDraft) {
-      continue;
-    }
-
-    const syncedSessionIds = group.sessions.map((session) => session.sessionId);
-    const nextDraftSessionIds = mergeDraftSessionIds(previousDraft, syncedSessionIds);
-    if (!haveSameSessionOrder(nextDraftSessionIds, syncedSessionIds)) {
-      nextDraftSessionIdsByGroup[group.groupId] = nextDraftSessionIds;
-    }
-  }
-
-  return nextDraftSessionIdsByGroup;
+function findSessionGroupId(
+  sessionIdsByGroup: SessionIdsByGroup,
+  sessionId: string,
+): string | undefined {
+  return Object.entries(sessionIdsByGroup).find(([, sessionIds]) =>
+    sessionIds.includes(sessionId),
+  )?.[0];
 }
 
-function reconcileDraftGroupIds(
-  draftGroupIds: readonly string[] | undefined,
-  groups: readonly SidebarSessionGroup[],
-): string[] | undefined {
-  if (!draftGroupIds) {
-    return undefined;
+function haveSameSessionIdsByGroup(left: SessionIdsByGroup, right: SessionIdsByGroup): boolean {
+  const leftGroupIds = Object.keys(left);
+  const rightGroupIds = Object.keys(right);
+  if (!haveSameSessionOrder(leftGroupIds, rightGroupIds)) {
+    return false;
   }
 
-  const syncedGroupIds = groups.map((group) => group.groupId);
-  const nextDraftGroupIds = mergeDraftSessionIds(draftGroupIds, syncedGroupIds);
-
-  return haveSameSessionOrder(nextDraftGroupIds, syncedGroupIds) ? undefined : nextDraftGroupIds;
+  return leftGroupIds.every((groupId) =>
+    haveSameSessionOrder(left[groupId] ?? [], right[groupId] ?? []),
+  );
 }
 
 function haveSameSessionOrder(left: readonly string[], right: readonly string[]): boolean {
@@ -880,11 +853,7 @@ type SettingsIconProps = {
 
 function SettingsIcon({ className }: SettingsIconProps) {
   return (
-    <svg
-      aria-hidden="true"
-      className={className ?? "toolbar-icon"}
-      viewBox="0 0 16 16"
-    >
+    <svg aria-hidden="true" className={className ?? "toolbar-icon"} viewBox="0 0 16 16">
       <path
         className="toolbar-icon-line"
         d="M8 2.2v1.4M8 12.4v1.4M3.76 3.76l1 1M11.24 11.24l1 1M2.2 8h1.4M12.4 8h1.4M3.76 12.24l1-1M11.24 4.76l1-1"
