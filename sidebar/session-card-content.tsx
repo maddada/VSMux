@@ -1,8 +1,15 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
+import type { SidebarAgentIcon } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
+
+const HIDDEN_AGENT_SECONDARY_TEXT: Record<SidebarAgentIcon, readonly string[]> = {
+  claude: ["claude", "claude code"],
+  codex: ["codex", "codex cli", "openai codex"],
+  opencode: ["open code", "opencode"],
+};
 
 export type SessionCardContentProps = {
   aliasHeadingRef?: RefObject<HTMLDivElement | null>;
@@ -21,9 +28,10 @@ export function SessionCardContent({
   showCloseButton,
   showHotkeys,
 }: SessionCardContentProps) {
-  const secondaryText =
-    session.detail ?? session.terminalTitle ?? session.primaryTitle ?? session.activityLabel;
-  const secondaryTitle = [session.terminalTitle, session.primaryTitle, session.detail]
+  const terminalTitle = getVisibleAgentSecondaryText(session.terminalTitle, session.agentIcon);
+  const primaryTitle = getVisibleAgentSecondaryText(session.primaryTitle, session.agentIcon);
+  const secondaryText = session.detail ?? terminalTitle ?? primaryTitle ?? session.activityLabel;
+  const secondaryTitle = [terminalTitle, primaryTitle, session.detail]
     .filter((value) => value && value.length > 0)
     .join("\n");
 
@@ -78,6 +86,23 @@ export function SessionCardContent({
       </div>
     </>
   );
+}
+
+function getVisibleAgentSecondaryText(
+  value: string | undefined,
+  agentIcon: SidebarSessionItem["agentIcon"],
+): string | undefined {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) {
+    return undefined;
+  }
+
+  if (!agentIcon) {
+    return normalizedValue;
+  }
+
+  const hiddenLabels = HIDDEN_AGENT_SECONDARY_TEXT[agentIcon];
+  return hiddenLabels.includes(normalizedValue.toLowerCase()) ? undefined : normalizedValue;
 }
 
 type OverflowTooltipTextProps = {
