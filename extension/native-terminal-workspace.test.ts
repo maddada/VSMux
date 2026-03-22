@@ -126,6 +126,7 @@ const testState = vi.hoisted(() => ({
   browserSessionManagers: [] as Array<{
     dispose: ReturnType<typeof vi.fn>;
     disposeSession: ReturnType<typeof vi.fn>;
+    hasLiveTab: ReturnType<typeof vi.fn>;
     reconcileVisibleSessions: ReturnType<typeof vi.fn>;
     revealStoredSession: ReturnType<typeof vi.fn>;
   }>,
@@ -133,6 +134,7 @@ const testState = vi.hoisted(() => ({
     | {
         dispose: ReturnType<typeof vi.fn>;
         disposeSession: ReturnType<typeof vi.fn>;
+        hasLiveTab: ReturnType<typeof vi.fn>;
         reconcileVisibleSessions: ReturnType<typeof vi.fn>;
         revealStoredSession: ReturnType<typeof vi.fn>;
       }
@@ -327,6 +329,7 @@ vi.mock("./browser-session-manager", () => ({
       testState.browserSessionManager = {
         dispose: vi.fn(),
         disposeSession: vi.fn(async () => {}),
+        hasLiveTab: vi.fn(() => false),
         reconcileVisibleSessions: vi.fn(async () => {}),
         revealStoredSession: vi.fn(async () => {}),
       };
@@ -663,6 +666,37 @@ describe("NativeTerminalWorkspaceController rename session", () => {
             sessions: expect.arrayContaining([
               expect.objectContaining({
                 isRunning: false,
+                sessionId: session.sessionId,
+              }),
+            ]),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  test("should publish visible browser sessions as running in the sidebar", async () => {
+    const session = createSessionRecord(3, 0, {
+      browser: {
+        url: "https://example.com/docs",
+      },
+      kind: "browser",
+      title: "Docs",
+    });
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    await controller.openWorkspace();
+
+    expect(testState.sidebarPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groups: expect.arrayContaining([
+          expect.objectContaining({
+            sessions: expect.arrayContaining([
+              expect.objectContaining({
+                detail: "https://example.com/docs",
+                isRunning: true,
+                primaryTitle: "Docs",
                 sessionId: session.sessionId,
               }),
             ]),

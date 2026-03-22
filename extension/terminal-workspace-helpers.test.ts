@@ -119,11 +119,8 @@ describe("getWorkspaceStorageKey", () => {
 });
 
 describe("getTitleDerivedSessionActivity", () => {
-  test("should mark an unstarred Claude Code title as working", () => {
-    expect(getTitleDerivedSessionActivity("Claude Code")).toEqual({
-      activity: "working",
-      agentName: "claude",
-    });
+  test("should treat a bare Claude Code title as idle until a stronger signal arrives", () => {
+    expect(getTitleDerivedSessionActivity("Claude Code")).toBeUndefined();
   });
 
   test("should keep a starred Claude Code title idle before any work starts", () => {
@@ -145,7 +142,7 @@ describe("getTitleDerivedSessionActivity", () => {
     });
   });
 
-  test("should treat any Claude Code title without the idle marker as working", () => {
+  test("should treat a dot-prefixed Claude Code title as working", () => {
     expect(getTitleDerivedSessionActivity("· Claude Code")).toEqual({
       activity: "working",
       agentName: "claude",

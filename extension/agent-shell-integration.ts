@@ -242,6 +242,7 @@ function getAgentWrapperShellScriptContent(
   },
 ): string {
   return `#!/bin/sh
+export ELECTRON_RUN_AS_NODE=1
 exec ${quoteShellLiteral(process.execPath)} ${quoteShellLiteral(options.wrapperRunnerPath)} --agent ${quoteShellLiteral(agentName)} --bin-dir ${quoteShellLiteral(options.binDir)} --claude-settings-path ${quoteShellLiteral(options.claudeSettingsPath)} --notify-runner-path ${quoteShellLiteral(options.notifyPath)} --opencode-config-dir ${quoteShellLiteral(options.opencodeConfigDir)} -- "$@"
 `;
 }
@@ -258,6 +259,7 @@ function getAgentWrapperCmdContent(
 ): string {
   return `@echo off
 setlocal
+set ELECTRON_RUN_AS_NODE=1
 "${process.execPath}" "${options.wrapperRunnerPath}" --agent ${agentName} --bin-dir "${options.binDir}" --claude-settings-path "${options.claudeSettingsPath}" --notify-runner-path "${options.notifyPath}" --opencode-config-dir "${options.opencodeConfigDir}" -- %*
 `;
 }
@@ -267,12 +269,14 @@ function getClaudeNotifyCommandContent(notifyPath: string): string {
     return `@echo off
 setlocal
 set VSMUX_AGENT=claude
+set ELECTRON_RUN_AS_NODE=1
 "${process.execPath}" "${notifyPath}" %*
 `;
   }
 
   return `#!/bin/sh
 export VSMUX_AGENT=claude
+export ELECTRON_RUN_AS_NODE=1
 exec ${quoteShellLiteral(process.execPath)} ${quoteShellLiteral(notifyPath)} "$@"
 `;
 }
@@ -552,6 +556,7 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
         const child = spawn(nodePath, [notifyPath, payload], {
           env: {
             ...process.env,
+            ELECTRON_RUN_AS_NODE: "1",
             VSMUX_AGENT: "opencode",
           },
           stdio: "ignore",

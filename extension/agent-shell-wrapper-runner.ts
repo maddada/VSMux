@@ -34,6 +34,7 @@ async function main(): Promise<void> {
 
   switch (options.agent) {
     case "claude":
+      delete environment.ELECTRON_RUN_AS_NODE;
       await writeInitialSessionState("claude", "Claude Code");
       args.unshift("--settings", options.claudeSettingsPath);
       break;
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
       break;
     }
     case "opencode":
+      delete environment.ELECTRON_RUN_AS_NODE;
       await writeInitialSessionState("opencode", "OpenCode");
       environment.OPENCODE_CONFIG_DIR = options.opencodeConfigDir;
       break;
@@ -252,6 +254,7 @@ function emitNotifyEvent(eventName: "Start" | "Stop", notifyRunnerPath: string):
     detached: true,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
       VSMUX_AGENT: "codex",
     },
     stdio: "ignore",

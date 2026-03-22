@@ -350,7 +350,7 @@ export class T3ActivityMonitor implements vscode.Disposable {
   }
 }
 
-function resolveThreadActivity(
+export function resolveThreadActivity(
   thread: SnapshotThread,
   previousState?: T3ThreadActivityState,
 ): T3ThreadActivityState {
@@ -361,6 +361,7 @@ function resolveThreadActivity(
   const completionMarker = getCompletionMarker(thread);
   const shouldRaiseAttention =
     !isWorking &&
+    previousState !== undefined &&
     completionMarker !== undefined &&
     completionMarker !== previousState?.completionMarker &&
     (latestTurnState === "completed" ||

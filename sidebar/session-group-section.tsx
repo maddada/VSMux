@@ -26,8 +26,6 @@ const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 164;
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
 const GROUP_CONTROL_MENU_MARGIN_PX = 12;
-const GROUP_LAYOUT_MENU_WIDTH_PX = 0;
-const GROUP_VISIBLE_COUNT_MENU_WIDTH_PX = 0;
 
 type ContextMenuPosition = {
   x: number;
@@ -81,10 +79,7 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
   };
 }
 
-function getControlMenuPosition(
-  button: HTMLButtonElement | null,
-  menuWidth: number,
-): ContextMenuPosition | undefined {
+function getControlMenuPosition(button: HTMLButtonElement | null): ContextMenuPosition | undefined {
   if (!button) {
     return undefined;
   }
@@ -93,10 +88,7 @@ function getControlMenuPosition(
   return {
     x: Math.max(
       GROUP_CONTROL_MENU_MARGIN_PX,
-      Math.min(
-        bounds.right - menuWidth,
-        window.innerWidth - menuWidth - GROUP_CONTROL_MENU_MARGIN_PX,
-      ),
+      Math.min(bounds.left + bounds.width / 2, window.innerWidth - GROUP_CONTROL_MENU_MARGIN_PX),
     ),
     y: Math.max(
       GROUP_CONTROL_MENU_MARGIN_PX,
@@ -339,9 +331,7 @@ export function SessionGroupSection({
     setOpenControlMenu(undefined);
 
     if (option.kind === "focus") {
-      if (!group.isFocusModeActive) {
-        vscode.postMessage({ type: "toggleFullscreenSession" });
-      }
+      vscode.postMessage({ type: "toggleFullscreenSession" });
       return;
     }
 
@@ -569,7 +559,7 @@ export function SessionGroupSection({
               onClick={(event) => event.stopPropagation()}
               ref={controlMenuRef}
               role="menu"
-              style={getPortalMenuStyle(layoutButtonRef.current, GROUP_LAYOUT_MENU_WIDTH_PX)}
+              style={getPortalMenuStyle(layoutButtonRef.current)}
             >
               {LAYOUT_OPTIONS.map((option) => {
                 const isSelected =
@@ -622,10 +612,7 @@ export function SessionGroupSection({
               onClick={(event) => event.stopPropagation()}
               ref={controlMenuRef}
               role="menu"
-              style={getPortalMenuStyle(
-                visibleCountButtonRef.current,
-                GROUP_VISIBLE_COUNT_MENU_WIDTH_PX,
-              )}
+              style={getPortalMenuStyle(visibleCountButtonRef.current)}
             >
               {COUNT_OPTIONS.map((visibleCount) => (
                 <button
@@ -662,9 +649,8 @@ export function SessionGroupSection({
   );
 }
 
-function getPortalMenuStyle(button: HTMLButtonElement | null, menuWidth: number) {
-  const effectiveMenuWidth = menuWidth || button?.offsetWidth || 0;
-  const position = getControlMenuPosition(button, effectiveMenuWidth);
+function getPortalMenuStyle(button: HTMLButtonElement | null) {
+  const position = getControlMenuPosition(button);
   if (!position) {
     return undefined;
   }
@@ -673,6 +659,7 @@ function getPortalMenuStyle(button: HTMLButtonElement | null, menuWidth: number)
     left: `${position.x}px`,
     position: "fixed" as const,
     top: `${position.y}px`,
+    transform: "translateX(-50%)",
   };
 }
 

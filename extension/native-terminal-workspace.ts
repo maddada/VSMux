@@ -183,6 +183,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       },
     });
     this.browserSessions = new BrowserSessionManager({
+      onDidChangeSessions: async () => {
+        await this.refreshSidebar();
+      },
       onDidFocusSession: async (sessionId) => {
         const sessionRecord = this.store.getSession(sessionId);
         if (!sessionRecord || !isBrowserSession(sessionRecord)) {
@@ -1276,6 +1279,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     if (isBrowserSession(sessionRecord)) {
       const activeSnapshot = this.getActiveSnapshot();
       const isActiveGroup = this.store.getSnapshot().activeGroupId === group.groupId;
+      const isVisible =
+        isActiveGroup && activeSnapshot.visibleSessionIds.includes(sessionRecord.sessionId);
       return {
         activity: "idle",
         activityLabel: undefined,
@@ -1284,9 +1289,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         column: sessionRecord.column,
         detail: sessionRecord.browser.url,
         isFocused: isActiveGroup && activeSnapshot.focusedSessionId === sessionRecord.sessionId,
-        isRunning: false,
-        isVisible:
-          isActiveGroup && activeSnapshot.visibleSessionIds.includes(sessionRecord.sessionId),
+        isRunning: isVisible || this.browserSessions.hasLiveTab(sessionRecord.sessionId),
+        isVisible,
         primaryTitle: getVisiblePrimaryTitle(sessionRecord.title) ?? "Browser",
         row: sessionRecord.row,
         sessionId: sessionRecord.sessionId,

@@ -1,6 +1,7 @@
 import type { SidebarSessionActivityState } from "../shared/session-grid-contract";
 
 const CLAUDE_CODE_IDLE_MARKERS = ["✳", "*"] as const;
+const CLAUDE_CODE_WORKING_MARKERS = ["·"] as const;
 const CLAUDE_CODE_TITLE = "Claude Code";
 
 export type TitleDerivedSessionActivity = {
@@ -39,12 +40,24 @@ export function getTitleDerivedSessionActivityFromTransition(
   nextTitle: string,
   previousDerivedActivity?: TitleDerivedSessionActivity,
 ): TitleDerivedSessionActivity | undefined {
+  const previousTitleState = previousTitle ? getClaudeCodeTitleState(previousTitle) : undefined;
+  const nextTitleState = getClaudeCodeTitleState(nextTitle);
+  if (
+    nextTitleState === undefined &&
+    previousTitleState === "idleMarkerVisible" &&
+    nextTitle.toLowerCase().includes(CLAUDE_CODE_TITLE.toLowerCase())
+  ) {
+    return {
+      activity: "working",
+      agentName: "claude",
+    };
+  }
+
   const nextActivity = getTitleDerivedSessionActivity(nextTitle, previousDerivedActivity);
   if (!nextActivity) {
     return undefined;
   }
 
-  const previousTitleState = previousTitle ? getClaudeCodeTitleState(previousTitle) : undefined;
   if (
     nextActivity.activity === "idle" &&
     (previousTitleState === "working" || previousDerivedActivity?.activity === "working")
@@ -78,7 +91,11 @@ function getClaudeCodeTitleState(title: string): "idleMarkerVisible" | "working"
     return "idleMarkerVisible";
   }
 
-  return "working";
+  if (containsAnyMarker(normalizedTitle, CLAUDE_CODE_WORKING_MARKERS)) {
+    return "working";
+  }
+
+  return undefined;
 }
 
 function containsAnyMarker(title: string, markers: readonly string[]): boolean {

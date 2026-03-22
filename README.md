@@ -4,9 +4,12 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## New in 1.6.0
+## New in 1.7.0
 
 - Windows should work now.
+
+## New in 1.6.0
+
 - Added browser support.
 - Better UI across the workspace and session management flow.
 

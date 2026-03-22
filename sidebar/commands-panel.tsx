@@ -1,15 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
-import {
-  IconBrowser,
-  IconGlobe,
-  IconPencil,
-  IconPlayerPlay,
-  IconTerminal2,
-  IconTrash,
-  IconWorld,
-} from "@tabler/icons-react";
+import { IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
