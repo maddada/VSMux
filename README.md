@@ -132,6 +132,7 @@ If `forks/t3code-embed/dist` is missing, the extension still builds, but T3 sess
 ## Features
 
 ### Session Management
+
 - **Create, rename, restart, and close** terminal sessions from the sidebar
 - **Session groups** — organize sessions into up to 4 named groups, rename groups, and drag sessions between them
 - **Drag-and-drop reordering** — reorder sessions within and across groups, reorder command buttons
@@ -139,6 +140,7 @@ If `forks/t3code-embed/dist` is missing, the extension still builds, but T3 sess
 - **Previous session history** — closed sessions are archived (up to 200) and can be browsed or restored from a modal
 
 ### Layout & Views
+
 - **Three view modes** — Horizontal, Vertical, and Grid layouts (Cmd+Alt+H/V/G)
 - **Configurable visible count** — show 1, 2, 3, 4, 6, or 9 sessions at once
 - **Fullscreen / focus mode** — toggle a single session to fill the entire view (Cmd+Alt+F)
@@ -147,18 +149,21 @@ If `forks/t3code-embed/dist` is missing, the extension still builds, but T3 sess
 - **Directional focus navigation** — move focus up/right/down/left across sessions
 
 ### Agent Launchers
+
 - **Built-in agent buttons** — one-click launch for T3 Code, Codex, Claude Code, OpenCode, and Gemini
 - **Custom agents** — add your own agent launchers with custom commands and names
 - **Agent icon detection** — session cards show the agent logo watermark based on what's running
 - **Edit and delete agents** — right-click context menu on agent buttons
 
 ### Command Shortcuts
+
 - **Sidebar command buttons** — quick-launch buttons for Dev, Build, Test, Setup (or your own)
 - **Custom commands** — create commands with a name, shell command, and optional close-on-exit behavior
 - **Drag-and-drop reordering** — reorder command buttons in the sidebar
 - **Edit and delete commands** — right-click context menu on command buttons
 
 ### Activity Tracking
+
 - **Three activity states** — idle, working, and attention indicators on session cards
 - **Claude Code title detection** — automatically detects Claude Code idle/working state from terminal title
 - **Shell integration** — detects agent start/stop lifecycle events via control sequences
@@ -167,29 +172,32 @@ If `forks/t3code-embed/dist` is missing, the extension still builds, but T3 sess
 - **10 completion sounds** — Arcade, African, Afrobeat, EDM, Come Back To The Code, Glass, Ping, Shamisen, Superset Doo-Wap, Superset Quick
 
 ### T3 Code Integration
+
 - **Embedded T3 sessions** — T3 Code runs directly inside the VSmux sidebar as a webview
 - **T3 activity monitoring** — WebSocket connection to local T3 runtime tracks thread activity in real time
 - **T3 session lifecycle** — automatic supervision, sync, and management of T3 sessions
 
 ### Theming
+
 - **11 sidebar theme presets** — Auto, Plain, Dark Green/Blue/Red/Pink/Orange, Light Blue/Green/Pink/Orange
 - **Auto theme** — follows the active VS Code theme (dark or light)
 
 ### Keyboard Shortcuts
 
-| Action | macOS | Windows/Linux |
-|---|---|---|
-| Focus session slot 1–9 | Cmd+Alt+1–9 | Ctrl+Alt+1–9 |
-| Focus group 1–4 | Ctrl+Alt+Shift+1–4 | Ctrl+Alt+Shift+1–4 |
-| Horizontal view | Cmd+Alt+H | Ctrl+Alt+H |
-| Vertical view | Cmd+Alt+V | Ctrl+Alt+V |
-| Grid view | Cmd+Alt+G | Ctrl+Alt+G |
-| Fullscreen toggle | Cmd+Alt+F | Ctrl+Alt+F |
-| Rename active session | Cmd+Alt+R | Ctrl+Alt+R |
-| Show 6 terminals | Cmd+Alt+Shift+6 | Ctrl+Alt+Shift+6 |
-| Show 9 terminals | Cmd+Alt+Shift+9 | Ctrl+Alt+Shift+9 |
+| Action                 | macOS              | Windows/Linux      |
+| ---------------------- | ------------------ | ------------------ |
+| Focus session slot 1–9 | Cmd+Alt+1–9        | Ctrl+Alt+1–9       |
+| Focus group 1–4        | Ctrl+Alt+Shift+1–4 | Ctrl+Alt+Shift+1–4 |
+| Horizontal view        | Cmd+Alt+H          | Ctrl+Alt+H         |
+| Vertical view          | Cmd+Alt+V          | Ctrl+Alt+V         |
+| Grid view              | Cmd+Alt+G          | Ctrl+Alt+G         |
+| Fullscreen toggle      | Cmd+Alt+F          | Ctrl+Alt+F         |
+| Rename active session  | Cmd+Alt+R          | Ctrl+Alt+R         |
+| Show 6 terminals       | Cmd+Alt+Shift+6    | Ctrl+Alt+Shift+6   |
+| Show 9 terminals       | Cmd+Alt+Shift+9    | Ctrl+Alt+Shift+9   |
 
 ### Other
+
 - **Sidebar rename → terminal rename** — renaming from the sidebar optionally stages `/rename <name>` in the terminal
 - **Cmd+click or middle-click to close** — close sessions without needing a visible close button
 - **Configurable close button visibility** — show/hide close buttons on session cards

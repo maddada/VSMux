@@ -25,10 +25,17 @@ const T3_PANEL_TYPE = "VSmux.t3Session";
 
 export class T3WebviewManager implements vscode.Disposable {
   private readonly panelsBySessionId = new Map<string, ManagedPanel>();
+  private pendingProgrammaticFocus:
+    | {
+        clearTimeout: ReturnType<typeof setTimeout>;
+        sessionId: string;
+      }
+    | undefined;
 
   public constructor(private readonly options: T3WebviewManagerOptions) {}
 
   public dispose(): void {
+    this.clearPendingProgrammaticFocus();
     for (const managedPanel of this.panelsBySessionId.values()) {
       managedPanel.panel.dispose();
     }
@@ -109,6 +116,9 @@ export class T3WebviewManager implements vscode.Disposable {
     const managedPanel = this.panelsBySessionId.get(sessionRecord.sessionId);
     const viewColumn = getViewColumn(visibleIndex);
     const nextRenderKey = getRenderKey(sessionRecord);
+    if (!preserveFocus) {
+      this.beginProgrammaticFocus(sessionRecord.sessionId);
+    }
     if (managedPanel) {
       managedPanel.panel.title = getPanelTitle(sessionRecord);
       if (managedPanel.renderKey !== nextRenderKey) {
@@ -161,6 +171,10 @@ export class T3WebviewManager implements vscode.Disposable {
         return;
       }
 
+      if (this.shouldIgnoreFocusEvent(sessionRecord.sessionId)) {
+        return;
+      }
+
       void this.options.onDidFocusSession(sessionRecord.sessionId);
     });
     panel.webview.onDidReceiveMessage((message: unknown) => {
@@ -184,6 +198,41 @@ export class T3WebviewManager implements vscode.Disposable {
 
     managedPanel.pendingComposerFocus = false;
     void managedPanel.panel.webview.postMessage({ type: "focusComposer" });
+  }
+
+  private beginProgrammaticFocus(sessionId: string): void {
+    this.clearPendingProgrammaticFocus();
+    this.pendingProgrammaticFocus = {
+      clearTimeout: setTimeout(() => {
+        if (this.pendingProgrammaticFocus?.sessionId === sessionId) {
+          this.pendingProgrammaticFocus = undefined;
+        }
+      }, 250),
+      sessionId,
+    };
+  }
+
+  private clearPendingProgrammaticFocus(): void {
+    if (!this.pendingProgrammaticFocus) {
+      return;
+    }
+
+    clearTimeout(this.pendingProgrammaticFocus.clearTimeout);
+    this.pendingProgrammaticFocus = undefined;
+  }
+
+  private shouldIgnoreFocusEvent(sessionId: string): boolean {
+    const pendingProgrammaticFocus = this.pendingProgrammaticFocus;
+    if (!pendingProgrammaticFocus) {
+      return false;
+    }
+
+    if (pendingProgrammaticFocus.sessionId === sessionId) {
+      this.clearPendingProgrammaticFocus();
+      return true;
+    }
+
+    return true;
   }
 
   private async createPanelHtml(
