@@ -56,7 +56,7 @@ To get that, something outside VS Code must own the PTY:
 - custom `node-pty` daemon
 - similar background service
 
-The rendering risk comes back the moment the visible terminal reconnects through that external owner. That is exactly why `zmx attach` is causing trouble now.
+The rendering risk comes back the moment the visible terminal reconnects through that external owner. That is exactly why an external attach layer was causing trouble before.
 
 So the hard truth is:
 
