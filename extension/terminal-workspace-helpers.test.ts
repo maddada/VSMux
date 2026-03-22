@@ -1,6 +1,8 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 import { createSessionRecord } from "../shared/session-grid-contract";
 import {
+  applyEditorLayout,
+  doesCurrentEditorLayoutMatch,
   extractClaudeCodeTitleFromVtHistory,
   extractLatestTerminalTitleFromVtHistory,
   getSessionTabTitle,
@@ -40,6 +42,71 @@ describe("getSessionTabTitle", () => {
         alias: "API",
       }),
     ).toBe("API");
+  });
+});
+
+describe("applyEditorLayout", () => {
+  test("should skip joining editor groups when requested", async () => {
+    const executeCommand = (await import("vscode")).commands.executeCommand as ReturnType<
+      typeof vi.fn
+    >;
+    executeCommand.mockReset();
+    executeCommand.mockResolvedValue(undefined);
+
+    await applyEditorLayout(4, "grid", {
+      joinAllGroups: false,
+    });
+
+    expect(executeCommand).toHaveBeenCalledTimes(1);
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.setEditorLayout",
+      expect.objectContaining({
+        groups: expect.any(Array),
+      }),
+    );
+  });
+});
+
+describe("doesCurrentEditorLayoutMatch", () => {
+  test("should detect when the current editor layout already matches", async () => {
+    const executeCommand = (await import("vscode")).commands.executeCommand as ReturnType<
+      typeof vi.fn
+    >;
+    executeCommand.mockReset();
+    executeCommand.mockImplementation(async (command: string) => {
+      if (command === "vscode.getEditorLayout") {
+        return {
+          groups: [
+            { groups: [{}, {}], orientation: 0 },
+            { groups: [{}, {}], orientation: 0 },
+          ],
+          orientation: 1,
+        };
+      }
+
+      return undefined;
+    });
+
+    await expect(doesCurrentEditorLayoutMatch(4, "grid")).resolves.toBe(true);
+  });
+
+  test("should detect when the current editor layout shape differs", async () => {
+    const executeCommand = (await import("vscode")).commands.executeCommand as ReturnType<
+      typeof vi.fn
+    >;
+    executeCommand.mockReset();
+    executeCommand.mockImplementation(async (command: string) => {
+      if (command === "vscode.getEditorLayout") {
+        return {
+          groups: [{}, {}, {}, {}],
+          orientation: 0,
+        };
+      }
+
+      return undefined;
+    });
+
+    await expect(doesCurrentEditorLayoutMatch(4, "grid")).resolves.toBe(false);
   });
 });
 

@@ -6097,7 +6097,7 @@ function pc(e, t) {
     }
 }
 function mc(e) {
-  return e.endsWith('[]') ? e.slice(0, -2) : e;
+  return e.endsWith("[]") ? e.slice(0, -2) : e;
 }
 function hc(e) {
   return Array.from(e.elements)

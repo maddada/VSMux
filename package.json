@@ -20,12 +20,13 @@
   ],
   "main": "./out/extension/extension.js",
   "scripts": {
-    "vscode:prepublish": "vp run sidebar:build && tsc -p ./tsconfig.extension.json",
+    "vscode:prepublish": "vp run sidebar:build && vp run debug-panel:build && tsc -p ./tsconfig.extension.json",
     "sidebar:build": "vp build --config vite.sidebar.config.ts",
+    "debug-panel:build": "vp build --config vite.debug-panel.config.ts",
     "storybook": "vp exec storybook dev -p 6006 --no-open",
     "storybook:build": "vp exec storybook build",
     "storybook:test": "node ./scripts/storybook-test.mjs",
-    "compile": "vp run sidebar:build && tsc -p ./tsconfig.extension.json",
+    "compile": "vp run sidebar:build && vp run debug-panel:build && tsc -p ./tsconfig.extension.json",
     "watch": "tsc -w -p ./tsconfig.extension.json",
     "lint": "vp lint",
     "fmt": "vp fmt",
@@ -68,6 +69,11 @@
       {
         "command": "VSmux.openSettings",
         "title": "Open Settings",
+        "category": "VSmux"
+      },
+      {
+        "command": "VSmux.openDebugInspector",
+        "title": "Open Move Debugger",
         "category": "VSmux"
       },
       {
@@ -270,24 +276,30 @@
           "default": false,
           "description": "Show debugging UI such as the active terminal backend indicator in the status bar."
         },
-        "VSmux.zmxBinaryPathOverride": {
-          "title": "Zmx Binary Path Override",
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to a custom zmx binary. When set, VSmux uses this binary instead of downloading the pinned upstream zmx release."
+        "VSmux.matchVisibleTerminalOrderInSessionsArea": {
+          "title": "Match Visible Terminal Order In Sessions Area",
+          "type": "boolean",
+          "default": false,
+          "description": "Keep editor terminals in the same order as the Sessions list. This can add extra layout jitter when switching sessions."
         },
-        "VSmux.experimentalZmxActionDelayMs": {
-          "title": "Experimental Zmx Action Delay (ms)",
+        "VSmux.nativeTerminalActionDelayMs": {
+          "title": "Native Terminal Action Delay Ms",
           "type": "number",
           "minimum": 0,
           "default": 0,
-          "description": "Experimental zmx debug setting: add this many milliseconds of delay before each VSmux terminal UI action. Set to 1000 to slow swaps down by 1 second per step so you can inspect layout behavior."
+          "description": "Delay native terminal move actions for debugging so you can watch layout changes more clearly."
+        },
+        "VSmux.keepSessionGroupsUnlocked": {
+          "title": "Keep Session Groups Unlocked",
+          "type": "boolean",
+          "default": true,
+          "description": "Keep editor groups that contain VSmux session terminals unlocked after native moves complete."
         },
         "VSmux.showCloseButtonOnSessionCards": {
           "title": "Show Close Button On Session Cards",
           "type": "boolean",
           "default": false,
-          "description": "Show close button on session cards. You can always cmd + click or middle click on a card to close it."
+          "description": "Reveal a close button when you hover a session card. You can always cmd + click or middle click on a card to close it."
         },
         "VSmux.showHotkeysOnSessionCards": {
           "title": "Show Hotkeys On Session Cards",

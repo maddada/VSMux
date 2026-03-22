@@ -3,13 +3,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import { CommandConfigModal, type CommandConfigDraft } from "./command-config-modal";
@@ -380,7 +374,11 @@ function SortableCommandButton({
   );
 }
 
-function moveCommandId(commandIds: readonly string[], initialIndex: number, index: number): string[] {
+function moveCommandId(
+  commandIds: readonly string[],
+  initialIndex: number,
+  index: number,
+): string[] {
   const nextCommandIds = [...commandIds];
   const [commandId] = nextCommandIds.splice(initialIndex, 1);
 
@@ -418,7 +416,9 @@ function reconcileDraftCommandIds(
 
   const syncedCommandIds = commands.map((command) => command.commandId);
   const nextDraftCommandIds = mergeCommandIds(draftCommandIds, syncedCommandIds);
-  return haveSameCommandOrder(nextDraftCommandIds, syncedCommandIds) ? undefined : nextDraftCommandIds;
+  return haveSameCommandOrder(nextDraftCommandIds, syncedCommandIds)
+    ? undefined
+    : nextDraftCommandIds;
 }
 
 function haveSameCommandOrder(left: readonly string[], right: readonly string[]): boolean {

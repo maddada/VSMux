@@ -51,7 +51,9 @@ export function createSidebarCommandButtons(
   deletedDefaultCommandIds: readonly string[] = [],
 ): SidebarCommandButton[] {
   const storedCommandById = new Map(storedCommands.map((command) => [command.commandId, command]));
-  const deletedDefaultCommandIdSet = new Set(normalizeStoredSidebarCommandOrder(deletedDefaultCommandIds));
+  const deletedDefaultCommandIdSet = new Set(
+    normalizeStoredSidebarCommandOrder(deletedDefaultCommandIds),
+  );
   const defaultButtons = DEFAULT_SIDEBAR_COMMANDS.reduce<SidebarCommandButton[]>(
     (buttons, command) => {
       if (deletedDefaultCommandIdSet.has(command.commandId)) {

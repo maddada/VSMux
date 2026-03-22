@@ -45612,7 +45612,7 @@ init_theming();
 // src/components/components/typography/elements/Link.tsx
 var import_react7 = __toESM(require_react(), 1),
   Link = ({ href: input2 = "", ...props }) => {
-    let href = input2.startsWith('/') ? `./?path=${input2}` : input2,
+    let href = input2.startsWith("/") ? `./?path=${input2}` : input2,
       target = /^#.*/.test(input2) ? "_self" : "_top";
     return import_react7.default.createElement("a", { href, target, ...props });
   };
@@ -64683,7 +64683,7 @@ function getFormValue(container, name) {
     }
 }
 function getPureName(name) {
-  return name.endsWith('[]') ? name.slice(0, -2) : name;
+  return name.endsWith("[]") ? name.slice(0, -2) : name;
 }
 function getAllFormValues(container) {
   return Array.from(container.elements)
@@ -93531,7 +93531,8 @@ var ToggleButton = (0, import_react94.forwardRef)(({ pressed, ...props }, ref) =
   }),
 );
 ToggleButton.displayName = "ToggleButton";
-var StyledToggle = styled(Button)(({ theme: theme3, variant = "outline", pressed }) => ((pressed
+var StyledToggle = styled(Button)(({ theme: theme3, variant = "outline", pressed }) =>
+  pressed
     ? {
         ...(variant === "solid"
           ? {
@@ -93558,7 +93559,8 @@ var StyledToggle = styled(Button)(({ theme: theme3, variant = "outline", pressed
             }
           : {}),
       }
-    : {})));
+    : {},
+);
 
 // src/components/components/ActionList/ActionList.tsx
 var ActionListItem = styled.li(

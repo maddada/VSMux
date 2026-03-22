@@ -17,6 +17,12 @@ export const DEFAULT_SIDEBAR_AGENTS = [
     icon: "opencode",
     name: "OpenCode",
   },
+  {
+    agentId: "gemini",
+    command: "gemini -y",
+    icon: "gemini",
+    name: "Gemini",
+  },
 ] as const;
 
 export type SidebarAgentIcon = (typeof DEFAULT_SIDEBAR_AGENTS)[number]["icon"];
@@ -68,7 +74,7 @@ export function createSidebarAgentButtons(
       command: storedAgent.command,
       icon: storedAgent.icon ?? agent.icon,
       isDefault: true,
-      name: storedAgent.name,
+      name: getDefaultSidebarAgentName(agent.agentId, storedAgent.name),
     };
   });
 
@@ -92,6 +98,10 @@ export function isDefaultSidebarAgentId(agentId: string): boolean {
 export function getSidebarAgentIconById(agentId: string | undefined): SidebarAgentIcon | undefined {
   const normalizedAgentId = agentId?.trim().toLowerCase();
   return DEFAULT_SIDEBAR_AGENTS.find((agent) => agent.agentId === normalizedAgentId)?.icon;
+}
+
+export function getSidebarAgentNameByIcon(icon: SidebarAgentIcon | undefined): string | undefined {
+  return DEFAULT_SIDEBAR_AGENTS.find((agent) => agent.icon === icon)?.name;
 }
 
 export function normalizeStoredSidebarAgents(candidate: unknown): StoredSidebarAgent[] {
@@ -137,4 +147,21 @@ function isSidebarAgentIcon(candidate: unknown): candidate is SidebarAgentIcon {
     typeof candidate === "string" &&
     DEFAULT_SIDEBAR_AGENTS.some((agent) => agent.icon === candidate)
   );
+}
+
+function getDefaultSidebarAgentName(agentId: string, storedName: string): string {
+  const defaultName = DEFAULT_SIDEBAR_AGENTS.find((agent) => agent.agentId === agentId)?.name;
+  if (!defaultName) {
+    return storedName;
+  }
+
+  const normalizedStoredName = storedName.trim().toLowerCase();
+  if (
+    (agentId === "codex" && normalizedStoredName === "codex cli") ||
+    (agentId === "claude" && normalizedStoredName === "claude code")
+  ) {
+    return defaultName;
+  }
+
+  return storedName;
 }

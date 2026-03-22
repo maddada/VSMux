@@ -19,9 +19,7 @@ export type SaveSidebarCommandInput = {
   name: string;
 };
 
-export function getSidebarCommandButtons(
-  context: vscode.ExtensionContext,
-): SidebarCommandButton[] {
+export function getSidebarCommandButtons(context: vscode.ExtensionContext): SidebarCommandButton[] {
   return createSidebarCommandButtons(
     getStoredSidebarCommands(context),
     getStoredSidebarCommandOrder(context),
@@ -46,7 +44,9 @@ export async function saveSidebarCommandPreference(
     return;
   }
 
-  const currentCommandIds = getSidebarCommandButtons(context).map((candidate) => candidate.commandId);
+  const currentCommandIds = getSidebarCommandButtons(context).map(
+    (candidate) => candidate.commandId,
+  );
   const storedCommands = getStoredSidebarCommands(context);
   const storedOrder = getStoredSidebarCommandOrder(context);
   const deletedDefaultCommandIds = getDeletedDefaultCommandIds(context);
@@ -61,7 +61,9 @@ export async function saveSidebarCommandPreference(
   const existingIndex = storedCommands.findIndex((candidate) => candidate.commandId === commandId);
   const nextCommands =
     existingIndex >= 0
-      ? storedCommands.map((candidate, index) => (index === existingIndex ? nextCommand : candidate))
+      ? storedCommands.map((candidate, index) =>
+          index === existingIndex ? nextCommand : candidate,
+        )
       : [...storedCommands, nextCommand];
   const nextOrder =
     existingIndex >= 0 || storedOrder.includes(commandId) || isDefaultSidebarCommandId(commandId)
@@ -129,7 +131,9 @@ function getStoredSidebarCommandOrder(context: vscode.ExtensionContext): string[
 }
 
 function getDeletedDefaultCommandIds(context: vscode.ExtensionContext): string[] {
-  return normalizeStoredSidebarCommandOrder(context.workspaceState.get(DELETED_DEFAULT_COMMANDS_KEY));
+  return normalizeStoredSidebarCommandOrder(
+    context.workspaceState.get(DELETED_DEFAULT_COMMANDS_KEY),
+  );
 }
 
 function createCustomCommandId(): string {

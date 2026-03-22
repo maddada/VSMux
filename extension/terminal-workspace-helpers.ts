@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import * as os from "node:os";
 import * as vscode from "vscode";
-import { createEditorLayoutPlan } from "../shared/editor-layout";
+import {
+  createEditorLayoutPlan,
+  type EditorLayout,
+  type EditorLayoutGroup,
+} from "../shared/editor-layout";
 import {
   type SessionGridSnapshot,
   type SessionRecord,
@@ -29,10 +33,37 @@ const CODEX_WORKING_SNIPPET_LENGTH = 220;
 export async function applyEditorLayout(
   visibleCount: number,
   viewMode: TerminalViewMode,
+  options?: {
+    joinAllGroups?: boolean;
+  },
 ): Promise<void> {
   const layoutPlan = createEditorLayoutPlan(visibleCount, viewMode);
-  await vscode.commands.executeCommand("workbench.action.joinAllGroups");
+  if (options?.joinAllGroups !== false) {
+    await vscode.commands.executeCommand("workbench.action.joinAllGroups");
+  }
   await vscode.commands.executeCommand("vscode.setEditorLayout", layoutPlan.layout);
+}
+
+export async function doesCurrentEditorLayoutMatch(
+  visibleCount: number,
+  viewMode: TerminalViewMode,
+): Promise<boolean> {
+  try {
+    const currentLayout = await vscode.commands.executeCommand<EditorLayout | undefined>(
+      "vscode.getEditorLayout",
+    );
+    if (!isEditorLayout(currentLayout)) {
+      return false;
+    }
+
+    const desiredLayout = createEditorLayoutPlan(visibleCount, viewMode).layout;
+    return (
+      JSON.stringify(normalizeEditorLayout(currentLayout)) ===
+      JSON.stringify(normalizeEditorLayout(desiredLayout))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function createBlockedSessionSnapshot(
@@ -85,6 +116,36 @@ export function getDefaultShell(): string {
   }
 
   return process.platform === "win32" ? "powershell.exe" : "/bin/zsh";
+}
+
+function isEditorLayout(value: unknown): value is EditorLayout {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as EditorLayout).groups) &&
+    ((value as EditorLayout).orientation === 0 || (value as EditorLayout).orientation === 1)
+  );
+}
+
+function normalizeEditorLayout(layout: EditorLayout): {
+  groups: Array<Record<string, unknown>>;
+  orientation: 0 | 1;
+} {
+  return {
+    groups: layout.groups.map((group) => normalizeEditorLayoutGroup(group)),
+    orientation: layout.orientation,
+  };
+}
+
+function normalizeEditorLayoutGroup(group: EditorLayoutGroup): Record<string, unknown> {
+  if (!Array.isArray(group.groups) || group.groups.length === 0) {
+    return {};
+  }
+
+  return {
+    groups: group.groups.map((childGroup) => normalizeEditorLayoutGroup(childGroup)),
+    orientation: group.orientation,
+  };
 }
 
 export function getDefaultWorkspaceCwd(): string {
@@ -290,6 +351,10 @@ export function getViewColumn(index: number): vscode.ViewColumn {
   return Math.max(vscode.ViewColumn.One, Math.min(index + 1, vscode.ViewColumn.Nine));
 }
 
+export function getActiveEditorGroupViewColumn(): vscode.ViewColumn | undefined {
+  return vscode.window.tabGroups.activeTabGroup?.viewColumn;
+}
+
 export async function focusEditorGroupByIndex(index: number): Promise<boolean> {
   const command = FOCUS_EDITOR_GROUP_COMMANDS[index];
   if (!command) {
@@ -298,6 +363,30 @@ export async function focusEditorGroupByIndex(index: number): Promise<boolean> {
 
   await vscode.commands.executeCommand(command);
   return true;
+}
+
+export async function moveActiveTerminalToEditor(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
+}
+
+export async function moveActiveTerminalToPanel(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.terminal.moveToTerminalPanel");
+}
+
+export async function moveActiveEditorToNextGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.moveEditorToNextGroup");
+}
+
+export async function moveActiveEditorToPreviousGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.moveEditorToPreviousGroup");
+}
+
+export async function lockActiveEditorGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.lockEditorGroup");
+}
+
+export async function unlockActiveEditorGroup(): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.unlockEditorGroup");
 }
 
 export function matchesVisibleTerminalLayout(

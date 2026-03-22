@@ -202,8 +202,9 @@ describe("normalizeStoredSidebarCommands", () => {
 
 describe("normalizeStoredSidebarCommandOrder", () => {
   test("should ignore invalid ids, trim values, and dedupe entries", () => {
-    expect(
-      normalizeStoredSidebarCommandOrder([" test ", "", "dev", "test", 42, null]),
-    ).toEqual(["test", "dev"]);
+    expect(normalizeStoredSidebarCommandOrder([" test ", "", "dev", "test", 42, null])).toEqual([
+      "test",
+      "dev",
+    ]);
   });
 });

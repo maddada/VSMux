@@ -29,6 +29,7 @@ type SidebarStoryWorkspaceOptions = {
   commands: SidebarCommandButton[];
   completionBellEnabled: boolean;
   completionSound: SidebarHydrateMessage["hud"]["completionSound"];
+  debuggingMode: boolean;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
   theme: SidebarHydrateMessage["hud"]["theme"];
@@ -52,6 +53,7 @@ export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): Sid
       commands: message.hud.commands,
       completionBellEnabled: message.hud.completionBellEnabled,
       completionSound: message.hud.completionSound,
+      debuggingMode: message.hud.debuggingMode,
       showCloseButtonOnSessionCards: message.hud.showCloseButtonOnSessionCards,
       showHotkeysOnSessionCards: message.hud.showHotkeysOnSessionCards,
       theme: message.hud.theme,
@@ -119,6 +121,7 @@ export function createSidebarStoryMessage(
       workspace.options.theme,
       workspace.options.showCloseButtonOnSessionCards,
       workspace.options.showHotkeysOnSessionCards,
+      workspace.options.debuggingMode,
       workspace.options.completionBellEnabled,
       workspace.options.completionSound,
       workspace.options.agents,
@@ -186,15 +189,17 @@ export function reduceSidebarStoryWorkspace(
       };
 
     case "saveSidebarCommand": {
-      const nextCommandId = message.commandId ?? `custom-story-${workspace.options.commands.length}`;
+      const nextCommandId =
+        message.commandId ?? `custom-story-${workspace.options.commands.length}`;
       const nextCommands = [...workspace.options.commands];
-      const existingIndex = nextCommands.findIndex((command) => command.commandId === nextCommandId);
+      const existingIndex = nextCommands.findIndex(
+        (command) => command.commandId === nextCommandId,
+      );
       const nextCommand = {
         closeTerminalOnExit: message.closeTerminalOnExit,
         command: message.command,
         commandId: nextCommandId,
-        isDefault:
-          existingIndex >= 0 ? nextCommands[existingIndex]?.isDefault === true : false,
+        isDefault: existingIndex >= 0 ? nextCommands[existingIndex]?.isDefault === true : false,
         name: message.name,
       };
 
@@ -214,7 +219,8 @@ export function reduceSidebarStoryWorkspace(
     }
 
     case "saveSidebarAgent": {
-      const nextAgentId = message.agentId ?? `custom-agent-story-${workspace.options.agents.length}`;
+      const nextAgentId =
+        message.agentId ?? `custom-agent-story-${workspace.options.agents.length}`;
       const nextAgents = [...workspace.options.agents];
       const existingIndex = nextAgents.findIndex((agent) => agent.agentId === nextAgentId);
       const nextAgent = {

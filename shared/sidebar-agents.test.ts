@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  createSidebarAgentButtons,
-  normalizeStoredSidebarAgents,
-} from "./sidebar-agents";
+import { createSidebarAgentButtons, normalizeStoredSidebarAgents } from "./sidebar-agents";
 
 describe("createSidebarAgentButtons", () => {
   test("should expose the built-in agents by default", () => {
@@ -28,10 +25,17 @@ describe("createSidebarAgentButtons", () => {
         isDefault: true,
         name: "OpenCode",
       },
+      {
+        agentId: "gemini",
+        command: "gemini -y",
+        icon: "gemini",
+        isDefault: true,
+        name: "Gemini",
+      },
     ]);
   });
 
-  test("should merge overrides and append custom agents", () => {
+  test("should merge overrides, rename legacy built-in labels, and append custom agents", () => {
     expect(
       createSidebarAgentButtons([
         {
@@ -39,13 +43,13 @@ describe("createSidebarAgentButtons", () => {
           command: "codex --model gpt-5.4",
           icon: "codex",
           isDefault: true,
-          name: "Codex Fast",
+          name: "Codex CLI",
         },
         {
-          agentId: "gemini",
-          command: "gemini",
+          agentId: "cursor",
+          command: "cursor-agent",
           isDefault: false,
-          name: "Gemini",
+          name: "Cursor",
         },
       ]),
     ).toEqual([
@@ -54,7 +58,7 @@ describe("createSidebarAgentButtons", () => {
         command: "codex --model gpt-5.4",
         icon: "codex",
         isDefault: true,
-        name: "Codex Fast",
+        name: "Codex",
       },
       {
         agentId: "claude",
@@ -72,10 +76,17 @@ describe("createSidebarAgentButtons", () => {
       },
       {
         agentId: "gemini",
-        command: "gemini",
+        command: "gemini -y",
+        icon: "gemini",
+        isDefault: true,
+        name: "Gemini",
+      },
+      {
+        agentId: "cursor",
+        command: "cursor-agent",
         icon: undefined,
         isDefault: false,
-        name: "Gemini",
+        name: "Cursor",
       },
     ]);
   });

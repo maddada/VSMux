@@ -31675,10 +31675,7 @@ function getA11yStatusMessage(_ref2) {
 }
 function unwrapArray(arg, defaultValue) {
   return (
-    (arg = Array.isArray(arg)
-      ? /* istanbul ignore next (preact) */
-        arg[0]
-      : arg),
+    (arg = Array.isArray(arg) ? /* istanbul ignore next (preact) */ arg[0] : arg),
     !arg && defaultValue ? defaultValue : arg
   );
 }
@@ -32355,11 +32352,7 @@ var unknown = 0,
             _ref7.onPress;
             var index = _ref7.index,
               _ref7$item = _ref7.item,
-              item =
-                _ref7$item === void 0
-                  ? /* istanbul ignore next */
-                    void 0
-                  : _ref7$item,
+              item = _ref7$item === void 0 ? /* istanbul ignore next */ void 0 : _ref7$item,
               rest2 = _objectWithoutPropertiesLoose2(_ref7, _excluded5);
             index === void 0
               ? (_this.items.push(item), (index = _this.items.indexOf(item)))
@@ -36125,7 +36118,7 @@ var DEFAULT_HEIGHT = 500,
           ),
           react_default.createElement(
             Bar2,
-            (hasTestProviders ? { onClick: (e2) => toggleCollapsed(e2) } : {}),
+            hasTestProviders ? { onClick: (e2) => toggleCollapsed(e2) } : {},
             react_default.createElement(
               Action,
               null,

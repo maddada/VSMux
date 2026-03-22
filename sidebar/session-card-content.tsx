@@ -1,13 +1,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
-import type { SidebarAgentIcon } from "../shared/sidebar-agents";
+import { getSidebarAgentNameByIcon, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 
-const HIDDEN_AGENT_SECONDARY_TEXT: Record<SidebarAgentIcon, readonly string[]> = {
+const AGENT_SECONDARY_LABELS: Record<SidebarAgentIcon, readonly string[]> = {
   claude: ["claude", "claude code"],
   codex: ["codex", "codex cli", "openai codex"],
+  gemini: ["gemini"],
   opencode: ["open code", "opencode"],
 };
 
@@ -16,6 +17,7 @@ export type SessionCardContentProps = {
   onClose?: () => void;
   secondaryRef?: RefObject<HTMLDivElement | null>;
   session: SidebarSessionItem;
+  showDebugSessionNumbers: boolean;
   showCloseButton: boolean;
   showHotkeys: boolean;
 };
@@ -25,15 +27,23 @@ export function SessionCardContent({
   onClose,
   secondaryRef,
   session,
+  showDebugSessionNumbers,
   showCloseButton,
   showHotkeys,
 }: SessionCardContentProps) {
-  const terminalTitle = getVisibleAgentSecondaryText(session.terminalTitle, session.agentIcon);
-  const primaryTitle = getVisibleAgentSecondaryText(session.primaryTitle, session.agentIcon);
-  const secondaryText = session.detail ?? terminalTitle ?? primaryTitle ?? session.activityLabel;
+  const terminalTitle = getAgentSecondaryText(session.terminalTitle, session.agentIcon);
+  const primaryTitle = getAgentSecondaryText(session.primaryTitle, session.agentIcon);
+  const secondaryText =
+    session.detail ??
+    terminalTitle ??
+    primaryTitle ??
+    session.activityLabel ??
+    getSidebarAgentNameByIcon(session.agentIcon);
   const secondaryTitle = [terminalTitle, primaryTitle, session.detail]
     .filter((value) => value && value.length > 0)
     .join("\n");
+  const showDebugSessionNumber = showDebugSessionNumbers && session.sessionNumber !== undefined;
+  const showMeta = showHotkeys || showDebugSessionNumber;
 
   return (
     <>
@@ -80,15 +90,20 @@ export function SessionCardContent({
         ) : (
           <div />
         )}
-        <div className="session-meta" data-visible={String(showHotkeys)}>
-          {session.shortcutLabel}
+        <div className="session-meta" data-visible={String(showMeta)}>
+          {showDebugSessionNumber ? (
+            <span className="session-debug-number">{session.sessionNumber}</span>
+          ) : null}
+          {showHotkeys ? (
+            <span className="session-shortcut-label">{session.shortcutLabel}</span>
+          ) : null}
         </div>
       </div>
     </>
   );
 }
 
-function getVisibleAgentSecondaryText(
+function getAgentSecondaryText(
   value: string | undefined,
   agentIcon: SidebarSessionItem["agentIcon"],
 ): string | undefined {
@@ -101,8 +116,14 @@ function getVisibleAgentSecondaryText(
     return normalizedValue;
   }
 
-  const hiddenLabels = HIDDEN_AGENT_SECONDARY_TEXT[agentIcon];
-  return hiddenLabels.includes(normalizedValue.toLowerCase()) ? undefined : normalizedValue;
+  const matchingGenericLabel = AGENT_SECONDARY_LABELS[agentIcon].includes(
+    normalizedValue.toLowerCase(),
+  );
+  if (matchingGenericLabel) {
+    return getSidebarAgentNameByIcon(agentIcon);
+  }
+
+  return normalizedValue;
 }
 
 type OverflowTooltipTextProps = {
