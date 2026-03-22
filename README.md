@@ -1,5 +1,9 @@
 # VSmux: Manage all your CLI coding agents sessions without leaving your IDE.
 
+For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
+
+For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
+
 > Current UI in v1.3 (still under development. Will be much nicer with time.)
 
 ![VSmux v1.3 Screenshot](media/1.3-screenshot.png)
