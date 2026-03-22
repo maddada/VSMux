@@ -558,6 +558,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
         <CommandsPanel
           commands={serverState.hud.commands}
           createRequestId={commandCreateRequestId}
+          isVsMuxDisabled={serverState.hud.isVsMuxDisabled}
           vscode={vscode}
         />
         <section className="session-groups-panel">
@@ -585,14 +586,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
             onDragStart={handleDragStart}
             sensors={sensors}
           >
-            <button
-              className="disable-vsmux-toggle-button"
-              data-selected={String(serverState.hud.isVsMuxDisabled)}
-              onClick={() => vscode.postMessage({ type: "toggleVsMuxDisabled" })}
-              type="button"
-            >
-              Code Mode
-            </button>
             <div className="group-list">
               {orderedGroups.map((group, groupIndex) => (
                 <SessionGroupSection

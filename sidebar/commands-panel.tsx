@@ -1,7 +1,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
-import { IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
+import {
+  IconBracketsAngle,
+  IconCode,
+  IconPencil,
+  IconPlayerPlay,
+  IconTrash,
+  IconWorld,
+} from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
@@ -16,6 +23,7 @@ const CONTEXT_MENU_HEIGHT_PX = 110;
 type CommandsPanelProps = {
   commands: SidebarCommandButton[];
   createRequestId: number;
+  isVsMuxDisabled: boolean;
   vscode: WebviewApi;
 };
 
@@ -66,7 +74,12 @@ function getCommandDragData(candidate: { data?: unknown } | null | undefined) {
     : undefined;
 }
 
-export function CommandsPanel({ commands, createRequestId, vscode }: CommandsPanelProps) {
+export function CommandsPanel({
+  commands,
+  createRequestId,
+  isVsMuxDisabled,
+  vscode,
+}: CommandsPanelProps) {
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
   const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
@@ -249,6 +262,39 @@ export function CommandsPanel({ commands, createRequestId, vscode }: CommandsPan
                     onRun={() => runOrConfigureCommand(command)}
                   />
                 ))}
+                <Tooltip.Root>
+                  <Tooltip.Trigger
+                    render={
+                      <button
+                        aria-label="Code Mode: switch back to normal VS Code layout while keeping VSmux sessions available"
+                        className="command-button command-button-code-mode"
+                        data-configured="true"
+                        data-empty-space-blocking="true"
+                        data-selected={String(isVsMuxDisabled)}
+                        onClick={() => vscode.postMessage({ type: "toggleVsMuxDisabled" })}
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="command-button-kind-badge">
+                          <IconCode
+                            aria-hidden="true"
+                            className="command-button-kind-icon"
+                            size={15}
+                            stroke={1.8}
+                          />
+                        </span>
+                        <span className="command-button-label">Code Mode</span>
+                      </button>
+                    }
+                  />
+                  <Tooltip.Portal>
+                    <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
+                      <Tooltip.Popup className="tooltip-popup">
+                        Switch back to normal VS Code layout while keeping VSmux sessions active in
+                        the background
+                      </Tooltip.Popup>
+                    </Tooltip.Positioner>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
               </div>
             </DragDropProvider>
           </Tooltip.Provider>

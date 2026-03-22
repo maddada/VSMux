@@ -470,6 +470,8 @@ button:disabled {
   letter-spacing: 0.02em;
   max-width: 100%;
   min-height: 36px;
+  outline: 2px solid transparent;
+  outline-offset: -3px;
   padding: 0 12px;
 }
 
@@ -542,6 +544,20 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
 
 .command-button[data-dragging="true"] {
   opacity: 0.6;
+}
+
+.command-button-code-mode {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--app-button-background) 34%, var(--app-border));
+}
+
+.command-button-code-mode[data-selected="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 16%, var(--app-card-active) 84%);
+  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
+  outline-color: color-mix(in srgb, var(--app-button-background) 92%, #ffffff 8%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 88%, transparent),
+    0 10px 18px color-mix(in srgb, var(--app-button-background) 10%, transparent);
 }
 
 .command-button-add {
@@ -916,54 +932,6 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
   border-radius: 16px;
 }
 
-.disable-vsmux-toggle-button {
-  align-items: center;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--app-card-active) 92%, white 8%),
-    color-mix(in srgb, var(--app-card) 96%, black 4%)
-  );
-  border: 1px solid color-mix(in srgb, var(--app-border) 88%, transparent);
-  border-radius: 14px;
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 16%, transparent),
-    0 10px 18px color-mix(in srgb, var(--app-shadow) 12%, transparent);
-  color: color-mix(in srgb, var(--app-foreground) 82%, var(--app-muted) 18%);
-  display: flex;
-  font-size: 13px;
-  font-weight: 700;
-  justify-content: center;
-  letter-spacing: 0.03em;
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  width: 100%;
-}
-
-.disable-vsmux-toggle-button:hover,
-.disable-vsmux-toggle-button:focus-visible {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--app-card-active) 84%, var(--app-button-background) 16%),
-    color-mix(in srgb, var(--app-card) 88%, var(--app-button-background) 12%)
-  );
-  border-color: color-mix(in srgb, var(--app-button-background) 44%, var(--app-border));
-  color: var(--app-button-background);
-  outline: none;
-}
-
-.disable-vsmux-toggle-button[data-selected="true"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--app-button-background) 28%, var(--app-card-active) 72%),
-    color-mix(in srgb, var(--app-button-background) 18%, var(--app-card) 82%)
-  );
-  border-color: color-mix(in srgb, var(--app-button-background) 78%, var(--app-border));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
-    0 12px 22px color-mix(in srgb, var(--app-button-background) 14%, transparent);
-  color: var(--app-button-background);
-}
-
 .group-empty-drop-target {
   display: grid;
 }
@@ -1053,14 +1021,12 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
 }
 
 .previous-sessions-modal {
-  bottom: 12px;
   gap: 14px;
-  left: 12px;
+  left: 50%;
   max-height: calc(100vh - 24px);
   max-width: 280px;
-  right: 12px;
-  top: auto;
-  transform: none;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: min(280px, calc(100vw - 24px));
 }
 

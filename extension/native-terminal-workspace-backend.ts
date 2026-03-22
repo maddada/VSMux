@@ -899,12 +899,16 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
     await this.promoteFocusedVisibleProjection(snapshot, focusedSessionId);
     const fullyParked = await this.parkHiddenEditorProjections(snapshot);
+    const hasVisibleNonTerminalSessions = this.hasVisibleNonTerminalSessions(snapshot);
 
     if (snapshot.visibleSessionIds.length === 0) {
       return;
     }
 
-    if (fullyParked) {
+    if (hasVisibleNonTerminalSessions && snapshot.visibleSessionIds.length > 1) {
+      await this.applyVisibleEditorLayout(snapshot);
+      this.refreshProjectionLocations();
+    } else if (fullyParked) {
       await this.applyVisibleEditorLayout(snapshot);
     } else {
       void this.trace.log("LAYOUT", "skipApplyEditorLayout", {

@@ -937,11 +937,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     const previousVisibleSessionIds = this.getActiveSnapshot().visibleSessionIds;
-    const changed = await this.store.focusGroup(groupId);
+    await this.store.focusGroup(groupId);
     await this.updateFocusedTerminal(previousVisibleSessionIds, false);
-    if (changed) {
-      await this.refreshSidebar();
-    }
+    await this.refreshSidebar();
   }
 
   public async focusGroupByIndex(groupIndex: number): Promise<void> {
@@ -954,11 +952,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     const previousVisibleSessionIds = this.getActiveSnapshot().visibleSessionIds;
-    const changed = await this.store.focusGroupByIndex(groupIndex);
+    await this.store.focusGroupByIndex(groupIndex);
     await this.updateFocusedTerminal(previousVisibleSessionIds, false);
-    if (changed) {
-      await this.refreshSidebar();
-    }
+    await this.refreshSidebar();
   }
 
   public async renameGroup(groupId: string, title: string): Promise<void> {

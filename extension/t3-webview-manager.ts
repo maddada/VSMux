@@ -6,7 +6,13 @@ import {
   type SessionGridSnapshot,
   type T3SessionRecord,
 } from "../shared/session-grid-contract";
-import { getViewColumn } from "./terminal-workspace-helpers";
+import {
+  focusEditorGroupByIndex,
+  getActiveEditorGroupViewColumn,
+  getViewColumn,
+  moveActiveEditorToNextGroup,
+  moveActiveEditorToPreviousGroup,
+} from "./terminal-workspace-helpers";
 
 type T3WebviewManagerOptions = {
   context: vscode.ExtensionContext;
@@ -22,6 +28,8 @@ type ManagedPanel = {
 };
 
 const T3_PANEL_TYPE = "VSmux.t3Session";
+const MAX_PANEL_MOVE_STEPS = 8;
+const PANEL_MOVE_SETTLE_MS = 25;
 
 export class T3WebviewManager implements vscode.Disposable {
   private readonly panelsBySessionId = new Map<string, ManagedPanel>();
@@ -122,9 +130,7 @@ export class T3WebviewManager implements vscode.Disposable {
     const managedPanel = this.panelsBySessionId.get(sessionRecord.sessionId);
     const viewColumn = getViewColumn(visibleIndex);
     const nextRenderKey = getRenderKey(sessionRecord);
-    if (!preserveFocus) {
-      this.beginProgrammaticFocus(sessionRecord.sessionId);
-    }
+    this.beginProgrammaticFocus(sessionRecord.sessionId);
     if (managedPanel) {
       managedPanel.panel.title = getPanelTitle(sessionRecord);
       if (managedPanel.renderKey !== nextRenderKey) {
@@ -142,6 +148,7 @@ export class T3WebviewManager implements vscode.Disposable {
       ) {
         managedPanel.panel.reveal(viewColumn, preserveFocus);
       }
+      await this.ensurePanelViewColumn(managedPanel.panel, viewColumn, preserveFocus);
       return;
     }
 
@@ -194,6 +201,51 @@ export class T3WebviewManager implements vscode.Disposable {
       }
     });
     panel.webview.html = await this.createPanelHtml(panel.webview, sessionRecord);
+    await this.ensurePanelViewColumn(panel, viewColumn, preserveFocus);
+  }
+
+  private async ensurePanelViewColumn(
+    panel: vscode.WebviewPanel,
+    desiredViewColumn: vscode.ViewColumn,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    if (panel.viewColumn === desiredViewColumn) {
+      return;
+    }
+
+    const restoreViewColumn = preserveFocus ? getActiveEditorGroupViewColumn() : undefined;
+    panel.reveal(panel.viewColumn ?? desiredViewColumn, false);
+    await delay(PANEL_MOVE_SETTLE_MS);
+
+    for (let attempt = 0; attempt < MAX_PANEL_MOVE_STEPS; attempt += 1) {
+      const currentViewColumn = panel.viewColumn;
+      if (currentViewColumn === desiredViewColumn) {
+        break;
+      }
+
+      if (currentViewColumn === undefined) {
+        panel.reveal(desiredViewColumn, false);
+        await delay(PANEL_MOVE_SETTLE_MS);
+        continue;
+      }
+
+      if (currentViewColumn < desiredViewColumn) {
+        await moveActiveEditorToNextGroup();
+      } else {
+        await moveActiveEditorToPreviousGroup();
+      }
+
+      await delay(PANEL_MOVE_SETTLE_MS);
+    }
+
+    if (panel.viewColumn !== desiredViewColumn) {
+      panel.reveal(desiredViewColumn, preserveFocus);
+      await delay(PANEL_MOVE_SETTLE_MS);
+    }
+
+    if (preserveFocus && restoreViewColumn && restoreViewColumn !== desiredViewColumn) {
+      await focusEditorGroupByIndex(restoreViewColumn - 1);
+    }
   }
 
   private requestComposerFocus(managedPanel: ManagedPanel): void {
@@ -356,4 +408,10 @@ function isT3WebviewMessage(message: unknown): message is { type: "vsmuxReady" }
     "type" in message &&
     message.type === "vsmuxReady"
   );
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

@@ -846,6 +846,106 @@ describe("NativeTerminalWorkspaceBackend debugging trace", () => {
   });
 });
 
+describe("NativeTerminalWorkspaceBackend mixed visible layout reconcile", () => {
+  test("should create the editor split before moving a visible terminal when a T3 session occupies another slot", async () => {
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+    const terminalSession = createSessionRecord(93, 0);
+    const t3Session = createSessionRecord(96, 1, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/workspace",
+      },
+      title: "Adding t3 code",
+    });
+    const snapshot = {
+      focusedSessionId: t3Session.sessionId,
+      sessions: [terminalSession, t3Session],
+      viewMode: "vertical" as const,
+      visibleCount: 2 as const,
+      visibleSessionIds: [t3Session.sessionId, terminalSession.sessionId],
+    };
+    const callOrder: string[] = [];
+
+    vi.spyOn(backend as never, "promoteFocusedVisibleProjection").mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(backend as never, "parkHiddenEditorProjections").mockResolvedValue(false as never);
+    vi.spyOn(backend as never, "applyVisibleEditorLayout").mockImplementation(async () => {
+      callOrder.push("layout");
+    });
+    vi.spyOn(backend as never, "refreshProjectionLocations").mockImplementation(() => {
+      callOrder.push("refresh");
+    });
+    vi.spyOn(backend as never, "moveProjectionToEditor").mockImplementation(
+      async (_sessionId: string, visibleIndex: number) => {
+        callOrder.push(`move:${visibleIndex}`);
+      },
+    );
+    vi.spyOn(backend as never, "ensureDesiredEditorLayoutShape").mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(backend as never, "showTerminal").mockResolvedValue(undefined as never);
+
+    await (backend as any).reconcileVisibleTerminalsByMovingParkedProjections(snapshot, true);
+
+    expect(callOrder).toEqual(["layout", "refresh", "move:1"]);
+  });
+
+  test("should still skip early editor layout creation for all-terminal layouts when hidden projections are not fully parked", async () => {
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+    const sessionA = createSessionRecord(1, 0);
+    const sessionB = createSessionRecord(2, 1);
+    const snapshot = {
+      focusedSessionId: sessionA.sessionId,
+      sessions: [sessionA, sessionB],
+      viewMode: "vertical" as const,
+      visibleCount: 2 as const,
+      visibleSessionIds: [sessionA.sessionId, sessionB.sessionId],
+    };
+    const callOrder: string[] = [];
+
+    vi.spyOn(backend as never, "promoteFocusedVisibleProjection").mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(backend as never, "parkHiddenEditorProjections").mockResolvedValue(false as never);
+    vi.spyOn(backend as never, "applyVisibleEditorLayout").mockImplementation(async () => {
+      callOrder.push("layout");
+    });
+    vi.spyOn(backend as never, "moveProjectionToEditor").mockImplementation(
+      async (_sessionId: string, visibleIndex: number) => {
+        callOrder.push(`move:${visibleIndex}`);
+      },
+    );
+    vi.spyOn(backend as never, "ensureDesiredEditorLayoutShape").mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(backend as never, "showTerminal").mockResolvedValue(undefined as never);
+
+    await (backend as any).reconcileVisibleTerminalsByMovingParkedProjections(snapshot, true);
+
+    expect(callOrder).toEqual(["move:0", "move:1"]);
+  });
+});
+
 async function waitForFileToBeRemoved(filePath: string): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
