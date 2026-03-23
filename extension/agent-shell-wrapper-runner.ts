@@ -307,7 +307,9 @@ function spawnAgentProcess(
 
   if (process.platform === "win32" && /\.(bat|cmd)$/i.test(executablePath)) {
     return new Promise((resolve, reject) => {
-      const commandLine = [`"${executablePath}"`, ...args.map(quoteWindowsCommandArgument)].join(" ");
+      const commandLine = [`"${executablePath}"`, ...args.map(quoteWindowsCommandArgument)].join(
+        " ",
+      );
       const child = spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", commandLine], {
         env: environment,
         stdio: "inherit",

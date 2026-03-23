@@ -203,6 +203,7 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
     case "promptRenameSession":
     case "restartSession":
     case "closeSession":
+    case "copyResumeCommand":
       return typeof message.sessionId === "string" && message.sessionId.length > 0;
 
     case "restorePreviousSession":

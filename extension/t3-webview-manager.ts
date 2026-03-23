@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
+  getT3SessionSurfaceTitle,
   isT3Session,
   type SessionGridSnapshot,
   type T3SessionRecord,
@@ -30,9 +31,11 @@ type ManagedPanel = {
 const T3_PANEL_TYPE = "VSmux.t3Session";
 const MAX_PANEL_MOVE_STEPS = 8;
 const PANEL_MOVE_SETTLE_MS = 25;
+const SUPPRESSED_FOCUS_EVENT_MS = 1_500;
 
 export class T3WebviewManager implements vscode.Disposable {
   private readonly panelsBySessionId = new Map<string, ManagedPanel>();
+  private readonly suppressedFocusUntilBySessionId = new Map<string, number>();
   private pendingProgrammaticFocus:
     | {
         clearTimeout: ReturnType<typeof setTimeout>;
@@ -44,6 +47,7 @@ export class T3WebviewManager implements vscode.Disposable {
 
   public dispose(): void {
     this.clearPendingProgrammaticFocus();
+    this.suppressedFocusUntilBySessionId.clear();
     for (const managedPanel of this.panelsBySessionId.values()) {
       managedPanel.panel.dispose();
     }
@@ -57,6 +61,7 @@ export class T3WebviewManager implements vscode.Disposable {
     const orderedVisibleSessions = snapshot.visibleSessionIds
       .map((sessionId) => snapshot.sessions.find((session) => session.sessionId === sessionId))
       .filter((session): session is T3SessionRecord => Boolean(session && isT3Session(session)));
+    await this.closeRestoredPanelsOutsideVisibleSessions(orderedVisibleSessions);
     const visibleSessionIdSet = new Set(orderedVisibleSessions.map((session) => session.sessionId));
 
     for (const [sessionId, managedPanel] of this.panelsBySessionId.entries()) {
@@ -81,6 +86,35 @@ export class T3WebviewManager implements vscode.Disposable {
 
     if (focusedVisibleSession) {
       await this.revealSession(focusedVisibleSession, snapshot, preserveFocus);
+    }
+  }
+
+  private async closeRestoredPanelsOutsideVisibleSessions(
+    visibleSessions: readonly T3SessionRecord[],
+  ): Promise<void> {
+    const visibleSessionIdByTitle = new Map(
+      visibleSessions.map((sessionRecord) => [
+        getPanelTitle(sessionRecord),
+        sessionRecord.sessionId,
+      ]),
+    );
+
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (
+          !(tab.input instanceof vscode.TabInputWebview) ||
+          tab.input.viewType !== T3_PANEL_TYPE
+        ) {
+          continue;
+        }
+
+        const visibleSessionId = visibleSessionIdByTitle.get(tab.label);
+        if (visibleSessionId && this.panelsBySessionId.get(visibleSessionId)?.panel.visible) {
+          continue;
+        }
+
+        await vscode.window.tabGroups.close(tab, true);
+      }
     }
   }
 
@@ -130,7 +164,10 @@ export class T3WebviewManager implements vscode.Disposable {
     const managedPanel = this.panelsBySessionId.get(sessionRecord.sessionId);
     const viewColumn = getViewColumn(visibleIndex);
     const nextRenderKey = getRenderKey(sessionRecord);
-    this.beginProgrammaticFocus(sessionRecord.sessionId);
+    this.setSuppressedSessionFocus(sessionRecord.sessionId, preserveFocus);
+    if (!preserveFocus) {
+      this.beginProgrammaticFocus(sessionRecord.sessionId);
+    }
     if (managedPanel) {
       managedPanel.panel.title = getPanelTitle(sessionRecord);
       if (managedPanel.renderKey !== nextRenderKey) {
@@ -178,9 +215,14 @@ export class T3WebviewManager implements vscode.Disposable {
       if (this.panelsBySessionId.get(sessionRecord.sessionId)?.panel === panel) {
         this.panelsBySessionId.delete(sessionRecord.sessionId);
       }
+      this.suppressedFocusUntilBySessionId.delete(sessionRecord.sessionId);
     });
     panel.onDidChangeViewState((event) => {
       if (!event.webviewPanel.active) {
+        return;
+      }
+
+      if (this.shouldSuppressSessionFocus(sessionRecord.sessionId)) {
         return;
       }
 
@@ -210,6 +252,12 @@ export class T3WebviewManager implements vscode.Disposable {
     preserveFocus: boolean,
   ): Promise<void> {
     if (panel.viewColumn === desiredViewColumn) {
+      return;
+    }
+
+    if (preserveFocus) {
+      panel.reveal(desiredViewColumn, true);
+      await delay(PANEL_MOVE_SETTLE_MS);
       return;
     }
 
@@ -279,6 +327,29 @@ export class T3WebviewManager implements vscode.Disposable {
     this.pendingProgrammaticFocus = undefined;
   }
 
+  private setSuppressedSessionFocus(sessionId: string, preserveFocus: boolean): void {
+    if (!preserveFocus) {
+      this.suppressedFocusUntilBySessionId.delete(sessionId);
+      return;
+    }
+
+    this.suppressedFocusUntilBySessionId.set(sessionId, Date.now() + SUPPRESSED_FOCUS_EVENT_MS);
+  }
+
+  private shouldSuppressSessionFocus(sessionId: string): boolean {
+    const suppressedUntil = this.suppressedFocusUntilBySessionId.get(sessionId);
+    if (!suppressedUntil) {
+      return false;
+    }
+
+    if (Date.now() <= suppressedUntil) {
+      return true;
+    }
+
+    this.suppressedFocusUntilBySessionId.delete(sessionId);
+    return false;
+  }
+
   private shouldIgnoreFocusEvent(sessionId: string): boolean {
     const pendingProgrammaticFocus = this.pendingProgrammaticFocus;
     if (!pendingProgrammaticFocus) {
@@ -346,7 +417,7 @@ function getEmbeddedT3Root(context: vscode.ExtensionContext): vscode.Uri {
 }
 
 function getPanelTitle(sessionRecord: T3SessionRecord): string {
-  return `T3 Code: ${sessionRecord.alias}`;
+  return getT3SessionSurfaceTitle(sessionRecord);
 }
 
 function getRenderKey(sessionRecord: T3SessionRecord): string {

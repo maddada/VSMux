@@ -1,5 +1,5 @@
 import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel } from "../shared/completion-sound";
-import { createDefaultSidebarAgentButtons } from "../shared/sidebar-agents";
+import { createDefaultSidebarAgentButtons, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
 import type {
   SidebarHydrateMessage,
@@ -42,18 +42,21 @@ const DEFAULT_GROUPS: SidebarStoryGroup[] = [
     sessions: [
       createSession({
         alias: "show title in 2nd row",
+        agentIcon: "codex",
         detail: "OpenAI Codex",
         sessionId: "session-1",
         shortcutLabel: "⌘⌥1",
       }),
       createSession({
         alias: "layout drift fix",
+        agentIcon: "codex",
         detail: "OpenAI Codex",
         sessionId: "session-2",
         shortcutLabel: "⌘⌥2",
       }),
       createSession({
         alias: "Harbor Vale",
+        agentIcon: "codex",
         detail: "OpenAI Codex",
         sessionId: "session-3",
         shortcutLabel: "⌘⌥3",
@@ -364,6 +367,7 @@ function createSession({
   activity = "idle",
   activityLabel,
   alias,
+  agentIcon,
   detail,
   isFocused = false,
   isRunning = true,
@@ -376,6 +380,7 @@ function createSession({
   activity?: SidebarSessionItem["activity"];
   activityLabel?: string;
   alias: string;
+  agentIcon?: SidebarAgentIcon;
   detail?: string;
   isFocused?: boolean;
   isRunning?: boolean;
@@ -388,6 +393,7 @@ function createSession({
   return {
     activity,
     activityLabel,
+    agentIcon,
     alias,
     column: 0,
     detail,

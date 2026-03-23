@@ -25,11 +25,15 @@ function quoteCmdArg(value) {
 function run(command, args, options = {}) {
   const useCmdShim = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
   const result = useCmdShim
-    ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", [quoteCmdArg(command), ...args.map(quoteCmdArg)].join(" ")], {
-        cwd: repoRoot,
-        stdio: "inherit",
-        ...options,
-      })
+    ? spawnSync(
+        process.env.ComSpec ?? "cmd.exe",
+        ["/d", "/s", "/c", [quoteCmdArg(command), ...args.map(quoteCmdArg)].join(" ")],
+        {
+          cwd: repoRoot,
+          stdio: "inherit",
+          ...options,
+        },
+      )
     : spawnSync(command, args, {
         cwd: repoRoot,
         stdio: "inherit",

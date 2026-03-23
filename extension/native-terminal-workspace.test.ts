@@ -1,3 +1,5 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
@@ -66,6 +68,7 @@ const testState = vi.hoisted(() => ({
   showInputBox: vi.fn(),
   showQuickPick: vi.fn(),
   showWarningMessage: vi.fn(),
+  writeClipboardText: vi.fn(),
   sidebarResolveView: undefined as (() => Promise<void>) | undefined,
   terminals: [] as unknown[],
   debugPanelPostMessage: vi.fn(async () => {}),
@@ -115,6 +118,7 @@ const testState = vi.hoisted(() => ({
     reconcileVisibleSessions: ReturnType<typeof vi.fn>;
     revealStoredSession: ReturnType<typeof vi.fn>;
   }>,
+  t3WebviewOnDidFocusSession: undefined as ((sessionId: string) => Promise<void>) | undefined,
   t3WebviewManager: undefined as
     | {
         dispose: ReturnType<typeof vi.fn>;
@@ -131,6 +135,7 @@ const testState = vi.hoisted(() => ({
     reconcileVisibleSessions: ReturnType<typeof vi.fn>;
     revealStoredSession: ReturnType<typeof vi.fn>;
   }>,
+  browserSessionOnDidFocusSession: undefined as ((sessionId: string) => Promise<void>) | undefined,
   browserSessionManager: undefined as
     | {
         dispose: ReturnType<typeof vi.fn>;
@@ -156,6 +161,11 @@ vi.mock("vscode", () => ({
   },
   commands: {
     executeCommand: testState.executeCommand,
+  },
+  env: {
+    clipboard: {
+      writeText: testState.writeClipboardText,
+    },
   },
   window: {
     activeColorTheme: testState.activeColorTheme,
@@ -316,7 +326,8 @@ vi.mock("./t3-activity-monitor", () => ({
 
 vi.mock("./t3-webview-manager", () => ({
   T3WebviewManager: class T3WebviewManager {
-    public constructor() {
+    public constructor(options: { onDidFocusSession: (sessionId: string) => Promise<void> }) {
+      testState.t3WebviewOnDidFocusSession = options.onDidFocusSession;
       testState.t3WebviewManager = {
         dispose: vi.fn(),
         disposeSession: vi.fn(),
@@ -332,7 +343,8 @@ vi.mock("./t3-webview-manager", () => ({
 
 vi.mock("./browser-session-manager", () => ({
   BrowserSessionManager: class BrowserSessionManager {
-    public constructor() {
+    public constructor(options: { onDidFocusSession: (sessionId: string) => Promise<void> }) {
+      testState.browserSessionOnDidFocusSession = options.onDidFocusSession;
       testState.browserSessionManager = {
         dispose: vi.fn(),
         disposeSession: vi.fn(async () => {}),
@@ -383,6 +395,7 @@ describe("NativeTerminalWorkspaceController rename session", () => {
     testState.showInputBox.mockReset();
     testState.showQuickPick.mockReset();
     testState.showWarningMessage.mockReset();
+    testState.writeClipboardText.mockReset();
     testState.sidebarResolveView = undefined;
     testState.terminals = [];
     testState.debugPanelPostMessage.mockReset();
@@ -399,8 +412,10 @@ describe("NativeTerminalWorkspaceController rename session", () => {
     testState.t3ActivityMonitor = undefined;
     testState.t3WebviewManagers.length = 0;
     testState.t3WebviewManager = undefined;
+    testState.t3WebviewOnDidFocusSession = undefined;
     testState.browserSessionManagers.length = 0;
     testState.browserSessionManager = undefined;
+    testState.browserSessionOnDidFocusSession = undefined;
   });
 
   afterEach(() => {
@@ -714,6 +729,265 @@ describe("NativeTerminalWorkspaceController rename session", () => {
     );
   });
 
+  test("should ignore stale T3 focus callbacks for sessions outside the active visible snapshot", async () => {
+    const expertsT3 = createSessionRecord(3, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-experts",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-experts",
+        workspaceRoot: "/workspace",
+      },
+      title: "Adding prev sessions",
+    });
+    const minorTerminal = createSessionRecord(4, 0);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups = [
+      {
+        groupId: "group-1",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: expertsT3.sessionId,
+          sessions: [expertsT3],
+          visibleCount: 1,
+          visibleSessionIds: [expertsT3.sessionId],
+        },
+        title: "Experts",
+      },
+      {
+        groupId: "group-2",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: minorTerminal.sessionId,
+          sessions: [minorTerminal],
+          visibleCount: 1,
+          visibleSessionIds: [minorTerminal.sessionId],
+        },
+        title: "Minor",
+      },
+    ];
+    workspaceSnapshot.activeGroupId = "group-2";
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    await testState.t3WebviewOnDidFocusSession?.(expertsT3.sessionId);
+
+    expect((controller as any).store.getSnapshot().activeGroupId).toBe("group-2");
+    expect(testState.sidebarPostMessage).not.toHaveBeenCalled();
+  });
+
+  test("should ignore T3 focus callbacks for non-target visible sessions while a reconcile is in flight", async () => {
+    const expertsT3 = createSessionRecord(3, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-experts",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-experts",
+        workspaceRoot: "/workspace",
+      },
+      title: "Adding prev sessions",
+    });
+    const expertsTerminal = createSessionRecord(4, 1);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups[0]!.snapshot = {
+      ...createDefaultSessionGridSnapshot(),
+      focusedSessionId: expertsTerminal.sessionId,
+      sessions: [expertsT3, expertsTerminal],
+      visibleCount: 2,
+      visibleSessionIds: [expertsT3.sessionId, expertsTerminal.sessionId],
+    };
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    (controller as any).projectedReconcileDepth = 1;
+    (controller as any).projectedReconcileFocusedSessionId = expertsTerminal.sessionId;
+
+    await testState.t3WebviewOnDidFocusSession?.(expertsT3.sessionId);
+
+    expect((controller as any).store.getActiveGroup().snapshot.focusedSessionId).toBe(
+      expertsTerminal.sessionId,
+    );
+    expect(testState.sidebarPostMessage).not.toHaveBeenCalled();
+  });
+
+  test("should restore terminal focus after reconciling a mixed T3 and terminal group", async () => {
+    const expertsT3 = createSessionRecord(3, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-experts",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-experts",
+        workspaceRoot: "/workspace",
+      },
+      title: "Adding prev sessions",
+    });
+    const expertsTerminal = createSessionRecord(4, 1);
+    const minorTerminal = createSessionRecord(5, 0);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups = [
+      {
+        groupId: "group-1",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: expertsTerminal.sessionId,
+          sessions: [expertsT3, expertsTerminal],
+          visibleCount: 2,
+          visibleSessionIds: [expertsT3.sessionId, expertsTerminal.sessionId],
+        },
+        title: "Experts",
+      },
+      {
+        groupId: "group-2",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: minorTerminal.sessionId,
+          sessions: [minorTerminal],
+          visibleCount: 1,
+          visibleSessionIds: [minorTerminal.sessionId],
+        },
+        title: "Minor",
+      },
+    ];
+    workspaceSnapshot.activeGroupId = "group-2";
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    testState.backend?.focusSession.mockClear();
+
+    await controller.focusSession(expertsTerminal.sessionId);
+
+    expect(testState.t3WebviewManager?.reconcileVisibleSessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        focusedSessionId: expertsTerminal.sessionId,
+        visibleSessionIds: [expertsT3.sessionId, expertsTerminal.sessionId],
+      }),
+      false,
+    );
+    expect(testState.backend?.focusSession).toHaveBeenLastCalledWith(
+      expertsTerminal.sessionId,
+      false,
+    );
+  });
+
+  test("should ignore delayed T3 focus callbacks after directly focusing a visible terminal session", async () => {
+    const expertsT3 = createSessionRecord(3, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-experts",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-experts",
+        workspaceRoot: "/workspace",
+      },
+      title: "Adding prev sessions",
+    });
+    const expertsTerminal = createSessionRecord(4, 1);
+    const minorTerminal = createSessionRecord(5, 0);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups = [
+      {
+        groupId: "group-1",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: expertsTerminal.sessionId,
+          sessions: [expertsT3, expertsTerminal],
+          visibleCount: 2,
+          visibleSessionIds: [expertsT3.sessionId, expertsTerminal.sessionId],
+        },
+        title: "Experts",
+      },
+      {
+        groupId: "group-2",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: minorTerminal.sessionId,
+          sessions: [minorTerminal],
+          visibleCount: 1,
+          visibleSessionIds: [minorTerminal.sessionId],
+        },
+        title: "Minor",
+      },
+    ];
+    workspaceSnapshot.activeGroupId = "group-2";
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    await controller.focusSession(expertsTerminal.sessionId);
+    await testState.t3WebviewOnDidFocusSession?.(expertsT3.sessionId);
+
+    expect((controller as any).store.getActiveGroup().snapshot.focusedSessionId).toBe(
+      expertsTerminal.sessionId,
+    );
+  });
+
+  test("should ignore stale browser focus callbacks for sessions outside the active visible snapshot", async () => {
+    const expertsBrowser = createSessionRecord(3, 0, {
+      browser: {
+        url: "https://example.com/docs",
+      },
+      kind: "browser",
+      title: "Docs",
+    });
+    const minorTerminal = createSessionRecord(4, 0);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups = [
+      {
+        groupId: "group-1",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: expertsBrowser.sessionId,
+          sessions: [expertsBrowser],
+          visibleCount: 1,
+          visibleSessionIds: [expertsBrowser.sessionId],
+        },
+        title: "Experts",
+      },
+      {
+        groupId: "group-2",
+        snapshot: {
+          ...createDefaultSessionGridSnapshot(),
+          focusedSessionId: minorTerminal.sessionId,
+          sessions: [minorTerminal],
+          visibleCount: 1,
+          visibleSessionIds: [minorTerminal.sessionId],
+        },
+        title: "Minor",
+      },
+    ];
+    workspaceSnapshot.activeGroupId = "group-2";
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    await testState.browserSessionOnDidFocusSession?.(expertsBrowser.sessionId);
+
+    expect((controller as any).store.getSnapshot().activeGroupId).toBe("group-2");
+    expect(testState.sidebarPostMessage).not.toHaveBeenCalled();
+  });
+
+  test("should ignore browser focus callbacks for non-target visible sessions while a reconcile is in flight", async () => {
+    const expertsBrowser = createSessionRecord(3, 0, {
+      browser: {
+        url: "https://example.com/docs",
+      },
+      kind: "browser",
+      title: "Docs",
+    });
+    const expertsTerminal = createSessionRecord(4, 1);
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    workspaceSnapshot.groups[0]!.snapshot = {
+      ...createDefaultSessionGridSnapshot(),
+      focusedSessionId: expertsTerminal.sessionId,
+      sessions: [expertsBrowser, expertsTerminal],
+      visibleCount: 2,
+      visibleSessionIds: [expertsBrowser.sessionId, expertsTerminal.sessionId],
+    };
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+
+    (controller as any).projectedReconcileDepth = 1;
+    (controller as any).projectedReconcileFocusedSessionId = expertsTerminal.sessionId;
+
+    await testState.browserSessionOnDidFocusSession?.(expertsBrowser.sessionId);
+
+    expect((controller as any).store.getActiveGroup().snapshot.focusedSessionId).toBe(
+      expertsTerminal.sessionId,
+    );
+    expect(testState.sidebarPostMessage).not.toHaveBeenCalled();
+  });
+
   test("should not save browser sessions into previous session history", async () => {
     vi.setSystemTime(new Date("2026-03-22T08:15:00.000Z"));
     const session = createSessionRecord(3, 0, {
@@ -971,6 +1245,48 @@ describe("NativeTerminalWorkspaceController rename session", () => {
     );
   });
 
+  test("should copy a codex resume command for a sidebar-agent session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("codex");
+    testState.writeClipboardText.mockClear();
+
+    await controller.copyResumeCommand("session-4");
+
+    expect(testState.writeClipboardText).toHaveBeenCalledWith(`codex resume '${generatedAlias}'`);
+  });
+
+  test("should copy a claude resume command for a sidebar-agent session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("claude");
+    testState.writeClipboardText.mockClear();
+
+    await controller.copyResumeCommand("session-4");
+
+    expect(testState.writeClipboardText).toHaveBeenCalledWith(`claude -r '${generatedAlias}'`);
+  });
+
+  test("should copy the session alias for an opencode sidebar-agent session", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const controller = new NativeTerminalWorkspaceController(createContext(workspaceSnapshot));
+    const generatedAlias = createSessionAlias(4, 1);
+
+    await controller.runSidebarAgent("opencode");
+    testState.writeClipboardText.mockClear();
+
+    await controller.copyResumeCommand("session-4");
+
+    expect(testState.writeClipboardText).toHaveBeenCalledWith(generatedAlias);
+  });
+
   test("should resume disconnected visible agent sessions during initialize", async () => {
     const session = {
       ...createSessionRecord(3, 0),
@@ -1002,6 +1318,46 @@ describe("NativeTerminalWorkspaceController rename session", () => {
       "codex resume 'Code mode'",
       true,
     );
+  });
+
+  test("should recover terminal control after startup when the previous owner lease becomes stale", async () => {
+    const session = createSessionRecord(3, 0);
+    const workspaceSnapshot = createWorkspaceSnapshot(session);
+    const sharedGlobalStoragePath = `/tmp/vsmux-native-terminal-owner-retry-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    await mkdir(sharedGlobalStoragePath, { recursive: true });
+    await writeFile(
+      path.join(sharedGlobalStoragePath, "native-terminal-control-owner.json"),
+      JSON.stringify({
+        updatedAt: Date.now(),
+        windowId: "stale-window",
+      }),
+      "utf8",
+    );
+    const controller = new NativeTerminalWorkspaceController(
+      createContext(workspaceSnapshot, [], undefined, sharedGlobalStoragePath),
+    );
+
+    await controller.initialize();
+
+    expect(testState.backend?.initialize).not.toHaveBeenCalled();
+
+    await writeFile(
+      path.join(sharedGlobalStoragePath, "native-terminal-control-owner.json"),
+      JSON.stringify({
+        updatedAt: Date.now() - 6_000,
+        windowId: "stale-window",
+      }),
+      "utf8",
+    );
+    await (controller as any).retryNativeTerminalControlRecovery();
+
+    expect(testState.backend?.initialize).toHaveBeenCalledTimes(1);
+    expect(testState.backend?.reconcileVisibleTerminals).toHaveBeenCalled();
+
+    controller.dispose();
+    await rm(sharedGlobalStoragePath, { force: true, recursive: true });
   });
 
   test("should refresh the sidebar again after startup settle delays", async () => {

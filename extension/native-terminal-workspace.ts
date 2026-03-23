@@ -10,6 +10,7 @@ import {
   MAX_SESSION_COUNT,
   clampSidebarThemeSetting,
   createSidebarHudState,
+  formatSessionDisplayId,
   getOrderedSessions,
   getSessionShortcutLabel,
   getVisiblePrimaryTitle,
@@ -108,6 +109,10 @@ const COMMAND_TERMINAL_EXIT_POLL_MS = 250;
 const DEBUG_STATE_POLL_INTERVAL_MS = 500;
 const CONTROL_OWNER_STALE_MS = 5_000;
 const CONTROL_OWNER_HEARTBEAT_MS = 1_000;
+const CONTROL_OWNER_RECOVERY_BUFFER_MS = 250;
+const STARTUP_PROJECTION_RECOVERY_DELAYS_MS = [300, 900, 1_800] as const;
+const DELAYED_FOCUS_RESTORE_DELAYS_MS = [350, 900, 1_600] as const;
+const EXTERNAL_FOCUS_LOCK_MS = 2_000;
 const SIDEBAR_WELCOME_OK_LABEL = "OK";
 
 type NativeTerminalWorkspaceBackendKind = "native";
@@ -137,12 +142,19 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private debugStatePollTimer: NodeJS.Timeout | undefined;
   private readonly lastKnownActivityBySessionId = new Map<string, TerminalAgentStatus>();
   private controlOwnerHeartbeatTimer: NodeJS.Timeout | undefined;
+  private controlOwnerRecoveryTimer: NodeJS.Timeout | undefined;
+  private externalFocusLockSessionId: string | undefined;
+  private externalFocusLockUntil = 0;
+  private readonly focusedSessionRestoreTimeouts = new Set<NodeJS.Timeout>();
   private ownsNativeTerminalControl = false;
   private readonly sessionAgentLaunchBySessionId = new Map<string, StoredSessionAgentLaunch>();
   private readonly sidebarAgentIconBySessionId = new Map<string, SidebarAgentIcon>();
   private sidebarWelcomeHandled = false;
   private readonly debugPanel: NativeTerminalDebugPanel;
   private readonly previousSessionHistory: PreviousSessionHistory;
+  private projectedReconcileDepth = 0;
+  private projectedReconcileFocusedSessionId: string | undefined;
+  private readonly startupProjectionRecoveryTimeouts = new Set<NodeJS.Timeout>();
   private readonly startupSidebarRefreshTimeouts = new Set<NodeJS.Timeout>();
   private readonly store: SessionGridStore;
   private t3Runtime: T3RuntimeManager | undefined;
@@ -183,6 +195,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           return;
         }
 
+        if (!this.shouldAcceptExternalSessionFocus(sessionId)) {
+          return;
+        }
+
         const changed = await this.store.focusSession(sessionId);
         const acknowledgedAttention = await this.acknowledgeSessionAttention(sessionId);
         if (changed && !acknowledgedAttention) {
@@ -197,6 +213,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       onDidFocusSession: async (sessionId) => {
         const sessionRecord = this.store.getSession(sessionId);
         if (!sessionRecord || !isBrowserSession(sessionRecord)) {
+          return;
+        }
+
+        if (!this.shouldAcceptExternalSessionFocus(sessionId)) {
           return;
         }
 
@@ -265,19 +285,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   public async initialize(): Promise<void> {
     await this.migrateCompletionBellPreference();
     await this.ensureNativeTerminalControl();
-    if (!this.isVsMuxDisabled()) {
-      await this.ensureT3RuntimeForStoredSessions(this.getAllSessionRecords());
-    }
     if (this.ownsNativeTerminalControl) {
-      const disconnectedVisibleAgentSessionIds = this.isVsMuxDisabled()
-        ? []
-        : this.getDisconnectedAgentSessionIds(this.getActiveSnapshot().visibleSessionIds);
-      await this.reconcileProjectedSessions();
-      if (!this.isVsMuxDisabled()) {
-        for (const sessionId of disconnectedVisibleAgentSessionIds) {
-          await this.resumeAgentSessionIfConfigured(sessionId);
-        }
-      }
+      await this.restoreOwnedWindowStateAfterControlAcquired();
+      this.scheduleStartupProjectionRecovery();
+    } else {
+      this.scheduleControlOwnerRecovery();
     }
     this.scheduleStartupSidebarRefreshes();
     await this.refreshSidebar("hydrate");
@@ -293,7 +305,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
   public dispose(): void {
     this.stopControlOwnerHeartbeat();
+    this.clearControlOwnerRecovery();
+    this.clearDelayedFocusedSessionRestore();
     this.stopDebugStatePolling();
+    this.clearStartupProjectionRecovery();
     this.clearStartupSidebarRefreshes();
     void this.releaseNativeTerminalControl();
     this.t3Runtime?.dispose();
@@ -338,6 +353,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       return;
     }
 
+    if (!preserveFocus) {
+      this.lockExternalSessionFocus(sessionId);
+    }
+
     const previousVisibleSessionIds = this.getActiveSnapshot().visibleSessionIds;
     const shouldResumeAgentSession =
       this.sessionAgentLaunchBySessionId.has(sessionId) && !this.backend.hasLiveTerminal(sessionId);
@@ -354,6 +373,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
     if (!preserveFocus) {
       this.focusT3ComposerIfPossible(sessionId);
+      this.scheduleDelayedFocusedSessionRestore(sessionId, false);
     }
 
     const acknowledgedAttention = await this.acknowledgeSessionAttention(sessionId);
@@ -652,6 +672,15 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
     await this.syncT3RuntimeLease();
     await this.refreshSidebar();
+  }
+
+  public async copyResumeCommand(sessionId: string): Promise<void> {
+    const resumeText = this.buildCopyResumeCommandText(sessionId);
+    if (!resumeText) {
+      return;
+    }
+
+    await vscode.env.clipboard.writeText(resumeText);
   }
 
   public async setVisibleCount(visibleCount: VisibleSessionCount): Promise<void> {
@@ -1272,6 +1301,87 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     this.controlOwnerHeartbeatTimer = undefined;
   }
 
+  private scheduleControlOwnerRecovery(): void {
+    if (this.controlOwnerRecoveryTimer || this.ownsNativeTerminalControl) {
+      return;
+    }
+
+    this.controlOwnerRecoveryTimer = setTimeout(() => {
+      this.controlOwnerRecoveryTimer = undefined;
+      void this.retryNativeTerminalControlRecovery();
+    }, CONTROL_OWNER_STALE_MS + CONTROL_OWNER_RECOVERY_BUFFER_MS);
+  }
+
+  private clearControlOwnerRecovery(): void {
+    if (!this.controlOwnerRecoveryTimer) {
+      return;
+    }
+
+    clearTimeout(this.controlOwnerRecoveryTimer);
+    this.controlOwnerRecoveryTimer = undefined;
+  }
+
+  private async retryNativeTerminalControlRecovery(): Promise<void> {
+    if (this.ownsNativeTerminalControl) {
+      return;
+    }
+
+    if (!(await this.ensureNativeTerminalControl())) {
+      return;
+    }
+
+    await this.restoreOwnedWindowStateAfterControlAcquired();
+    this.scheduleStartupProjectionRecovery();
+    this.scheduleStartupSidebarRefreshes();
+    await this.refreshSidebar("hydrate");
+  }
+
+  private scheduleStartupProjectionRecovery(): void {
+    this.clearStartupProjectionRecovery();
+    for (const delayMs of STARTUP_PROJECTION_RECOVERY_DELAYS_MS) {
+      const timeout = setTimeout(() => {
+        this.startupProjectionRecoveryTimeouts.delete(timeout);
+        void this.runStartupProjectionRecoveryPass();
+      }, delayMs);
+      this.startupProjectionRecoveryTimeouts.add(timeout);
+    }
+  }
+
+  private clearStartupProjectionRecovery(): void {
+    for (const timeout of this.startupProjectionRecoveryTimeouts) {
+      clearTimeout(timeout);
+    }
+
+    this.startupProjectionRecoveryTimeouts.clear();
+  }
+
+  private async runStartupProjectionRecoveryPass(): Promise<void> {
+    if (!this.ownsNativeTerminalControl || this.isVsMuxDisabled()) {
+      return;
+    }
+
+    await this.reconcileProjectedSessions(true);
+    await this.refreshSidebar();
+  }
+
+  private async restoreOwnedWindowStateAfterControlAcquired(): Promise<void> {
+    if (!this.isVsMuxDisabled()) {
+      await this.ensureT3RuntimeForStoredSessions(this.getAllSessionRecords());
+    }
+
+    const disconnectedVisibleAgentSessionIds = this.isVsMuxDisabled()
+      ? []
+      : this.getDisconnectedAgentSessionIds(this.getActiveSnapshot().visibleSessionIds);
+    await this.reconcileProjectedSessions();
+    if (this.isVsMuxDisabled()) {
+      return;
+    }
+
+    for (const sessionId of disconnectedVisibleAgentSessionIds) {
+      await this.resumeAgentSessionIfConfigured(sessionId);
+    }
+  }
+
   private async publishNativeTerminalControlOwnerLease(): Promise<void> {
     const ownerLease = {
       updatedAt: Date.now(),
@@ -1335,7 +1445,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         primaryTitle: getVisiblePrimaryTitle(sessionRecord.title) ?? "Browser",
         row: sessionRecord.row,
         sessionId: sessionRecord.sessionId,
-        sessionNumber: getDebuggingSessionNumber(sessionRecord.sessionId),
+        sessionNumber: getDebuggingSessionNumber(sessionRecord.displayId),
         shortcutLabel: getSessionShortcutLabel(sessionRecord.slotIndex, SHORTCUT_LABEL_PLATFORM),
         terminalTitle: undefined,
       };
@@ -1359,7 +1469,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         primaryTitle: getVisiblePrimaryTitle(sessionRecord.title) ?? "T3 Code",
         row: sessionRecord.row,
         sessionId: sessionRecord.sessionId,
-        sessionNumber: getDebuggingSessionNumber(sessionRecord.sessionId),
+        sessionNumber: getDebuggingSessionNumber(sessionRecord.displayId),
         shortcutLabel: getSessionShortcutLabel(sessionRecord.slotIndex, SHORTCUT_LABEL_PLATFORM),
         terminalTitle: undefined,
       };
@@ -1396,7 +1506,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       primaryTitle: getVisibleTerminalTitle(getVisiblePrimaryTitle(sessionRecord.title)),
       row: sessionRecord.row,
       sessionId: sessionRecord.sessionId,
-      sessionNumber: getDebuggingSessionNumber(sessionRecord.sessionId),
+      sessionNumber: getDebuggingSessionNumber(sessionRecord.displayId),
       shortcutLabel: getSessionShortcutLabel(sessionRecord.slotIndex, SHORTCUT_LABEL_PLATFORM),
       terminalTitle: getVisibleTerminalTitle(
         this.terminalTitleBySessionId.get(sessionRecord.sessionId),
@@ -1454,6 +1564,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private async handleSidebarMessage(message: SidebarToExtensionMessage): Promise<void> {
+    if (message.type !== "ready") {
+      this.clearStartupSidebarRefreshes();
+    }
+
     switch (message.type) {
       case "ready":
         await this.refreshSidebar("hydrate");
@@ -1565,6 +1679,12 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       case "closeSession":
         if (message.sessionId) {
           await this.closeSession(message.sessionId);
+        }
+        return;
+
+      case "copyResumeCommand":
+        if (message.sessionId) {
+          await this.copyResumeCommand(message.sessionId);
         }
         return;
 
@@ -1797,6 +1917,35 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     return (
       snapshot.focusedSessionId === sessionId && snapshot.visibleSessionIds.includes(sessionId)
     );
+  }
+
+  private shouldAcceptExternalSessionFocus(sessionId: string): boolean {
+    if (!this.getActiveSnapshot().visibleSessionIds.includes(sessionId)) {
+      return false;
+    }
+
+    if (
+      this.externalFocusLockSessionId &&
+      Date.now() <= this.externalFocusLockUntil &&
+      this.externalFocusLockSessionId !== sessionId
+    ) {
+      return false;
+    }
+
+    if (this.externalFocusLockSessionId && Date.now() > this.externalFocusLockUntil) {
+      this.externalFocusLockSessionId = undefined;
+      this.externalFocusLockUntil = 0;
+    }
+
+    if (
+      this.projectedReconcileDepth > 0 &&
+      this.projectedReconcileFocusedSessionId &&
+      this.projectedReconcileFocusedSessionId !== sessionId
+    ) {
+      return false;
+    }
+
+    return true;
   }
 
   private async writePendingRenameCommand(sessionId: string, alias: string): Promise<void> {
@@ -2035,11 +2184,101 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     const snapshot = this.getActiveSnapshot();
-    await this.ensureT3RuntimeForVisibleSessions(snapshot);
-    await this.syncT3RuntimeLease();
-    await this.backend.reconcileVisibleTerminals(snapshot, preserveFocus);
-    await this.t3Webviews.reconcileVisibleSessions(snapshot, preserveFocus);
-    await this.browserSessions.reconcileVisibleSessions(snapshot, preserveFocus);
+    this.projectedReconcileDepth += 1;
+    this.projectedReconcileFocusedSessionId = snapshot.focusedSessionId;
+    try {
+      await this.ensureT3RuntimeForVisibleSessions(snapshot);
+      await this.syncT3RuntimeLease();
+      await this.backend.reconcileVisibleTerminals(snapshot, preserveFocus);
+      await this.t3Webviews.reconcileVisibleSessions(snapshot, preserveFocus);
+      await this.browserSessions.reconcileVisibleSessions(snapshot, preserveFocus);
+      await this.restoreFocusedSessionProjection(snapshot, preserveFocus);
+    } finally {
+      this.projectedReconcileDepth = Math.max(0, this.projectedReconcileDepth - 1);
+      if (this.projectedReconcileDepth === 0) {
+        this.projectedReconcileFocusedSessionId = undefined;
+      }
+    }
+  }
+
+  private async restoreFocusedSessionProjection(
+    snapshot: ReturnType<NativeTerminalWorkspaceController["getActiveSnapshot"]>,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    if (preserveFocus) {
+      return;
+    }
+
+    const focusedSessionId = snapshot.focusedSessionId ?? snapshot.visibleSessionIds[0];
+    if (!focusedSessionId) {
+      return;
+    }
+
+    const sessionRecord = this.store.getSession(focusedSessionId);
+    if (!sessionRecord) {
+      return;
+    }
+
+    if (isTerminalSession(sessionRecord)) {
+      if (!this.backend.hasLiveTerminal(focusedSessionId)) {
+        return;
+      }
+
+      await this.backend.focusSession(focusedSessionId, false);
+      return;
+    }
+
+    if (isT3Session(sessionRecord)) {
+      await this.t3Webviews.revealStoredSession(sessionRecord, snapshot, false);
+      return;
+    }
+
+    if (isBrowserSession(sessionRecord)) {
+      await this.browserSessions.revealStoredSession(sessionRecord, snapshot, false);
+    }
+  }
+
+  private lockExternalSessionFocus(sessionId: string): void {
+    this.externalFocusLockSessionId = sessionId;
+    this.externalFocusLockUntil = Date.now() + EXTERNAL_FOCUS_LOCK_MS;
+  }
+
+  private scheduleDelayedFocusedSessionRestore(
+    focusedSessionId: string,
+    preserveFocus: boolean,
+  ): void {
+    this.clearDelayedFocusedSessionRestore();
+    if (preserveFocus) {
+      return;
+    }
+
+    for (const delayMs of DELAYED_FOCUS_RESTORE_DELAYS_MS) {
+      const timeout = setTimeout(() => {
+        this.focusedSessionRestoreTimeouts.delete(timeout);
+        void this.restoreDelayedFocusedSessionProjection(focusedSessionId);
+      }, delayMs);
+      this.focusedSessionRestoreTimeouts.add(timeout);
+    }
+  }
+
+  private clearDelayedFocusedSessionRestore(): void {
+    for (const timeout of this.focusedSessionRestoreTimeouts) {
+      clearTimeout(timeout);
+    }
+
+    this.focusedSessionRestoreTimeouts.clear();
+  }
+
+  private async restoreDelayedFocusedSessionProjection(expectedSessionId: string): Promise<void> {
+    const snapshot = this.getActiveSnapshot();
+    if (
+      snapshot.focusedSessionId !== expectedSessionId ||
+      !snapshot.visibleSessionIds.includes(expectedSessionId)
+    ) {
+      return;
+    }
+
+    await this.restoreFocusedSessionProjection(snapshot, false);
   }
 
   private async revealT3SessionIfNeeded(
@@ -2178,6 +2417,31 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           : undefined;
       case "opencode":
         return `${agentCommand} --continue`;
+      default:
+        return undefined;
+    }
+  }
+
+  private buildCopyResumeCommandText(sessionId: string): string | undefined {
+    const sessionRecord = this.store.getSession(sessionId);
+    const sessionAlias = sessionRecord?.alias?.trim();
+    if (!sessionAlias) {
+      return undefined;
+    }
+
+    const agentLaunch = this.sessionAgentLaunchBySessionId.get(sessionId);
+    const agentId =
+      agentLaunch?.agentId.trim().toLowerCase() ??
+      this.sidebarAgentIconBySessionId.get(sessionId)?.trim().toLowerCase();
+    const agentCommand = agentLaunch?.command.trim();
+
+    switch (agentId) {
+      case "codex":
+        return `${agentCommand || "codex"} resume ${quoteForSingleShellArgument(sessionAlias)}`;
+      case "claude":
+        return `${agentCommand || "claude"} -r ${quoteForSingleShellArgument(sessionAlias)}`;
+      case "opencode":
+        return sessionAlias;
       default:
         return undefined;
     }
@@ -2463,14 +2727,12 @@ function getSendRenameCommandOnSidebarRename(): boolean {
   );
 }
 
-function getDebuggingSessionNumber(sessionId: string): number | undefined {
-  const match = /^session-(\d+)$/.exec(sessionId);
-  if (!match) {
+function getDebuggingSessionNumber(displayId: string | undefined): string | undefined {
+  if (!displayId) {
     return undefined;
   }
 
-  const sessionNumber = Number.parseInt(match[1], 10);
-  return Number.isInteger(sessionNumber) && sessionNumber > 0 ? sessionNumber : undefined;
+  return formatSessionDisplayId(displayId);
 }
 
 function haveSameSessionIds(left: readonly string[], right: readonly string[]): boolean {

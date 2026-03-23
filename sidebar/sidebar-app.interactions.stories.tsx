@@ -100,6 +100,15 @@ export const SessionCardActions: Story = {
       await expectMessage({ sessionId: "session-3", type: "promptRenameSession" });
     });
 
+    await step("copy a resume command through the session context menu", async () => {
+      resetSidebarStoryMessages();
+
+      await openContextMenu(sessionCard);
+      await userEvent.click(await body.findByRole("menuitem", { name: "Copy resume" }));
+
+      await expectMessage({ sessionId: "session-3", type: "copyResumeCommand" });
+    });
+
     await step("terminate through the session context menu", async () => {
       resetSidebarStoryMessages();
 

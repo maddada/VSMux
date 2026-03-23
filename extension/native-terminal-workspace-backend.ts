@@ -8,6 +8,7 @@ import type {
   NativeTerminalDebugProjection,
 } from "../shared/native-terminal-debug-contract";
 import {
+  getTerminalSessionSurfaceTitle,
   isBrowserSession,
   isT3Session,
   isTerminalSession,
@@ -93,9 +94,16 @@ type ProjectionLocation =
     };
 
 type SessionProjection = {
+  identityRank: number;
   location: ProjectionLocation;
   sessionId: string;
   terminal: vscode.Terminal;
+};
+
+type ResolvedManagedTerminalIdentity = {
+  identityRank: number;
+  sessionId: string;
+  workspaceId: string;
 };
 
 type ReadSessionAgentStateResult = {
@@ -226,7 +234,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       this.trackedSessionIds.add(sessionRecord.sessionId);
       this.sessionAliases.set(
         sessionRecord.sessionId,
-        this.getDisplayNameForSession(sessionRecord.sessionId, sessionRecord.alias),
+        this.getDisplayNameForSession(sessionRecord),
       );
     }
 
@@ -325,10 +333,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     sessionRecord: SessionRecord,
   ): Promise<TerminalSessionSnapshot> {
     this.trackedSessionIds.add(sessionRecord.sessionId);
-    this.sessionAliases.set(
-      sessionRecord.sessionId,
-      this.getDisplayNameForSession(sessionRecord.sessionId, sessionRecord.alias),
-    );
+    this.sessionAliases.set(sessionRecord.sessionId, this.getDisplayNameForSession(sessionRecord));
 
     const existingProjection = this.projections.get(sessionRecord.sessionId);
     if (existingProjection && !existingProjection.terminal.exitStatus) {
@@ -375,6 +380,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     if (!preserveFocus && this.lastVisibleSnapshot) {
       const visibleIndex = this.lastVisibleSnapshot.visibleSessionIds.indexOf(sessionId);
       if (visibleIndex >= 0 && (await focusEditorGroupByIndex(visibleIndex))) {
+        await this.showTerminal(projection.terminal, false);
         return true;
       }
     }
@@ -486,10 +492,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   public async renameSession(sessionRecord: SessionRecord): Promise<void> {
-    this.sessionAliases.set(
-      sessionRecord.sessionId,
-      this.getDisplayNameForSession(sessionRecord.sessionId, sessionRecord.alias),
-    );
+    this.sessionAliases.set(sessionRecord.sessionId, this.getDisplayNameForSession(sessionRecord));
     const projection = this.projections.get(sessionRecord.sessionId);
     if (projection) {
       await this.syncTerminalName(projection.terminal, sessionRecord.sessionId, true);
@@ -542,8 +545,10 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     const previousProjection = this.projections.get(identity.sessionId);
     if (previousProjection?.terminal === terminal) {
+      previousProjection.identityRank = identity.identityRank;
       previousProjection.location = this.resolveProjectionLocation(terminal);
       void this.trace.log("ATTACH", "reuseExistingProjection", {
+        identityRank: identity.identityRank,
         sessionId: identity.sessionId,
         terminal: this.describeTerminal(terminal),
       });
@@ -552,7 +557,25 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
 
     if (previousProjection) {
+      const shouldReplacePreviousProjection =
+        this.createdTerminals.has(previousProjection.terminal) ||
+        previousProjection.terminal.exitStatus !== undefined ||
+        identity.identityRank > previousProjection.identityRank;
+      if (!shouldReplacePreviousProjection) {
+        await this.maybeParkDuplicateTerminal(identity.sessionId, terminal);
+        void this.trace.log("ATTACH", "skippedLowerPriorityReplacement", {
+          existingIdentityRank: previousProjection.identityRank,
+          incomingIdentityRank: identity.identityRank,
+          existingTerminal: this.describeTerminal(previousProjection.terminal),
+          incomingTerminal: this.describeTerminal(terminal),
+          sessionId: identity.sessionId,
+        });
+        return;
+      }
+
       void this.trace.log("REPLACE", "replacingProjectionTerminal", {
+        existingIdentityRank: previousProjection.identityRank,
+        incomingIdentityRank: identity.identityRank,
         previousTerminal: this.describeTerminal(previousProjection.terminal),
         replacementTerminal: this.describeTerminal(terminal),
         sessionId: identity.sessionId,
@@ -570,6 +593,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     this.trackedSessionIds.add(identity.sessionId);
     this.projections.set(identity.sessionId, {
+      identityRank: identity.identityRank,
       location: this.resolveProjectionLocation(terminal),
       sessionId: identity.sessionId,
       terminal,
@@ -580,6 +604,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     this.changeSessionsEmitter.fire();
     void this.captureProcessAssociation(identity.sessionId, terminal);
     void this.trace.log("ATTACH", "attachedManagedTerminal", {
+      identityRank: identity.identityRank,
       location: this.describeProjectionLocation(this.projections.get(identity.sessionId)?.location),
       sessionId: identity.sessionId,
       terminal: this.describeTerminal(terminal),
@@ -630,39 +655,54 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   private async resolveManagedTerminalIdentity(
     terminal: vscode.Terminal,
-  ): Promise<{ sessionId: string; workspaceId: string } | undefined> {
-    const envIdentity = getManagedTerminalIdentity(terminal);
-    if (envIdentity) {
-      return envIdentity;
-    }
+  ): Promise<ResolvedManagedTerminalIdentity | undefined> {
+    const candidates: ResolvedManagedTerminalIdentity[] = [];
 
-    const processId = await this.getTerminalProcessId(terminal);
-    if (processId) {
-      const sessionId = this.sessionIdByProcessId.get(processId);
-      if (sessionId) {
-        return {
-          sessionId,
+    const terminalName = terminal.name ?? terminal.creationOptions.name;
+    if (terminalName) {
+      const matchingSessionIds = Array.from(this.sessionAliases.entries())
+        .filter(([, alias]) => alias === terminalName)
+        .map(([sessionId]) => sessionId);
+      if (matchingSessionIds.length === 1) {
+        candidates.push({
+          identityRank: 100,
+          sessionId: matchingSessionIds[0],
           workspaceId: this.options.workspaceId,
-        };
+        });
+      }
+
+      const titledAlias = getSurfaceTitleAlias(terminalName);
+      if (titledAlias) {
+        const suffixMatchingSessionIds = Array.from(this.sessionAliases.entries())
+          .filter(([, alias]) => getSurfaceTitleAlias(alias) === titledAlias)
+          .map(([sessionId]) => sessionId);
+        if (suffixMatchingSessionIds.length === 1) {
+          candidates.push({
+            identityRank: 90,
+            sessionId: suffixMatchingSessionIds[0],
+            workspaceId: this.options.workspaceId,
+          });
+        }
+      }
+
+      const titledDisplayId = getSurfaceTitleDisplayId(terminalName);
+      if (titledDisplayId) {
+        const displayIdMatchingSessionIds = Array.from(this.sessionAliases.entries())
+          .filter(([, alias]) => getSurfaceTitleDisplayId(alias) === titledDisplayId)
+          .map(([sessionId]) => sessionId);
+        if (displayIdMatchingSessionIds.length === 1) {
+          candidates.push({
+            identityRank: 80,
+            sessionId: displayIdMatchingSessionIds[0],
+            workspaceId: this.options.workspaceId,
+          });
+        }
       }
     }
 
-    const terminalName = terminal.name ?? terminal.creationOptions.name;
-    if (!terminalName) {
-      return undefined;
-    }
-
-    const matchingSessionIds = Array.from(this.sessionAliases.entries())
-      .filter(([, alias]) => alias === terminalName)
-      .map(([sessionId]) => sessionId);
-    if (matchingSessionIds.length !== 1) {
-      return undefined;
-    }
-
-    return {
-      sessionId: matchingSessionIds[0],
-      workspaceId: this.options.workspaceId,
-    };
+    return candidates
+      .filter((candidate) => candidate.workspaceId === this.options.workspaceId)
+      .sort((left, right) => right.identityRank - left.identityRank)[0];
   }
 
   private resolveProjectionLocation(terminal: vscode.Terminal): ProjectionLocation {
@@ -1149,6 +1189,53 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     await this.runUiAction(() => focusEditorGroupByIndex(location.visibleIndex));
   }
 
+  private async maybeParkDuplicateTerminal(
+    sessionId: string,
+    terminal: vscode.Terminal,
+  ): Promise<void> {
+    const location = this.resolveProjectionLocation(terminal);
+    if (location.type !== "editor") {
+      return;
+    }
+
+    const terminalName = terminal.name ?? terminal.creationOptions.name ?? "";
+    const surfaceDisplayId = getSurfaceTitleDisplayId(terminalName);
+    const expectedDisplayId = getSurfaceTitleDisplayId(this.sessionAliases.get(sessionId) ?? "");
+    const shouldParkDuplicate =
+      surfaceDisplayId !== undefined &&
+      expectedDisplayId !== undefined &&
+      surfaceDisplayId === expectedDisplayId;
+    if (!shouldParkDuplicate) {
+      return;
+    }
+
+    this.beginMoveAction("moveProjectionToPanel", sessionId, {
+      identityRank: 0,
+      location,
+      sessionId,
+      terminal,
+    });
+    try {
+      void this.trace.log("MOVE", "parkDuplicateTerminal:start", {
+        currentLocation: this.describeProjectionLocation(location),
+        sessionId,
+        terminal: this.describeTerminal(terminal),
+      });
+      await this.runUiAction(() => focusEditorGroupByIndex(location.visibleIndex));
+      await this.activateTerminalForMove(terminal, "toPanel", sessionId);
+      await this.runUiAction(() => moveActiveTerminalToPanel());
+      void this.trace.log("MOVE", "parkDuplicateTerminal:complete", {
+        resultingLocation: this.describeProjectionLocation(
+          this.resolveProjectionLocation(terminal),
+        ),
+        sessionId,
+        terminal: this.describeTerminal(terminal),
+      });
+    } finally {
+      this.completeCurrentMoveAction();
+    }
+  }
+
   private async withUnlockedTargetEditorGroup<T>(
     visibleIndex: number,
     callback: () => Promise<T>,
@@ -1316,12 +1403,13 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       env: this.createTerminalEnvironment(sessionRecord.sessionId),
       iconPath: new vscode.ThemeIcon("terminal"),
       location: terminalLocation,
-      name: this.getDisplayNameForSession(sessionRecord.sessionId, sessionRecord.alias),
+      name: this.getDisplayNameForSession(sessionRecord),
       shellPath: getDefaultShell(),
     });
 
     this.createdTerminals.add(terminal);
     const projection = {
+      identityRank: 0,
       location:
         location === "panel"
           ? ({ type: "panel" } as const)
@@ -1738,9 +1826,8 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
   }
 
-  private getDisplayNameForSession(sessionId: string, alias: string | undefined): string {
-    const normalizedAlias = alias?.trim();
-    return normalizedAlias && normalizedAlias.length > 0 ? normalizedAlias : `Session ${sessionId}`;
+  private getDisplayNameForSession(sessionRecord: SessionRecord): string {
+    return getTerminalSessionSurfaceTitle(sessionRecord);
   }
 
   private async syncProjectionTerminalNames(): Promise<void> {
@@ -2157,4 +2244,15 @@ async function delay(durationMs: number): Promise<void> {
   await new Promise((resolve) => {
     setTimeout(resolve, durationMs);
   });
+}
+
+function getSurfaceTitleAlias(title: string): string | undefined {
+  const match = /^\[(\d{3})\]\s+(.+)$/.exec(title.trim());
+  const alias = match?.[2]?.trim();
+  return alias && alias.length > 0 ? alias : undefined;
+}
+
+function getSurfaceTitleDisplayId(title: string): string | undefined {
+  const match = /^\[(\d{3})\](?:\s+.+)?$/.exec(title.trim());
+  return match?.[1];
 }

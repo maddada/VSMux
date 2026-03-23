@@ -12,6 +12,7 @@ import {
   clampTerminalViewMode,
   createDefaultSessionGridSnapshot,
   createSessionRecord,
+  formatSessionDisplayId,
   getSlotPosition,
   getOrderedSessions,
 } from "./session-grid-contract";
@@ -546,6 +547,7 @@ function normalizeSessionRecord(session: SessionRecord): SessionRecord {
     typeof session.title === "string" && session.title.trim().length > 0
       ? session.title.trim()
       : defaultTitle;
+  const displayId = formatSessionDisplayId(session.displayId ?? sessionNumber - 1);
 
   if (
     session.kind === "t3" &&
@@ -557,6 +559,7 @@ function normalizeSessionRecord(session: SessionRecord): SessionRecord {
     return {
       ...session,
       alias,
+      displayId,
       kind: "t3",
       t3: {
         projectId: session.t3.projectId,
@@ -575,6 +578,7 @@ function normalizeSessionRecord(session: SessionRecord): SessionRecord {
       browser: {
         url: session.browser.url,
       },
+      displayId,
       kind: "browser",
       title,
     };
@@ -583,6 +587,7 @@ function normalizeSessionRecord(session: SessionRecord): SessionRecord {
   return {
     ...session,
     alias,
+    displayId,
     kind: "terminal",
     title,
   };

@@ -1,4 +1,4 @@
-import { IconPencil, IconX } from "@tabler/icons-react";
+import { IconCopy, IconPencil, IconX } from "@tabler/icons-react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -13,9 +13,10 @@ import { SessionCardContent } from "./session-card-content";
 import { createSessionDragData } from "./sidebar-dnd";
 import type { WebviewApi } from "./webview-api";
 
-const CONTEXT_MENU_HEIGHT_PX = 90;
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 156;
+const CONTEXT_MENU_ITEM_HEIGHT_PX = 34;
+const CONTEXT_MENU_VERTICAL_PADDING_PX = 12;
 
 type ContextMenuPosition = {
   x: number;
@@ -32,7 +33,12 @@ export type SortableSessionCardProps = {
   vscode: WebviewApi;
 };
 
-function clampContextMenuPosition(clientX: number, clientY: number): ContextMenuPosition {
+function clampContextMenuPosition(
+  clientX: number,
+  clientY: number,
+  itemCount: number,
+): ContextMenuPosition {
+  const menuHeight = CONTEXT_MENU_VERTICAL_PADDING_PX + itemCount * CONTEXT_MENU_ITEM_HEIGHT_PX;
   return {
     x: Math.max(
       CONTEXT_MENU_MARGIN_PX,
@@ -40,7 +46,7 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
     ),
     y: Math.max(
       CONTEXT_MENU_MARGIN_PX,
-      Math.min(clientY, window.innerHeight - CONTEXT_MENU_HEIGHT_PX - CONTEXT_MENU_MARGIN_PX),
+      Math.min(clientY, window.innerHeight - menuHeight - CONTEXT_MENU_MARGIN_PX),
     ),
   };
 }
@@ -57,6 +63,7 @@ export function SortableSessionCard({
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
   const menuRef = useRef<HTMLDivElement>(null);
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
+  const canCopyResumeCommand = supportsResumeCommandCopy(session);
   const sortable = useSortable({
     accept: "session",
     data: createSessionDragData(groupId, session.sessionId),
@@ -120,7 +127,9 @@ export function SortableSessionCard({
   }, [contextMenuPosition]);
 
   const openContextMenu = (clientX: number, clientY: number) => {
-    setContextMenuPosition(clampContextMenuPosition(clientX, clientY));
+    setContextMenuPosition(
+      clampContextMenuPosition(clientX, clientY, canCopyResumeCommand ? 3 : 2),
+    );
   };
 
   const requestRename = () => {
@@ -136,6 +145,14 @@ export function SortableSessionCard({
     vscode.postMessage({
       sessionId: session.sessionId,
       type: "closeSession",
+    });
+  };
+
+  const requestCopyResumeCommand = () => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      sessionId: session.sessionId,
+      type: "copyResumeCommand",
     });
   };
 
@@ -255,6 +272,22 @@ export function SortableSessionCard({
                 />
                 Rename
               </button>
+              {canCopyResumeCommand ? (
+                <button
+                  className="session-context-menu-item"
+                  onClick={requestCopyResumeCommand}
+                  role="menuitem"
+                  type="button"
+                >
+                  <IconCopy
+                    aria-hidden="true"
+                    className="session-context-menu-icon"
+                    size={16}
+                    stroke={1.8}
+                  />
+                  Copy resume
+                </button>
+              ) : null}
               <button
                 className="session-context-menu-item session-context-menu-item-danger"
                 onClick={requestClose}
@@ -274,5 +307,13 @@ export function SortableSessionCard({
           )
         : null}
     </>
+  );
+}
+
+function supportsResumeCommandCopy(session: SidebarSessionItem): boolean {
+  return (
+    session.agentIcon === "codex" ||
+    session.agentIcon === "claude" ||
+    session.agentIcon === "opencode"
   );
 }

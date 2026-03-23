@@ -2,9 +2,11 @@ import {
   DEFAULT_MAIN_GROUP_ID,
   DEFAULT_MAIN_GROUP_TITLE,
   MAX_GROUP_COUNT,
+  MAX_SESSION_DISPLAY_ID_COUNT,
   type CreateSessionRecordOptions,
   createDefaultGroupedSessionWorkspaceSnapshot,
   createDefaultSessionGridSnapshot,
+  formatSessionDisplayId,
   getOrderedSessions,
   type GroupedSessionWorkspaceSnapshot,
   type SessionGridSnapshot,
@@ -57,14 +59,21 @@ export function normalizeGroupedSessionWorkspaceSnapshot(
   const activeGroupId = normalizedGroups.some((group) => group.groupId === snapshot.activeGroupId)
     ? snapshot.activeGroupId
     : normalizedGroups[0].groupId;
+  const displayIdNormalization = normalizeWorkspaceSessionDisplayIds(normalizedGroups);
 
   return {
     activeGroupId,
-    groups: normalizedGroups,
+    groups: displayIdNormalization.groups,
     nextGroupNumber:
       typeof snapshot.nextGroupNumber === "number" && snapshot.nextGroupNumber > 1
         ? snapshot.nextGroupNumber
         : normalizedGroups.length + 1,
+    nextSessionDisplayId:
+      typeof snapshot.nextSessionDisplayId === "number" &&
+      Number.isInteger(snapshot.nextSessionDisplayId) &&
+      snapshot.nextSessionDisplayId >= 0
+        ? snapshot.nextSessionDisplayId % MAX_SESSION_DISPLAY_ID_COUNT
+        : displayIdNormalization.nextSessionDisplayId,
     nextSessionNumber:
       typeof snapshot.nextSessionNumber === "number" && snapshot.nextSessionNumber > 0
         ? snapshot.nextSessionNumber
@@ -105,10 +114,14 @@ export function createSessionInWorkspace(
     return { snapshot: normalizedSnapshot };
   }
 
+  const nextDisplayId = claimNextSessionDisplayId(normalizedSnapshot);
   const result = createSessionInSnapshot(
     activeGroup.snapshot,
     normalizedSnapshot.nextSessionNumber,
-    options,
+    {
+      ...options,
+      displayId: nextDisplayId.displayId,
+    } as CreateSessionRecordOptions & { displayId: string },
   );
   if (!result.session) {
     return { snapshot: normalizedSnapshot };
@@ -119,6 +132,7 @@ export function createSessionInWorkspace(
     snapshot: {
       ...normalizedSnapshot,
       groups: updateGroup(normalizedSnapshot.groups, activeGroup.groupId, result.snapshot),
+      nextSessionDisplayId: nextDisplayId.nextSessionDisplayId,
       nextSessionNumber: normalizedSnapshot.nextSessionNumber + 1,
     },
   };
@@ -611,4 +625,87 @@ function normalizeGroup(group: SessionGroupRecord, index: number): SessionGroupR
           ? DEFAULT_MAIN_GROUP_TITLE
           : `Group ${index + 1}`,
   };
+}
+
+function normalizeWorkspaceSessionDisplayIds(groups: readonly SessionGroupRecord[]): {
+  groups: SessionGroupRecord[];
+  nextSessionDisplayId: number;
+} {
+  const usedDisplayIds = new Set<string>();
+  let nextAvailableDisplayId = 0;
+  let changed = false;
+
+  const nextGroups = groups.map((group) => {
+    const sessions = group.snapshot.sessions.map((session) => {
+      const normalizedDisplayId = formatSessionDisplayId(session.displayId ?? "");
+      if (!usedDisplayIds.has(normalizedDisplayId) && /^\d{3}$/.test(normalizedDisplayId)) {
+        usedDisplayIds.add(normalizedDisplayId);
+        return {
+          ...session,
+          displayId: normalizedDisplayId,
+        };
+      }
+
+      changed = true;
+      const claimedDisplayId = claimDisplayId(usedDisplayIds, nextAvailableDisplayId);
+      nextAvailableDisplayId = claimedDisplayId.nextSessionDisplayId;
+      return {
+        ...session,
+        displayId: claimedDisplayId.displayId,
+      };
+    });
+
+    return sessions === group.snapshot.sessions && !changed
+      ? group
+      : {
+          ...group,
+          snapshot: {
+            ...group.snapshot,
+            sessions,
+          },
+        };
+  });
+
+  const nextSessionDisplayId = findNextAvailableDisplayId(usedDisplayIds, nextAvailableDisplayId);
+  return {
+    groups: changed ? nextGroups : [...nextGroups],
+    nextSessionDisplayId,
+  };
+}
+
+function claimNextSessionDisplayId(snapshot: GroupedSessionWorkspaceSnapshot): {
+  displayId: string;
+  nextSessionDisplayId: number;
+} {
+  const usedDisplayIds = new Set(
+    snapshot.groups.flatMap((group) => group.snapshot.sessions.map((session) => session.displayId)),
+  );
+  return claimDisplayId(usedDisplayIds, snapshot.nextSessionDisplayId);
+}
+
+function claimDisplayId(
+  usedDisplayIds: Set<string>,
+  startDisplayId: number,
+): { displayId: string; nextSessionDisplayId: number } {
+  const normalizedStartDisplayId =
+    ((Math.floor(startDisplayId) % MAX_SESSION_DISPLAY_ID_COUNT) + MAX_SESSION_DISPLAY_ID_COUNT) %
+    MAX_SESSION_DISPLAY_ID_COUNT;
+  const nextDisplayId = findNextAvailableDisplayId(usedDisplayIds, normalizedStartDisplayId);
+  const displayId = formatSessionDisplayId(nextDisplayId);
+  usedDisplayIds.add(displayId);
+  return {
+    displayId,
+    nextSessionDisplayId: (nextDisplayId + 1) % MAX_SESSION_DISPLAY_ID_COUNT,
+  };
+}
+
+function findNextAvailableDisplayId(usedDisplayIds: Set<string>, startDisplayId: number): number {
+  for (let offset = 0; offset < MAX_SESSION_DISPLAY_ID_COUNT; offset += 1) {
+    const candidate = (startDisplayId + offset) % MAX_SESSION_DISPLAY_ID_COUNT;
+    if (!usedDisplayIds.has(formatSessionDisplayId(candidate))) {
+      return candidate;
+    }
+  }
+
+  return startDisplayId % MAX_SESSION_DISPLAY_ID_COUNT;
 }

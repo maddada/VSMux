@@ -2,7 +2,10 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { createSessionRecord } from "../shared/session-grid-contract";
+import {
+  createSessionRecord,
+  getTerminalSessionSurfaceTitle,
+} from "../shared/session-grid-contract";
 
 const testState = vi.hoisted(() => ({
   activeTerminal: undefined as unknown,
@@ -12,6 +15,9 @@ const testState = vi.hoisted(() => ({
   configurationValues: {} as Record<string, unknown>,
   executeCommand: vi.fn(async () => undefined),
   openTerminalListeners: [] as Array<(terminal: unknown) => void>,
+  processIdentityByPid: vi.fn(
+    async () => undefined as { sessionId: string; workspaceId: string } | undefined,
+  ),
   TabInputTerminalClass: class MockTabInputTerminal {},
   terminalStateChangeListeners: [] as Array<(terminal: unknown) => void>,
   tabGroupsAll: [] as Array<{
@@ -37,6 +43,10 @@ vi.mock("./agent-shell-integration", () => ({
     opencodeConfigDir: "/mock-opencode",
     zshDotDir: "/mock-zsh",
   })),
+}));
+
+vi.mock("./native-terminal-process-identity", () => ({
+  readManagedTerminalIdentityFromProcessId: testState.processIdentityByPid,
 }));
 
 vi.mock("vscode", () => ({
@@ -126,6 +136,8 @@ describe("NativeTerminalWorkspaceBackend moveProjectionToEditor", () => {
     testState.executeCommand.mockReset();
     testState.executeCommand.mockResolvedValue(undefined);
     testState.openTerminalListeners = [];
+    testState.processIdentityByPid.mockReset();
+    testState.processIdentityByPid.mockResolvedValue(undefined);
     testState.tabGroupsAll = [];
     testState.terminalStateChangeListeners = [];
     testState.terminals = [];
@@ -1118,9 +1130,42 @@ describe("NativeTerminalWorkspaceBackend moveProjectionToPanel", () => {
   });
 });
 
-describe("NativeTerminalWorkspaceBackend initialize", () => {
-  test("should wait for late revived terminals and attach them by alias name", async () => {
-    vi.useFakeTimers();
+describe("NativeTerminalWorkspaceBackend focusSession", () => {
+  beforeEach(() => {
+    testState.activeTerminal = undefined;
+    testState.activeViewColumn = 1;
+    testState.activeTerminalChangeListeners = [];
+    testState.closeTerminalListeners = [];
+    testState.configurationValues = {};
+    testState.executeCommand.mockReset();
+    testState.executeCommand.mockResolvedValue(undefined);
+    testState.openTerminalListeners = [];
+    testState.tabGroupsAll = [];
+    testState.terminalStateChangeListeners = [];
+    testState.terminals = [];
+    vi.useRealTimers();
+  });
+
+  test("should explicitly re-show a visible editor terminal after focusing its editor group", async () => {
+    const callOrder: string[] = [];
+    const terminal = {
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: "[092] Adding t3 code",
+      sendText: vi.fn(),
+      show: vi.fn((preserveFocus: boolean) => {
+        testState.activeTerminal = terminal;
+        callOrder.push(`show:${String(preserveFocus)}`);
+      }),
+    };
+    testState.terminals = [terminal];
+    testState.executeCommand.mockImplementation(async (command: string) => {
+      if (command === "workbench.action.focusSecondEditorGroup") {
+        testState.activeViewColumn = 2;
+      }
+      callOrder.push(command);
+      return undefined;
+    });
 
     const backend = new NativeTerminalWorkspaceBackend({
       context: {
@@ -1132,17 +1177,48 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
       workspaceId: "workspace-1",
     });
 
-    let initialized = false;
-    const initializePromise = backend
-      .initialize([
-        {
-          alias: "Harbor Vale",
-          sessionId: "session-3",
+    (backend as any).projections.set("session-93", {
+      identityRank: 100,
+      location: { type: "editor", visibleIndex: 1 },
+      sessionId: "session-93",
+      terminal,
+    });
+    (backend as any).lastVisibleSnapshot = {
+      focusedSessionId: "session-93",
+      sessions: [],
+      viewMode: "horizontal",
+      visibleCount: 2,
+      visibleSessionIds: ["session-96", "session-93"],
+    };
+
+    await backend.focusSession("session-93", false);
+
+    expect(callOrder).toEqual(["workbench.action.focusSecondEditorGroup", "show:false"]);
+  });
+});
+
+describe("NativeTerminalWorkspaceBackend initialize", () => {
+  test("should wait for late revived terminals and attach them by exact display title", async () => {
+    vi.useFakeTimers();
+
+    const sessionRecord = {
+      ...createSessionRecord(3, 0),
+      alias: "Harbor Vale",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
         },
-      ] as never)
-      .then(() => {
-        initialized = true;
-      });
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    let initialized = false;
+    const initializePromise = backend.initialize([sessionRecord] as never).then(() => {
+      initialized = true;
+    });
 
     await Promise.resolve();
     await Promise.resolve();
@@ -1154,11 +1230,11 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
 
     const revivedTerminal = {
       creationOptions: {
-        name: "Harbor Vale",
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
       },
       dispose: vi.fn(),
       exitStatus: undefined,
-      name: "Harbor Vale",
+      name: getTerminalSessionSurfaceTitle(sessionRecord),
       sendText: vi.fn(),
       show: vi.fn(),
     };
@@ -1179,6 +1255,10 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
   test("should rescan revived terminals that gain their alias after the first restore scan", async () => {
     vi.useFakeTimers();
 
+    const sessionRecord = {
+      ...createSessionRecord(9, 0),
+      alias: "Atlas",
+    };
     const backend = new NativeTerminalWorkspaceBackend({
       context: {
         globalStorageUri: {
@@ -1201,16 +1281,11 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
     };
     testState.terminals = [revivedTerminal];
 
-    const initializePromise = backend.initialize([
-      {
-        alias: "Atlas",
-        sessionId: "session-9",
-      },
-    ] as never);
+    const initializePromise = backend.initialize([sessionRecord] as never);
 
     await Promise.resolve();
-    revivedTerminal.name = "Atlas";
-    revivedTerminal.creationOptions.name = "Atlas";
+    revivedTerminal.name = getTerminalSessionSurfaceTitle(sessionRecord);
+    revivedTerminal.creationOptions.name = getTerminalSessionSurfaceTitle(sessionRecord);
     testState.terminalStateChangeListeners[0]?.(revivedTerminal);
 
     await vi.advanceTimersByTimeAsync(200);
@@ -1221,17 +1296,15 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
     vi.useRealTimers();
   });
 
-  test("should restore a revived terminal by stored process id", async () => {
+  test("should restore a revived terminal by exact display title", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(10, 0),
+      alias: "Atlas",
+    };
     const backend = new NativeTerminalWorkspaceBackend({
       context: {
         globalStorageUri: {
           fsPath: "/extension-storage",
-        },
-        workspaceState: {
-          get: vi.fn(() => ({
-            "session-10": 7311,
-          })),
-          update: vi.fn(async () => undefined),
         },
       } as never,
       ensureShellSpawnAllowed: async () => true,
@@ -1240,25 +1313,260 @@ describe("NativeTerminalWorkspaceBackend initialize", () => {
 
     const revivedTerminal = {
       creationOptions: {
-        name: "opencode",
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
       },
       dispose: vi.fn(),
       exitStatus: undefined,
-      name: "opencode",
-      processId: Promise.resolve(7311),
+      name: getTerminalSessionSurfaceTitle(sessionRecord),
       sendText: vi.fn(),
       show: vi.fn(),
     };
     testState.terminals = [revivedTerminal];
 
-    await backend.initialize([
-      {
-        alias: "Atlas",
-        sessionId: "session-10",
-      },
-    ] as never);
+    await backend.initialize([sessionRecord] as never);
 
     expect((backend as any).projections.get("session-10")?.terminal).toBe(revivedTerminal);
+  });
+
+  test("should restore a revived terminal by titled alias suffix when the display id differs", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(137, 0),
+      alias: "Publish to Store",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    const revivedTerminal = {
+      creationOptions: {
+        name: "[138] Publish to Store",
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: "[138] Publish to Store",
+      sendText: vi.fn(),
+      show: vi.fn(),
+    };
+    testState.terminals = [revivedTerminal];
+
+    await backend.initialize([sessionRecord] as never);
+    await Promise.resolve();
+
+    expect((backend as any).projections.get("session-137")?.terminal).toBe(revivedTerminal);
+    expect(testState.executeCommand).toHaveBeenCalledWith(
+      "workbench.action.terminal.renameWithArg",
+      {
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
+      },
+    );
+  });
+
+  test("should restore a revived terminal by display id when only the bracketed prefix remains", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(93, 0),
+      alias: "Adding t3 code",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    const revivedTerminal = {
+      creationOptions: {
+        name: "[092]",
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: "[092]",
+      sendText: vi.fn(),
+      show: vi.fn(),
+    };
+    testState.terminals = [revivedTerminal];
+
+    await backend.initialize([sessionRecord] as never);
+    await Promise.resolve();
+
+    expect((backend as any).projections.get("session-93")?.terminal).toBe(revivedTerminal);
+    expect(testState.executeCommand).toHaveBeenCalledWith(
+      "workbench.action.terminal.renameWithArg",
+      {
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
+      },
+    );
+  });
+
+  test("should ignore a revived terminal whose title does not match any session", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(11, 0),
+      alias: "Adding t3 code",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    const revivedTerminal = {
+      creationOptions: {
+        name: "Code",
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: "Code",
+      sendText: vi.fn(),
+      show: vi.fn(),
+    };
+    testState.terminals = [revivedTerminal];
+
+    await backend.initialize([sessionRecord] as never);
+
+    expect((backend as any).projections.has("session-11")).toBe(false);
+  });
+
+  test("should keep the first restored terminal when a duplicate with the same title is discovered later", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(12, 0),
+      alias: "Adding t3 code",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    const restoredTerminal = {
+      creationOptions: {
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: getTerminalSessionSurfaceTitle(sessionRecord),
+      sendText: vi.fn(),
+      show: vi.fn(),
+    };
+    const duplicateTerminal = {
+      creationOptions: {
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: getTerminalSessionSurfaceTitle(sessionRecord),
+      sendText: vi.fn(),
+      show: vi.fn(),
+    };
+    (backend as any).trackedSessionIds.add("session-12");
+    (backend as any).sessionAliases.set(
+      "session-12",
+      getTerminalSessionSurfaceTitle(sessionRecord),
+    );
+    testState.terminals = [restoredTerminal, duplicateTerminal];
+
+    await expect(
+      (backend as any).resolveManagedTerminalIdentity(restoredTerminal),
+    ).resolves.toEqual({
+      identityRank: 100,
+      sessionId: "session-12",
+      workspaceId: "workspace-1",
+    });
+    await (backend as any).attachManagedTerminal(restoredTerminal);
+    await (backend as any).attachManagedTerminal(duplicateTerminal);
+
+    expect((backend as any).projections.get("session-12")?.terminal).toBe(restoredTerminal);
+  });
+
+  test("should move a prefix-only duplicate terminal to the panel when an exact restored terminal already exists", async () => {
+    const sessionRecord = {
+      ...createSessionRecord(93, 0),
+      alias: "Adding t3 code",
+    };
+    const backend = new NativeTerminalWorkspaceBackend({
+      context: {
+        globalStorageUri: {
+          fsPath: "/extension-storage",
+        },
+      } as never,
+      ensureShellSpawnAllowed: async () => true,
+      workspaceId: "workspace-1",
+    });
+
+    const restoredTerminal = {
+      creationOptions: {
+        name: getTerminalSessionSurfaceTitle(sessionRecord),
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: getTerminalSessionSurfaceTitle(sessionRecord),
+      sendText: vi.fn(),
+      show: vi.fn(() => {
+        testState.activeTerminal = prefixOnlyTerminal;
+      }),
+    };
+    const prefixOnlyTerminal = {
+      creationOptions: {
+        name: "[092]",
+      },
+      dispose: vi.fn(),
+      exitStatus: undefined,
+      name: "[092]",
+      sendText: vi.fn(),
+      show: vi.fn(() => {
+        testState.activeTerminal = prefixOnlyTerminal;
+      }),
+    };
+    testState.tabGroupsAll = [
+      {
+        tabs: [{ input: new testState.TabInputTerminalClass(), label: "[092]" }],
+        viewColumn: 2,
+      },
+    ];
+    testState.executeCommand.mockImplementation(async (command: string) => {
+      if (command === "workbench.action.focusSecondEditorGroup") {
+        testState.activeViewColumn = 2;
+      }
+      if (command === "workbench.action.terminal.moveToTerminalPanel") {
+        testState.tabGroupsAll = [];
+      }
+      return undefined;
+    });
+
+    (backend as any).trackedSessionIds.add("session-93");
+    (backend as any).sessionAliases.set(
+      "session-93",
+      getTerminalSessionSurfaceTitle(sessionRecord),
+    );
+    (backend as any).projections.set("session-93", {
+      identityRank: 100,
+      location: { type: "editor", visibleIndex: 1 },
+      sessionId: "session-93",
+      terminal: restoredTerminal,
+    });
+    (backend as any).terminalToSessionId.set(restoredTerminal, "session-93");
+
+    await (backend as any).attachManagedTerminal(prefixOnlyTerminal);
+
+    expect((backend as any).projections.get("session-93")?.terminal).toBe(restoredTerminal);
+    expect(testState.executeCommand).toHaveBeenCalledWith(
+      "workbench.action.terminal.moveToTerminalPanel",
+    );
   });
 
   test("should dispose a created placeholder when a revived terminal replaces it", async () => {
