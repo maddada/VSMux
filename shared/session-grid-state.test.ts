@@ -257,7 +257,7 @@ describe("visible primary titles", () => {
 });
 
 describe("focusSessionInSnapshot", () => {
-  test("should reveal an offscreen session while keeping the visible set slot-ordered", () => {
+  test("should reveal an offscreen session while preserving the visible set order", () => {
     const snapshot = {
       focusedSessionId: "session-1",
       sessions: [
@@ -275,7 +275,7 @@ describe("focusSessionInSnapshot", () => {
 
     expect(result.changed).toBe(true);
     expect(result.snapshot.focusedSessionId).toBe("session-3");
-    expect(result.snapshot.visibleSessionIds).toEqual(["session-2", "session-3"]);
+    expect(result.snapshot.visibleSessionIds).toEqual(["session-3", "session-2"]);
   });
 });
 
@@ -300,7 +300,7 @@ describe("focusDirectionInSnapshot", () => {
 });
 
 describe("setVisibleCountInSnapshot", () => {
-  test("should normalize the visible list into slot order", () => {
+  test("should preserve the requested visible list order", () => {
     const snapshot = setVisibleCountInSnapshot(
       {
         focusedSessionId: "session-2",
@@ -319,8 +319,8 @@ describe("setVisibleCountInSnapshot", () => {
 
     expect(snapshot.visibleCount).toBe(6);
     expect(snapshot.visibleSessionIds).toEqual([
-      "session-1",
       "session-2",
+      "session-1",
       "session-3",
       "session-4",
     ]);
@@ -410,9 +410,9 @@ describe("toggleFullscreenSessionInSnapshot", () => {
     expect(snapshot.visibleCount).toBe(4);
     expect(snapshot.fullscreenRestoreVisibleCount).toBeUndefined();
     expect(snapshot.visibleSessionIds).toEqual([
+      "session-3",
       "session-1",
       "session-2",
-      "session-3",
       "session-4",
     ]);
   });
@@ -433,7 +433,36 @@ describe("setViewModeInSnapshot", () => {
 
     expect(snapshot.viewMode).toBe("horizontal");
     expect(snapshot.visibleCount).toBe(6);
-    expect(snapshot.visibleSessionIds).toEqual(["session-1", "session-2", "session-3"]);
+    expect(snapshot.visibleSessionIds).toEqual(["session-2", "session-1", "session-3"]);
+  });
+
+  test("should exit focus mode and restore the previous visible count before switching view mode", () => {
+    const snapshot = setViewModeInSnapshot(
+      {
+        focusedSessionId: "session-3",
+        fullscreenRestoreVisibleCount: 4,
+        sessions: [
+          createSessionRecord(1, 0),
+          createSessionRecord(2, 1),
+          createSessionRecord(3, 2),
+          createSessionRecord(4, 3),
+        ],
+        viewMode: "grid",
+        visibleCount: 1,
+        visibleSessionIds: ["session-3"],
+      },
+      "horizontal",
+    );
+
+    expect(snapshot.fullscreenRestoreVisibleCount).toBeUndefined();
+    expect(snapshot.viewMode).toBe("horizontal");
+    expect(snapshot.visibleCount).toBe(4);
+    expect(snapshot.visibleSessionIds).toEqual([
+      "session-3",
+      "session-1",
+      "session-2",
+      "session-4",
+    ]);
   });
 });
 
@@ -592,7 +621,7 @@ describe("removeSessionInSnapshot", () => {
       "session-3",
     ]);
     expect(result.snapshot.focusedSessionId).toBe("session-3");
-    expect(result.snapshot.visibleSessionIds).toEqual(["session-1", "session-3"]);
+    expect(result.snapshot.visibleSessionIds).toEqual(["session-3", "session-1"]);
   });
 });
 

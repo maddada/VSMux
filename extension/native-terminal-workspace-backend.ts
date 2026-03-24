@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type {
@@ -37,9 +36,13 @@ import {
   moveActiveEditorToNextGroup,
   moveActiveEditorToPreviousGroup,
   moveActiveTerminalToEditor,
-  parsePersistedSessionState,
+  moveActiveTerminalToPanel,
 } from "./terminal-workspace-helpers";
 import { createWorkspaceTrace } from "./runtime-trace";
+import {
+  readPersistedSessionStateFromFile,
+  updatePersistedSessionStateFile,
+} from "./session-state-file";
 
 const AGENT_STATE_DIR_NAME = "terminal-session-state";
 const POLL_INTERVAL_MS = 500;
@@ -72,6 +75,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   private readonly projections = new Map<string, SessionProjection>();
   private readonly sessionIdByProcessId = new Map<number, string>();
   private readonly sessionRecordBySessionId = new Map<string, TerminalSessionRecord>();
+  private readonly sessionTitleBySessionId = new Map<string, string>();
   private readonly sessions = new Map<string, TerminalSessionSnapshot>();
   private readonly terminalToSessionId = new Map<vscode.Terminal, string>();
   private readonly trace = createWorkspaceTrace(TRACE_FILE_NAME);
@@ -241,12 +245,33 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return false;
     }
 
-    this.sessions.set(sessionId, {
+    const persistedState = await updatePersistedSessionStateFile(
+      this.getSessionAgentStateFilePath(sessionId),
+      (currentState) => {
+        if (currentState.agentStatus !== "attention") {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          agentName: snapshot.agentName ?? currentState.agentName,
+          agentStatus: "idle",
+        };
+      },
+    ).catch(() => undefined);
+
+    const nextSnapshot = {
       ...snapshot,
-      agentStatus: "idle",
-    });
-    this.changeSessionsEmitter.fire();
-    return true;
+      agentName: persistedState?.agentName ?? snapshot.agentName,
+      agentStatus: persistedState?.agentStatus ?? "idle",
+    } satisfies TerminalSessionSnapshot;
+    this.sessions.set(sessionId, nextSnapshot);
+
+    if (!haveSameTerminalSessionSnapshot(snapshot, nextSnapshot)) {
+      this.changeSessionsEmitter.fire();
+    }
+
+    return nextSnapshot.agentStatus === "idle";
   }
 
   public async createOrAttachSession(
@@ -259,7 +284,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       );
     }
 
-    this.syncSessions([sessionRecord]);
+    this.upsertSession(sessionRecord);
     await this.logState("SESSION", "create-or-attach", {
       sessionId: sessionRecord.sessionId,
       title: sessionRecord.title,
@@ -379,7 +404,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return;
     }
 
-    this.syncSessions([sessionRecord]);
+    this.upsertSession(sessionRecord);
     const projection = this.projections.get(sessionRecord.sessionId);
     if (!projection) {
       return;
@@ -410,19 +435,44 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     this.lastTerminalActivityAtBySessionId.set(sessionId, Date.now());
   }
 
-  private syncSessions(sessionRecords: readonly SessionRecord[]): void {
+  public async moveManagedTerminalsToPanel(): Promise<void> {
+    const projections = [...this.projections.values()].sort((left, right) => {
+      const leftGroupIndex = this.findTerminalGroupIndex(left.sessionId) ?? Number.MAX_SAFE_INTEGER;
+      const rightGroupIndex =
+        this.findTerminalGroupIndex(right.sessionId) ?? Number.MAX_SAFE_INTEGER;
+      if (leftGroupIndex !== rightGroupIndex) {
+        return leftGroupIndex - rightGroupIndex;
+      }
+
+      return left.sessionId.localeCompare(right.sessionId);
+    });
+
+    for (const projection of projections) {
+      const groupIndex = this.findTerminalGroupIndex(projection.sessionId);
+      if (groupIndex === undefined) {
+        continue;
+      }
+
+      await this.activateTerminalEditorTab(projection.sessionId, groupIndex);
+      await moveActiveTerminalToPanel();
+      await this.logState("MODE", "moved-terminal-to-panel", {
+        groupIndex,
+        sessionId: projection.sessionId,
+        terminalName: projection.terminal.name,
+      });
+    }
+
+    await this.refreshSessionSnapshots();
+  }
+
+  public syncSessions(sessionRecords: readonly SessionRecord[]): void {
     const nextSessionRecords = sessionRecords.filter(isTerminalSession);
     const nextSessionIdSet = new Set(
       nextSessionRecords.map((sessionRecord) => sessionRecord.sessionId),
     );
 
     for (const sessionRecord of nextSessionRecords) {
-      this.sessionRecordBySessionId.set(sessionRecord.sessionId, sessionRecord);
-      this.sessions.set(
-        sessionRecord.sessionId,
-        this.sessions.get(sessionRecord.sessionId) ??
-          createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
-      );
+      this.upsertSession(sessionRecord);
     }
 
     for (const sessionId of this.sessionRecordBySessionId.keys()) {
@@ -431,7 +481,17 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       }
 
       this.sessionRecordBySessionId.delete(sessionId);
+      this.sessionTitleBySessionId.delete(sessionId);
     }
+  }
+
+  private upsertSession(sessionRecord: TerminalSessionRecord): void {
+    this.sessionRecordBySessionId.set(sessionRecord.sessionId, sessionRecord);
+    this.sessions.set(
+      sessionRecord.sessionId,
+      this.sessions.get(sessionRecord.sessionId) ??
+        createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
+    );
   }
 
   private async placeTerminal(
@@ -728,44 +788,83 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   private async refreshSessionSnapshots(): Promise<void> {
+    let didChangeSessions = false;
+    const titleChanges: TerminalWorkspaceBackendTitleChange[] = [];
+
     for (const sessionId of this.sessionRecordBySessionId.keys()) {
-      await this.refreshSessionSnapshot(sessionId);
+      const result = await this.refreshSessionSnapshot(sessionId);
+      didChangeSessions ||= result.didChangeSnapshot;
+      if (result.titleChange) {
+        titleChanges.push(result.titleChange);
+      }
     }
-    this.changeSessionsEmitter.fire();
-    this.changeDebugStateEmitter.fire();
+
+    for (const titleChange of titleChanges) {
+      this.changeSessionTitleEmitter.fire(titleChange);
+    }
+
+    if (didChangeSessions) {
+      this.changeSessionsEmitter.fire();
+    }
+
+    if (didChangeSessions || titleChanges.length > 0) {
+      this.changeDebugStateEmitter.fire();
+    }
   }
 
-  private async refreshSessionSnapshot(sessionId: string): Promise<void> {
+  private async refreshSessionSnapshot(sessionId: string): Promise<{
+    didChangeSnapshot: boolean;
+    titleChange?: TerminalWorkspaceBackendTitleChange;
+  }> {
     const projection = this.projections.get(sessionId);
     const persistedState = await this.readPersistedSessionState(sessionId);
+    const previousSnapshot = this.sessions.get(sessionId);
+    let nextSnapshot: TerminalSessionSnapshot;
+
     if (!projection || projection.terminal.exitStatus) {
-      this.sessions.set(sessionId, {
+      nextSnapshot = {
         ...(this.sessions.get(sessionId) ??
           createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
         agentName: persistedState.agentName,
         agentStatus: persistedState.agentStatus,
         restoreState: "live",
         status: projection?.terminal.exitStatus ? "exited" : "disconnected",
-      });
-      return;
+      };
+    } else {
+      nextSnapshot = {
+        ...(this.sessions.get(sessionId) ??
+          createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
+        agentName: persistedState.agentName,
+        agentStatus: persistedState.agentStatus,
+        restoreState: "live",
+        startedAt: this.sessions.get(sessionId)?.startedAt ?? new Date().toISOString(),
+        status: "running",
+        workspaceId: this.options.workspaceId,
+      };
     }
 
-    this.sessions.set(sessionId, {
-      ...(this.sessions.get(sessionId) ??
-        createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
-      agentName: persistedState.agentName,
-      agentStatus: persistedState.agentStatus,
-      restoreState: "live",
-      startedAt: this.sessions.get(sessionId)?.startedAt ?? new Date().toISOString(),
-      status: "running",
-      workspaceId: this.options.workspaceId,
-    });
-    if (persistedState.title) {
-      this.changeSessionTitleEmitter.fire({
-        sessionId,
-        title: persistedState.title,
-      });
+    this.sessions.set(sessionId, nextSnapshot);
+
+    const previousTitle = this.sessionTitleBySessionId.get(sessionId);
+    const nextTitle = persistedState.title;
+    if (!nextTitle) {
+      this.sessionTitleBySessionId.delete(sessionId);
+      return {
+        didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
+      };
     }
+
+    this.sessionTitleBySessionId.set(sessionId, nextTitle);
+    return {
+      didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
+      titleChange:
+        nextTitle !== previousTitle
+          ? {
+              sessionId,
+              title: nextTitle,
+            }
+          : undefined,
+    };
   }
 
   private async readPersistedSessionState(sessionId: string): Promise<{
@@ -773,16 +872,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     agentStatus: TerminalAgentStatus;
     title?: string;
   }> {
-    try {
-      const rawState = await readFile(this.getSessionAgentStateFilePath(sessionId), "utf8");
-      return parsePersistedSessionState(rawState);
-    } catch {
-      return {
-        agentName: undefined,
-        agentStatus: "idle",
-        title: undefined,
-      };
-    }
+    return readPersistedSessionStateFromFile(this.getSessionAgentStateFilePath(sessionId));
   }
 
   private createTerminalEnvironment(sessionId: string): Record<string, string> {
@@ -965,6 +1055,28 @@ function formatLocation(groupIndex: number | undefined): string {
   }
 
   return `editor:${groupIndex}`;
+}
+
+function haveSameTerminalSessionSnapshot(
+  left: TerminalSessionSnapshot | undefined,
+  right: TerminalSessionSnapshot,
+): boolean {
+  return (
+    left?.agentName === right.agentName &&
+    left?.agentStatus === right.agentStatus &&
+    left?.cols === right.cols &&
+    left?.cwd === right.cwd &&
+    left?.endedAt === right.endedAt &&
+    left?.errorMessage === right.errorMessage &&
+    left?.exitCode === right.exitCode &&
+    left?.restoreState === right.restoreState &&
+    left?.rows === right.rows &&
+    left?.sessionId === right.sessionId &&
+    left?.shell === right.shell &&
+    left?.startedAt === right.startedAt &&
+    left?.status === right.status &&
+    left?.workspaceId === right.workspaceId
+  );
 }
 
 async function delay(ms: number): Promise<void> {

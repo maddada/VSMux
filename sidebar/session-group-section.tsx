@@ -335,10 +335,6 @@ export function SessionGroupSection({
       return;
     }
 
-    if (group.isFocusModeActive) {
-      vscode.postMessage({ type: "toggleFullscreenSession" });
-    }
-
     vscode.postMessage({
       type: "setViewMode",
       viewMode: option.viewMode,
@@ -463,7 +459,7 @@ export function SessionGroupSection({
                         ref={visibleCountButtonRef}
                         type="button"
                       >
-                        <GroupVisibleCountIcon visibleCount={group.visibleCount} />
+                        <GroupVisibleCountIcon visibleCount={group.layoutVisibleCount} />
                       </button>
                     </div>
                   </div>
@@ -568,7 +564,7 @@ export function SessionGroupSection({
                     : !group.isFocusModeActive && group.viewMode === option.viewMode;
                 const isDisabled =
                   option.kind === "view-mode" &&
-                  isViewModeDisabled(option.viewMode, group.visibleCount);
+                  isViewModeDisabled(option.viewMode, group.layoutVisibleCount);
 
                 return (
                   <button
@@ -616,9 +612,9 @@ export function SessionGroupSection({
             >
               {COUNT_OPTIONS.map((visibleCount) => (
                 <button
-                  aria-pressed={group.visibleCount === visibleCount}
+                  aria-pressed={group.layoutVisibleCount === visibleCount}
                   className="session-context-menu-item group-control-menu-item"
-                  data-selected={String(group.visibleCount === visibleCount)}
+                  data-selected={String(group.layoutVisibleCount === visibleCount)}
                   key={visibleCount}
                   onClick={() => setVisibleCount(visibleCount)}
                   role="menuitem"

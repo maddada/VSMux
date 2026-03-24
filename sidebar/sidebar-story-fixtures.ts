@@ -32,7 +32,7 @@ export type SidebarStoryArgs = {
 
 type SidebarStoryGroup = Omit<
   SidebarSessionGroup,
-  "isFocusModeActive" | "viewMode" | "visibleCount"
+  "isFocusModeActive" | "layoutVisibleCount" | "viewMode" | "visibleCount"
 >;
 
 const DEFAULT_GROUPS: SidebarStoryGroup[] = [
@@ -329,14 +329,19 @@ const GROUPS_BY_FIXTURE: Record<SidebarStoryFixture, SidebarStoryGroup[]> = {
 };
 
 export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrateMessage {
-  const groups = cloneGroups(GROUPS_BY_FIXTURE[args.fixture]).map((group) => ({
-    ...group,
-    isFocusModeActive: group.isActive ? args.isFocusModeActive : false,
-    viewMode: group.isActive ? args.viewMode : "grid",
-    visibleCount: group.isActive
+  const groups = cloneGroups(GROUPS_BY_FIXTURE[args.fixture]).map((group) => {
+    const visibleCount = group.isActive
       ? args.visibleCount
-      : clampVisibleSessionCount(Math.max(1, group.sessions.length)),
-  }));
+      : clampVisibleSessionCount(Math.max(1, group.sessions.length));
+
+    return {
+      ...group,
+      isFocusModeActive: group.isActive ? args.isFocusModeActive : false,
+      layoutVisibleCount: group.isActive ? args.highlightedVisibleCount : visibleCount,
+      viewMode: group.isActive ? args.viewMode : "grid",
+      visibleCount,
+    };
+  });
   const hud: SidebarHudState = {
     agents: createDefaultSidebarAgentButtons(),
     commands: createDefaultSidebarCommandButtons(),
@@ -359,6 +364,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
   return {
     groups,
     hud,
+    scratchPadContent: "",
     type: "hydrate",
   };
 }

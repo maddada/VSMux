@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { detectCodexLifecycleEventFromLogLine } from "./agent-shell-integration";
+import { writePersistedSessionStateToFile } from "./session-state-file";
 
 type AgentName = "claude" | "codex" | "opencode";
 
@@ -181,8 +182,11 @@ async function writeInitialSessionState(agent: AgentName, title: string): Promis
     return;
   }
 
-  const nextState = `status=idle\nagent=${agent}\ntitle=${title}\n`;
-  await writeFile(stateFilePath, nextState, "utf8").catch(() => undefined);
+  await writePersistedSessionStateToFile(stateFilePath, {
+    agentName: agent,
+    agentStatus: "idle",
+    title,
+  }).catch(() => undefined);
 }
 
 function startCodexWatcher(logFilePath: string, notifyRunnerPath: string): CodexWatcherHandle {

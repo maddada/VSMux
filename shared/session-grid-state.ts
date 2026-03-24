@@ -2,12 +2,14 @@ import {
   type CreateSessionRecordOptions,
   GRID_COLUMN_COUNT,
   MAX_SESSION_COUNT,
+  getSessionGridLayoutVisibleCount,
   createSessionAlias,
   type SessionGridDirection,
   type SessionGridSnapshot,
   type SessionRecord,
   type TerminalViewMode,
   type VisibleSessionCount,
+  isSessionGridFocusModeActive,
   clampVisibleSessionCount,
   clampTerminalViewMode,
   createDefaultSessionGridSnapshot,
@@ -16,6 +18,20 @@ import {
   getSlotPosition,
   getOrderedSessions,
 } from "./session-grid-contract";
+
+function dedupeSessionIds(sessionIds: readonly string[]): string[] {
+  const uniqueSessionIds = new Set<string>();
+  const result: string[] = [];
+  for (const sessionId of sessionIds) {
+    if (uniqueSessionIds.has(sessionId)) {
+      continue;
+    }
+
+    uniqueSessionIds.add(sessionId);
+    result.push(sessionId);
+  }
+  return result;
+}
 
 export function createSessionInSnapshot(
   snapshot: SessionGridSnapshot,
@@ -151,8 +167,9 @@ export function setVisibleCountInSnapshot(
   snapshot: SessionGridSnapshot,
   visibleCount: VisibleSessionCount,
 ): SessionGridSnapshot {
+  const normalizedSnapshot = normalizeSessionGridSnapshot(snapshot);
   return normalizeSessionGridSnapshot({
-    ...snapshot,
+    ...normalizedSnapshot,
     fullscreenRestoreVisibleCount: undefined,
     visibleCount,
   });
@@ -162,14 +179,8 @@ export function toggleFullscreenSessionInSnapshot(
   snapshot: SessionGridSnapshot,
 ): SessionGridSnapshot {
   const normalizedSnapshot = normalizeSessionGridSnapshot(snapshot);
-  const restoreVisibleCount = normalizedSnapshot.fullscreenRestoreVisibleCount;
-
-  if (normalizedSnapshot.visibleCount === 1 && restoreVisibleCount) {
-    return normalizeSessionGridSnapshot({
-      ...normalizedSnapshot,
-      fullscreenRestoreVisibleCount: undefined,
-      visibleCount: restoreVisibleCount,
-    });
+  if (isSessionGridFocusModeActive(normalizedSnapshot)) {
+    return restoreLayoutVisibleCountInSnapshot(normalizedSnapshot);
   }
 
   return normalizeSessionGridSnapshot({
@@ -184,8 +195,9 @@ export function setViewModeInSnapshot(
   snapshot: SessionGridSnapshot,
   viewMode: TerminalViewMode,
 ): SessionGridSnapshot {
+  const normalizedSnapshot = restoreLayoutVisibleCountInSnapshot(snapshot);
   return normalizeSessionGridSnapshot({
-    ...snapshot,
+    ...normalizedSnapshot,
     viewMode,
   });
 }
@@ -467,41 +479,49 @@ function normalizeVisibleSessionIds(
   }
 
   const orderedSessionIds = orderedSessions.map((session) => session.sessionId);
-  const visibleIdSet = new Set(
+  const normalizedVisibleIds = dedupeSessionIds(
     visibleSessionIds.filter((sessionId) => orderedSessionIds.includes(sessionId)),
   );
-  if (focusedSessionId && orderedSessionIds.includes(focusedSessionId)) {
-    visibleIdSet.add(focusedSessionId);
+  if (
+    focusedSessionId &&
+    orderedSessionIds.includes(focusedSessionId) &&
+    !normalizedVisibleIds.includes(focusedSessionId)
+  ) {
+    normalizedVisibleIds.push(focusedSessionId);
   }
 
-  while (visibleIdSet.size < desiredVisibleSize) {
-    const nextSessionId = orderedSessionIds.find((sessionId) => !visibleIdSet.has(sessionId));
+  while (normalizedVisibleIds.length < desiredVisibleSize) {
+    const nextSessionId = orderedSessionIds.find(
+      (sessionId) => !normalizedVisibleIds.includes(sessionId),
+    );
     if (!nextSessionId) {
       break;
     }
 
-    visibleIdSet.add(nextSessionId);
+    normalizedVisibleIds.push(nextSessionId);
   }
 
-  const orderedVisibleIds = orderedSessionIds.filter((sessionId) => visibleIdSet.has(sessionId));
-  if (orderedVisibleIds.length <= desiredVisibleSize) {
-    return orderedVisibleIds;
+  if (normalizedVisibleIds.length <= desiredVisibleSize) {
+    return normalizedVisibleIds;
   }
 
   if (!focusedSessionId) {
-    return orderedVisibleIds.slice(0, desiredVisibleSize);
+    return normalizedVisibleIds.slice(0, desiredVisibleSize);
   }
 
-  const focusedIndex = orderedVisibleIds.indexOf(focusedSessionId);
+  const focusedIndex = normalizedVisibleIds.indexOf(focusedSessionId);
   if (focusedIndex < 0) {
-    return orderedVisibleIds.slice(0, desiredVisibleSize);
+    return normalizedVisibleIds.slice(0, desiredVisibleSize);
   }
 
   const windowStart = Math.max(
     0,
-    Math.min(focusedIndex - desiredVisibleSize + 1, orderedVisibleIds.length - desiredVisibleSize),
+    Math.min(
+      focusedIndex - desiredVisibleSize + 1,
+      normalizedVisibleIds.length - desiredVisibleSize,
+    ),
   );
-  return orderedVisibleIds.slice(windowStart, windowStart + desiredVisibleSize);
+  return normalizedVisibleIds.slice(windowStart, windowStart + desiredVisibleSize);
 }
 
 function normalizeFullscreenRestoreVisibleCount(
@@ -513,6 +533,19 @@ function normalizeFullscreenRestoreVisibleCount(
   }
 
   return fullscreenRestoreVisibleCount > 1 ? fullscreenRestoreVisibleCount : undefined;
+}
+
+function restoreLayoutVisibleCountInSnapshot(snapshot: SessionGridSnapshot): SessionGridSnapshot {
+  const normalizedSnapshot = normalizeSessionGridSnapshot(snapshot);
+  if (!isSessionGridFocusModeActive(normalizedSnapshot)) {
+    return normalizedSnapshot;
+  }
+
+  return normalizeSessionGridSnapshot({
+    ...normalizedSnapshot,
+    fullscreenRestoreVisibleCount: undefined,
+    visibleCount: getSessionGridLayoutVisibleCount(normalizedSnapshot),
+  });
 }
 
 function reindexSessionsInOrder(sessions: readonly SessionRecord[]): SessionRecord[] {

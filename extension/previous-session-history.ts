@@ -4,6 +4,7 @@ import type {
   SidebarPreviousSessionItem,
   SidebarSessionItem,
 } from "../shared/session-grid-contract";
+import { isGeneratedSessionAlias } from "../shared/session-grid-contract";
 import type { SidebarAgentIcon } from "../shared/sidebar-agents";
 
 const PREVIOUS_SESSION_HISTORY_KEY = "VSmux.previousSessionHistory";
@@ -41,6 +42,7 @@ export class PreviousSessionHistory {
       ...entry.sidebarItem,
       closedAt: entry.closedAt,
       historyId: entry.historyId,
+      isGeneratedName: isGeneratedSessionAlias(entry.sessionRecord),
       isRestorable: true,
     }));
   }
@@ -62,6 +64,20 @@ export class PreviousSessionHistory {
 
     this.history = nextHistory;
     await this.persist();
+  }
+
+  public async removeGeneratedNames(): Promise<number> {
+    const nextHistory = this.history.filter(
+      (entry) => !isGeneratedSessionAlias(entry.sessionRecord),
+    );
+    const removedCount = this.history.length - nextHistory.length;
+    if (removedCount === 0) {
+      return 0;
+    }
+
+    this.history = nextHistory;
+    await this.persist();
+    return removedCount;
   }
 
   private async persist(): Promise<void> {

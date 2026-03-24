@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { createSessionRecord } from "../shared/session-grid-contract";
+import {
+  createSessionRecord,
+  getT3SessionSurfaceTitle,
+  getTerminalSessionSurfaceTitle,
+} from "../shared/session-grid-contract";
 import { NativeTerminalWorkspaceBackend } from "./native-terminal-workspace-backend";
 
 const testState = vi.hoisted(() => ({
@@ -57,9 +61,33 @@ const testState = vi.hoisted(() => ({
   onDidChangeTerminalState: vi.fn(() => ({ dispose: vi.fn() })),
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidOpenTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+  readPersistedSessionStateFromFile: vi.fn(async () => ({
+    agentName: "codex",
+    agentStatus: "idle",
+    title: "Codex",
+  })),
   tabGroupsAll: [] as MockTabGroup[],
   TabInputTerminalClass: class MockTabInputTerminal {},
   terminals: [] as MockTerminal[],
+  updatePersistedSessionStateFile: vi.fn(
+    async (
+      _filePath: string,
+      updater: (state: {
+        agentName?: string;
+        agentStatus: "attention" | "idle" | "working";
+        title?: string;
+      }) => {
+        agentName?: string;
+        agentStatus: "attention" | "idle" | "working";
+        title?: string;
+      },
+    ) =>
+      updater({
+        agentName: "codex",
+        agentStatus: "attention",
+        title: "Codex",
+      }),
+  ),
   workspaceState: {
     get: vi.fn(() => ({})),
     update: vi.fn(async () => undefined),
@@ -193,11 +221,11 @@ vi.mock("./terminal-workspace-helpers", () => ({
   moveActiveEditorToNextGroup: testState.moveActiveEditorToNextGroup,
   moveActiveEditorToPreviousGroup: testState.moveActiveEditorToPreviousGroup,
   moveActiveTerminalToEditor: testState.moveActiveTerminalToEditor,
-  parsePersistedSessionState: () => ({
-    agentName: "codex",
-    agentStatus: "working",
-    title: "Codex",
-  }),
+}));
+
+vi.mock("./session-state-file", () => ({
+  readPersistedSessionStateFromFile: testState.readPersistedSessionStateFromFile,
+  updatePersistedSessionStateFile: testState.updatePersistedSessionStateFile,
 }));
 
 describe("NativeTerminalWorkspaceBackend", () => {
@@ -210,8 +238,22 @@ describe("NativeTerminalWorkspaceBackend", () => {
     testState.moveActiveEditorToNextGroup.mockClear();
     testState.moveActiveEditorToPreviousGroup.mockClear();
     testState.moveActiveTerminalToEditor.mockClear();
+    testState.readPersistedSessionStateFromFile.mockClear();
+    testState.readPersistedSessionStateFromFile.mockImplementation(async () => ({
+      agentName: "codex",
+      agentStatus: "idle",
+      title: "Codex",
+    }));
     testState.tabGroupsAll = [];
     testState.terminals = [];
+    testState.updatePersistedSessionStateFile.mockClear();
+    testState.updatePersistedSessionStateFile.mockImplementation(async (_filePath, updater) =>
+      updater({
+        agentName: "codex",
+        agentStatus: "attention",
+        title: "Codex",
+      }),
+    );
     testState.workspaceState.get.mockClear();
     testState.workspaceState.get.mockReturnValue({});
     testState.workspaceState.update.mockClear();
@@ -221,7 +263,7 @@ describe("NativeTerminalWorkspaceBackend", () => {
     const session = createTerminalSession(1, 0, "Adding t3 code");
     const existingTerminal = createTerminal({
       env: {},
-      name: "[000] Adding t3 code",
+      name: getTerminalSessionSurfaceTitle(session),
     });
     testState.terminals.push(existingTerminal);
     testState.tabGroupsAll = [createTabGroup(1, existingTerminal)];
@@ -246,7 +288,7 @@ describe("NativeTerminalWorkspaceBackend", () => {
           preserveFocus: true,
           viewColumn: 1,
         },
-        name: "[000] Adding t3 code",
+        name: getTerminalSessionSurfaceTitle(session),
       }),
     );
     expect(backend.hasLiveTerminal(session.sessionId)).toBe(true);
@@ -254,13 +296,46 @@ describe("NativeTerminalWorkspaceBackend", () => {
 
   test("should activate the terminal tab before moving it between mixed editor groups", async () => {
     const terminalSession = createTerminalSession(24, 2, "Fixing layout issues");
-    const terminal = createTerminal({ env: {}, name: "[023] Fixing layout issues" });
+    const terminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(terminalSession),
+    });
+    const firstT3Session = createSessionRecord(112, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-111",
+        workspaceRoot: "/workspace",
+      },
+      title: "T3 Code",
+    });
+    const secondT3Session = createSessionRecord(96, 1, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-095",
+        workspaceRoot: "/workspace",
+      },
+      title: "T3 Code",
+    });
     testState.terminals.push(terminal);
     testState.tabGroupsAll = [
       createTabGroup(
         1,
-        createWebviewTab("[111] T3: Indicators for Claude"),
-        createWebviewTab("[095] T3: Adding prev sessions"),
+        createWebviewTab(
+          getT3SessionSurfaceTitle({
+            alias: "Indicators for Claude",
+            displayId: firstT3Session.displayId,
+          }),
+        ),
+        createWebviewTab(
+          getT3SessionSurfaceTitle({
+            alias: "Adding prev sessions",
+            displayId: secondT3Session.displayId,
+          }),
+        ),
         terminal,
       ),
       createTabGroup(2),
@@ -282,17 +357,23 @@ describe("NativeTerminalWorkspaceBackend", () => {
     expect(testState.executeCommand).toHaveBeenCalledWith("workbench.action.openEditorAtIndex3");
     expect(testState.moveActiveEditorToNextGroup).toHaveBeenCalledTimes(1);
     expect(testState.tabGroupsAll[0]?.tabs.map((tab) => tab.label)).toEqual([
-      "[111] T3: Indicators for Claude",
-      "[095] T3: Adding prev sessions",
+      getT3SessionSurfaceTitle({
+        alias: "Indicators for Claude",
+        displayId: firstT3Session.displayId,
+      }),
+      getT3SessionSurfaceTitle({
+        alias: "Adding prev sessions",
+        displayId: secondT3Session.displayId,
+      }),
     ]);
     expect(testState.tabGroupsAll[1]?.tabs.map((tab) => tab.label)).toEqual([
-      "[023] Fixing layout issues",
+      getTerminalSessionSurfaceTitle(terminalSession),
     ]);
   });
 
   test("should focus an attached terminal session", async () => {
     const session = createTerminalSession(1, 0, "Adding t3 code");
-    const terminal = createTerminal({ env: {}, name: "[000] Adding t3 code" });
+    const terminal = createTerminal({ env: {}, name: getTerminalSessionSurfaceTitle(session) });
     testState.terminals.push(terminal);
     testState.tabGroupsAll = [createTabGroup(1, terminal)];
 
@@ -305,11 +386,37 @@ describe("NativeTerminalWorkspaceBackend", () => {
     expect(terminal.show).toHaveBeenCalledWith(false);
   });
 
+  test("should persist attention acknowledgements instead of clearing them only in memory", async () => {
+    testState.readPersistedSessionStateFromFile.mockImplementation(async () => ({
+      agentName: "codex",
+      agentStatus: "attention",
+      title: "Codex",
+    }));
+
+    const session = createTerminalSession(1, 0, "Adding t3 code");
+    const terminal = createTerminal({ env: {}, name: getTerminalSessionSurfaceTitle(session) });
+    testState.terminals.push(terminal);
+    testState.tabGroupsAll = [createTabGroup(1, terminal)];
+
+    const backend = createBackend();
+    await backend.initialize([session]);
+
+    await expect(backend.acknowledgeAttention(session.sessionId)).resolves.toBe(true);
+    expect(testState.updatePersistedSessionStateFile).toHaveBeenCalledTimes(1);
+    expect(backend.getSessionSnapshot(session.sessionId)?.agentStatus).toBe("idle");
+  });
+
   test("should keep a hidden terminal in its current editor group", async () => {
     const firstSession = createTerminalSession(1, 0, "Adding t3 code");
     const secondSession = createTerminalSession(2, 1, "Publish to Store");
-    const firstTerminal = createTerminal({ env: {}, name: "[000] Adding t3 code" });
-    const secondTerminal = createTerminal({ env: {}, name: "[001] Publish to Store" });
+    const firstTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(firstSession),
+    });
+    const secondTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(secondSession),
+    });
     testState.terminals.push(firstTerminal, secondTerminal);
     testState.tabGroupsAll = [createTabGroup(1, firstTerminal), createTabGroup(2, secondTerminal)];
     activateTabAtIndex(0, 0);
@@ -329,15 +436,61 @@ describe("NativeTerminalWorkspaceBackend", () => {
     expect(testState.moveActiveEditorToNextGroup).not.toHaveBeenCalled();
     expect(testState.moveActiveEditorToPreviousGroup).not.toHaveBeenCalled();
     expect(testState.tabGroupsAll[1]?.tabs.map((tab) => tab.label)).toEqual([
-      "[001] Publish to Store",
+      getTerminalSessionSurfaceTitle(secondSession),
+    ]);
+  });
+
+  test("should keep all tracked terminal sessions after single-session attach operations", async () => {
+    const firstSession = createTerminalSession(1, 0, "Fixing layout issues");
+    const secondSession = createTerminalSession(2, 1, "Scratchpad");
+    const firstTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(firstSession),
+    });
+    const secondTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(secondSession),
+    });
+    testState.terminals.push(firstTerminal, secondTerminal);
+    testState.tabGroupsAll = [createTabGroup(1, firstTerminal), createTabGroup(2, secondTerminal)];
+    activateTabAtIndex(0, 0);
+
+    const backend = createBackend();
+    await backend.initialize([firstSession, secondSession]);
+
+    await backend.createOrAttachSession(firstSession);
+    await backend.reconcileVisibleTerminals({
+      focusedSessionId: secondSession.sessionId,
+      fullscreenRestoreVisibleCount: undefined,
+      sessions: [firstSession, secondSession],
+      viewMode: "horizontal",
+      visibleCount: 2,
+      visibleSessionIds: [firstSession.sessionId, secondSession.sessionId],
+    });
+
+    expect(backend.getDebugState().layout.trackedSessionIds).toEqual([
+      firstSession.sessionId,
+      secondSession.sessionId,
+    ]);
+    expect(testState.tabGroupsAll[0]?.tabs.map((tab) => tab.label)).toEqual([
+      getTerminalSessionSurfaceTitle(firstSession),
+    ]);
+    expect(testState.tabGroupsAll[1]?.tabs.map((tab) => tab.label)).toEqual([
+      getTerminalSessionSurfaceTitle(secondSession),
     ]);
   });
 
   test("should not activate a hidden terminal that is already parked in the correct group", async () => {
     const firstSession = createTerminalSession(24, 0, "Fixing layout issues");
     const secondSession = createTerminalSession(25, 1, "Atlas");
-    const firstTerminal = createTerminal({ env: {}, name: "[023] Fixing layout issues" });
-    const secondTerminal = createTerminal({ env: {}, name: "[024] Atlas" });
+    const firstTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(firstSession),
+    });
+    const secondTerminal = createTerminal({
+      env: {},
+      name: getTerminalSessionSurfaceTitle(secondSession),
+    });
     testState.terminals.push(firstTerminal, secondTerminal);
     testState.tabGroupsAll = [createTabGroup(1, secondTerminal), createTabGroup(2, firstTerminal)];
     activateTabAtIndex(1, 0);
@@ -363,9 +516,11 @@ describe("NativeTerminalWorkspaceBackend", () => {
     expect(firstTerminal.show).not.toHaveBeenCalled();
     expect(secondTerminal.show).not.toHaveBeenCalled();
     expect(testState.activeTerminal).toBe(firstTerminal);
-    expect(testState.tabGroupsAll[0]?.tabs.map((tab) => tab.label)).toEqual(["[024] Atlas"]);
+    expect(testState.tabGroupsAll[0]?.tabs.map((tab) => tab.label)).toEqual([
+      getTerminalSessionSurfaceTitle(secondSession),
+    ]);
     expect(testState.tabGroupsAll[1]?.tabs.map((tab) => tab.label)).toEqual([
-      "[023] Fixing layout issues",
+      getTerminalSessionSurfaceTitle(firstSession),
     ]);
   });
 });

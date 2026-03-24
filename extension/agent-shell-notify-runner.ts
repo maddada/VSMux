@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import * as path from "node:path";
+import {
+  readPersistedSessionStateFromFile,
+  writePersistedSessionStateToFile,
+} from "./session-state-file";
 
 const AGENT_CONTROL_COMMAND = "9001";
 const AGENT_CONTROL_NAMESPACE = "VSmux";
@@ -63,31 +65,12 @@ async function writeSessionState(eventType: "start" | "stop", agentName: string)
     return;
   }
 
-  const stateDirectory = path.dirname(stateFilePath);
-  await mkdir(stateDirectory, { recursive: true }).catch(() => undefined);
-
-  const title = await readExistingTitle(stateFilePath);
-  const nextStatus = eventType === "start" ? "working" : "attention";
-  const nextState = `status=${nextStatus}\nagent=${agentName}\ntitle=${title}\n`;
-  const tempStateFilePath = `${stateFilePath}.tmp.${process.pid}`;
-
-  await writeFile(tempStateFilePath, nextState, "utf8");
-  await rename(tempStateFilePath, stateFilePath).catch(() => undefined);
-}
-
-async function readExistingTitle(stateFilePath: string): Promise<string> {
-  try {
-    const stateFile = await readFile(stateFilePath, "utf8");
-    for (const line of stateFile.split(/\r?\n/)) {
-      if (line.startsWith("title=")) {
-        return line.slice("title=".length).trim();
-      }
-    }
-  } catch {
-    return "";
-  }
-
-  return "";
+  const currentState = await readPersistedSessionStateFromFile(stateFilePath);
+  await writePersistedSessionStateToFile(stateFilePath, {
+    agentName: agentName || currentState.agentName,
+    agentStatus: eventType === "start" ? "working" : "attention",
+    title: currentState.title,
+  });
 }
 
 void main().catch(() => {

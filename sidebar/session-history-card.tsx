@@ -41,6 +41,15 @@ export function SessionHistoryCard({
         data-running="false"
         data-restorable={String(session.isRestorable)}
         data-visible="false"
+        onAuxClick={(event) => {
+          if (event.button !== 1) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          onDelete();
+        }}
         onClick={() => {
           if (!session.isRestorable) {
             return;
@@ -55,6 +64,13 @@ export function SessionHistoryCard({
 
           event.preventDefault();
           onRestore();
+        }}
+        onMouseDown={(event) => {
+          if (event.button !== 1) {
+            return;
+          }
+
+          event.preventDefault();
         }}
         role={session.isRestorable ? "button" : undefined}
         tabIndex={session.isRestorable ? 0 : -1}

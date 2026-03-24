@@ -24,6 +24,8 @@ type CommandsPanelProps = {
   commands: SidebarCommandButton[];
   createRequestId: number;
   isVsMuxDisabled: boolean;
+  isScratchPadOpen: boolean;
+  onToggleScratchPad: () => void;
   vscode: WebviewApi;
 };
 
@@ -78,6 +80,8 @@ export function CommandsPanel({
   commands,
   createRequestId,
   isVsMuxDisabled,
+  isScratchPadOpen,
+  onToggleScratchPad,
   vscode,
 }: CommandsPanelProps) {
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
@@ -239,7 +243,36 @@ export function CommandsPanel({
         <div className="section-titlebar" data-empty-space-blocking="true">
           <div aria-hidden="true" className="section-titlebar-line" />
           <span className="section-titlebar-label">Actions</span>
-          <div aria-hidden="true" className="section-titlebar-line" />
+          <div className="section-titlebar-actions">
+            <div aria-hidden="true" className="section-titlebar-line" />
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                render={
+                  <button
+                    aria-expanded={isScratchPadOpen}
+                    aria-haspopup="dialog"
+                    aria-label="Show scratch pad"
+                    className="floating-toolbar-button section-titlebar-action-button"
+                    data-empty-space-blocking="true"
+                    data-selected={String(isScratchPadOpen)}
+                    onClick={onToggleScratchPad}
+                    type="button"
+                  >
+                    <IconPencil
+                      aria-hidden="true"
+                      className="toolbar-tabler-icon"
+                      stroke={1.8}
+                    />
+                  </button>
+                }
+              />
+              <Tooltip.Portal>
+                <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
+                  <Tooltip.Popup className="tooltip-popup">Scratch Pad</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </div>
         </div>
         <div className="card commands-panel">
           <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>

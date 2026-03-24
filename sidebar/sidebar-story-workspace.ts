@@ -1,6 +1,8 @@
 import {
   createSidebarHudState,
   createSidebarSessionItems,
+  getSessionGridLayoutVisibleCount,
+  isSessionGridFocusModeActive,
   type GroupedSessionWorkspaceSnapshot,
   type SessionGroupRecord,
   type SessionRecord,
@@ -31,6 +33,7 @@ type SidebarStoryWorkspaceOptions = {
   completionSound: SidebarHydrateMessage["hud"]["completionSound"];
   debuggingMode: boolean;
   isVsMuxDisabled: boolean;
+  scratchPadContent: string;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
   theme: SidebarHydrateMessage["hud"]["theme"];
@@ -56,6 +59,7 @@ export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): Sid
       completionSound: message.hud.completionSound,
       debuggingMode: message.hud.debuggingMode,
       isVsMuxDisabled: message.hud.isVsMuxDisabled,
+      scratchPadContent: message.scratchPadContent,
       showCloseButtonOnSessionCards: message.hud.showCloseButtonOnSessionCards,
       showHotkeysOnSessionCards: message.hud.showHotkeysOnSessionCards,
       theme: message.hud.theme,
@@ -106,9 +110,8 @@ export function createSidebarStoryMessage(
     return {
       groupId: group.groupId,
       isActive: workspace.snapshot.activeGroupId === group.groupId,
-      isFocusModeActive:
-        group.snapshot.visibleCount === 1 &&
-        group.snapshot.fullscreenRestoreVisibleCount !== undefined,
+      isFocusModeActive: isSessionGridFocusModeActive(group.snapshot),
+      layoutVisibleCount: getSessionGridLayoutVisibleCount(group.snapshot),
       sessions: items,
       title: group.title,
       viewMode: group.snapshot.viewMode,
@@ -130,6 +133,7 @@ export function createSidebarStoryMessage(
       workspace.options.commands,
       workspace.options.isVsMuxDisabled,
     ),
+    scratchPadContent: workspace.options.scratchPadContent,
     type,
   };
 }
@@ -197,6 +201,15 @@ export function reduceSidebarStoryWorkspace(
         options: {
           ...workspace.options,
           isVsMuxDisabled: !workspace.options.isVsMuxDisabled,
+        },
+      };
+
+    case "saveScratchPad":
+      return {
+        ...workspace,
+        options: {
+          ...workspace.options,
+          scratchPadContent: message.content,
         },
       };
 
@@ -324,7 +337,7 @@ function createSessionGroupRecord(
       focusedSessionId: group.sessions.find((session) => session.isFocused)?.sessionId,
       fullscreenRestoreVisibleCount:
         group.isFocusModeActive && group.visibleCount === 1
-          ? message.hud.highlightedVisibleCount
+          ? group.layoutVisibleCount
           : undefined,
       sessions: group.sessions.map((session) => createSessionRecord(session)),
       viewMode: group.viewMode,

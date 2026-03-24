@@ -594,7 +594,13 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
 }
 
 .session-groups-panel[data-dimmed="true"] {
-  opacity: 0.7;
+  filter: saturate(0.7);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.session-groups-panel[data-dimmed="true"] .section-titlebar-label {
+  color: color-mix(in srgb, var(--app-foreground) 44%, transparent);
 }
 
 .section-titlebar {
@@ -1034,6 +1040,52 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
   width: min(280px, calc(100vw - 24px));
 }
 
+.previous-sessions-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.previous-sessions-search-input {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.previous-sessions-clear-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 12px;
+  color: color-mix(in srgb, var(--app-muted) 54%, var(--app-foreground) 46%);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: 0.05em;
+  min-height: 32px;
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+.previous-sessions-clear-button:hover,
+.previous-sessions-clear-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 12%, var(--app-card-active) 88%);
+  border-color: color-mix(in srgb, var(--app-button-background) 54%, var(--app-border));
+  color: color-mix(in srgb, var(--app-button-background) 80%, var(--app-foreground) 20%);
+  outline: none;
+}
+
+.previous-sessions-clear-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .previous-sessions-modal-body {
   display: grid;
   gap: 14px;
@@ -1057,6 +1109,88 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="t3"] {
 
 .previous-sessions-empty-state {
   min-height: 96px;
+}
+
+.scratch-pad-modal {
+  gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(90vh, calc(100vh - 24px));
+  left: 50%;
+  max-height: min(90vh, calc(100vh - 24px));
+  max-width: min(420px, calc(100vw - 24px));
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 24px));
+}
+
+.scratch-pad-modal-header {
+  padding-right: 28px;
+}
+
+.scratch-pad-close-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--app-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+  width: 22px;
+}
+
+.scratch-pad-close-button:hover,
+.scratch-pad-close-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 10%, transparent);
+  color: var(--app-foreground);
+  outline: none;
+}
+
+.scratch-pad-modal-body {
+  display: grid;
+  min-height: 0;
+}
+
+.scratch-pad-textarea {
+  background: color-mix(in srgb, var(--app-card-active) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-button-background) 32%, var(--app-border));
+  border-radius: 14px;
+  height: 100%;
+  color: inherit;
+  font-family: var(
+    --vscode-editor-font-family,
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
+  font-size: var(--vscode-editor-font-size, 12px);
+  line-height: 1.55;
+  min-height: 0;
+  outline: none;
+  padding: 12px 13px;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+  width: 100%;
+}
+
+.scratch-pad-textarea:focus {
+  border-color: color-mix(in srgb, var(--app-button-background) 68%, var(--app-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-button-background) 22%, transparent);
+}
+
+.scratch-pad-textarea::placeholder {
+  color: color-mix(in srgb, var(--app-muted) 88%, transparent);
 }
 
 .command-config-fields {

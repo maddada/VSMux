@@ -1,13 +1,9 @@
 import { createPortal } from "react-dom";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SidebarPreviousSessionItem } from "../shared/session-grid-contract";
+import { filterPreviousSessions, groupPreviousSessionsByDay } from "./previous-session-search";
 import { SessionHistoryCard } from "./session-history-card";
 import type { WebviewApi } from "./webview-api";
-
-type PreviousSessionsModalDayGroup = {
-  dayLabel: string;
-  sessions: SidebarPreviousSessionItem[];
-};
 
 export type PreviousSessionsModalProps = {
   isOpen: boolean;
@@ -26,8 +22,17 @@ export function PreviousSessionsModal({
   showHotkeys,
   vscode,
 }: PreviousSessionsModalProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredSessions = useMemo(
+    () => filterPreviousSessions(previousSessions, searchQuery),
+    [previousSessions, searchQuery],
+  );
   const groupedSessions = useMemo(
-    () => groupPreviousSessionsByDay(previousSessions),
+    () => groupPreviousSessionsByDay(filteredSessions),
+    [filteredSessions],
+  );
+  const generatedNameCount = useMemo(
+    () => previousSessions.filter((session) => session.isGeneratedName).length,
     [previousSessions],
   );
 
@@ -47,6 +52,12 @@ export function PreviousSessionsModal({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("");
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -69,6 +80,34 @@ export function PreviousSessionsModal({
           <div className="confirm-modal-description" id="previous-sessions-modal-description">
             Sessions you previously ran in this workspace.
           </div>
+        </div>
+        <div className="previous-sessions-toolbar">
+          <input
+            aria-label="Search previous sessions"
+            className="group-title-input previous-sessions-search-input"
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+            }}
+            placeholder="Search previous sessions"
+            type="text"
+            value={searchQuery}
+          />
+          <button
+            className="previous-sessions-clear-button"
+            disabled={generatedNameCount === 0}
+            onClick={() => {
+              if (generatedNameCount === 0) {
+                return;
+              }
+
+              vscode.postMessage({
+                type: "clearGeneratedPreviousSessions",
+              });
+            }}
+            type="button"
+          >
+            Clear Auto Names{generatedNameCount > 0 ? ` (${generatedNameCount})` : ""}
+          </button>
         </div>
         <div className="previous-sessions-modal-body">
           {groupedSessions.length > 0 ? (
@@ -102,7 +141,9 @@ export function PreviousSessionsModal({
             ))
           ) : (
             <div className="group-empty-state previous-sessions-empty-state">
-              No previous sessions yet.
+              {searchQuery.trim()
+                ? "No previous sessions match that search."
+                : "No previous sessions yet."}
             </div>
           )}
         </div>
@@ -110,33 +151,4 @@ export function PreviousSessionsModal({
     </div>,
     document.body,
   );
-}
-
-function groupPreviousSessionsByDay(
-  previousSessions: readonly SidebarPreviousSessionItem[],
-): PreviousSessionsModalDayGroup[] {
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "long",
-    weekday: "long",
-    year: "numeric",
-  });
-  const sessionsByDay = new Map<string, SidebarPreviousSessionItem[]>();
-
-  for (const session of previousSessions) {
-    const date = new Date(session.closedAt);
-    const key = Number.isNaN(date.getTime()) ? "Unknown day" : formatter.format(date);
-    const grouped = sessionsByDay.get(key);
-    if (grouped) {
-      grouped.push(session);
-      continue;
-    }
-
-    sessionsByDay.set(key, [session]);
-  }
-
-  return [...sessionsByDay.entries()].map(([dayLabel, sessions]) => ({
-    dayLabel,
-    sessions,
-  }));
 }

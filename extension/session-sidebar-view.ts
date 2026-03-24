@@ -210,6 +210,12 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
     case "deletePreviousSession":
       return typeof message.historyId === "string" && message.historyId.length > 0;
 
+    case "clearGeneratedPreviousSessions":
+      return true;
+
+    case "saveScratchPad":
+      return typeof message.content === "string";
+
     case "renameSession":
       return (
         typeof message.sessionId === "string" &&

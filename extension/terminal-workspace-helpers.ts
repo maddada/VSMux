@@ -16,12 +16,8 @@ import type {
   TerminalSessionSnapshot,
   TerminalSessionStatus,
 } from "../shared/terminal-host-protocol";
-
-export type PersistedSessionState = {
-  agentName?: string;
-  agentStatus: TerminalAgentStatus;
-  title?: string;
-};
+export type { PersistedSessionState } from "./session-state-file";
+export { parsePersistedSessionState, serializePersistedSessionState } from "./session-state-file";
 
 export const DEFAULT_TERMINAL_COLS = 120;
 export const DEFAULT_TERMINAL_ROWS = 34;
@@ -173,41 +169,6 @@ export function getSessionActivityLabel(
     default:
       return undefined;
   }
-}
-
-export function parsePersistedSessionState(rawState: string): PersistedSessionState {
-  let agentName: string | undefined;
-  let agentStatus: TerminalAgentStatus = "idle";
-  let title: string | undefined;
-
-  for (const line of rawState.split(/\r?\n/)) {
-    const [key, ...valueParts] = line.split("=");
-    const value = valueParts.join("=").trim();
-    if (key === "agent") {
-      agentName = value || undefined;
-    }
-    if (key === "title") {
-      title = value || undefined;
-    }
-    if (key === "status" && (value === "idle" || value === "working" || value === "attention")) {
-      agentStatus = value;
-    }
-  }
-
-  return {
-    agentName,
-    agentStatus,
-    title,
-  };
-}
-
-export function serializePersistedSessionState(state: PersistedSessionState): string {
-  return [
-    `status=${state.agentStatus}`,
-    `agent=${normalizePersistedSessionValue(state.agentName) ?? ""}`,
-    `title=${normalizePersistedSessionValue(state.title) ?? ""}`,
-    "",
-  ].join("\n");
 }
 
 export function extractLatestTerminalTitleFromVtHistory(history: string): string | undefined {

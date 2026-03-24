@@ -37,6 +37,7 @@ import { AgentsPanel } from "./agents-panel";
 import { CommandsPanel } from "./commands-panel";
 import { CreateGroupDropTarget } from "./create-group-drop-target";
 import { PreviousSessionsModal } from "./previous-sessions-modal";
+import { ScratchPadModal } from "./scratch-pad-modal";
 import { getSidebarDropData } from "./sidebar-dnd";
 import { SessionGroupSection } from "./session-group-section";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
@@ -50,6 +51,7 @@ type SidebarState = {
   groups: SidebarSessionGroup[];
   hud: SidebarHudState;
   previousSessions: SidebarPreviousSessionItem[];
+  scratchPadContent: string;
 };
 
 type SessionIdsByGroup = Record<string, string[]>;
@@ -75,6 +77,7 @@ const INITIAL_STATE: SidebarState = {
     visibleSlotLabels: [],
   },
   previousSessions: [],
+  scratchPadContent: "",
 };
 
 const SIDEBAR_EMPTY_SPACE_BLOCKER_SELECTOR = [
@@ -119,8 +122,10 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
   const [commandCreateRequestId, setCommandCreateRequestId] = useState(0);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const [isPreviousSessionsOpen, setIsPreviousSessionsOpen] = useState(false);
+  const [isScratchPadOpen, setIsScratchPadOpen] = useState(false);
   const pendingCreateGroupRef = useRef(false);
   const floatingControlsRef = useRef<HTMLDivElement>(null);
+  const sessionGroupsPanelRef = useRef<HTMLElement>(null);
   const draggedSessionIdRef = useRef<string>();
   const groupIdsRef = useRef<string[]>([]);
   const sessionIdsByGroupRef = useRef<SessionIdsByGroup>({});
@@ -142,6 +147,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
           groups: message.groups,
           hud: message.hud,
           previousSessions: message.previousSessions ?? [],
+          scratchPadContent: message.scratchPadContent ?? "",
         };
       });
       setGroupIds(message.groups.map((group) => group.groupId));
@@ -234,6 +240,14 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       delete document.body.dataset.sidebarTheme;
     };
   }, [serverState.hud.theme]);
+
+  useEffect(() => {
+    if (!sessionGroupsPanelRef.current) {
+      return;
+    }
+
+    sessionGroupsPanelRef.current.inert = serverState.hud.isVsMuxDisabled;
+  }, [serverState.hud.isVsMuxDisabled]);
 
   useEffect(() => {
     if (!isOverflowMenuOpen) {
@@ -559,10 +573,17 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
           commands={serverState.hud.commands}
           createRequestId={commandCreateRequestId}
           isVsMuxDisabled={serverState.hud.isVsMuxDisabled}
+          isScratchPadOpen={isScratchPadOpen}
+          onToggleScratchPad={() => {
+            setIsPreviousSessionsOpen(false);
+            setIsScratchPadOpen((previous) => !previous);
+          }}
           vscode={vscode}
         />
         <section
           className="session-groups-panel"
+          ref={sessionGroupsPanelRef}
+          aria-disabled={serverState.hud.isVsMuxDisabled}
           data-dimmed={String(serverState.hud.isVsMuxDisabled)}
         >
           <div className="section-titlebar" data-empty-space-blocking="true">
@@ -576,7 +597,10 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                 ariaLabel="Show previous sessions"
                 className="floating-toolbar-button section-titlebar-action-button"
                 isSelected={isPreviousSessionsOpen}
-                onClick={() => setIsPreviousSessionsOpen((previous) => !previous)}
+                onClick={() => {
+                  setIsScratchPadOpen(false);
+                  setIsPreviousSessionsOpen((previous) => !previous);
+                }}
                 tooltip="Previous Sessions"
               >
                 <IconHistory aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
@@ -623,6 +647,17 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
           showDebugSessionNumbers={serverState.hud.debuggingMode}
           showHotkeys={serverState.hud.showHotkeysOnSessionCards}
           vscode={vscode}
+        />
+        <ScratchPadModal
+          content={serverState.scratchPadContent}
+          isOpen={isScratchPadOpen}
+          onClose={() => setIsScratchPadOpen(false)}
+          onSave={(content) => {
+            vscode.postMessage({
+              content,
+              type: "saveScratchPad",
+            });
+          }}
         />
       </div>
     </Tooltip.Provider>

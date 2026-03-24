@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import * as vscode from "vscode";
+import {
+  getT3SessionSurfaceTitle,
+  getTerminalSessionSurfaceTitle,
+} from "../shared/session-grid-contract";
 
 const testState = vi.hoisted(() => ({
   backend: undefined as
@@ -15,6 +19,7 @@ const testState = vi.hoisted(() => ({
         hasLiveTerminal: ReturnType<typeof vi.fn>;
         initialize: ReturnType<typeof vi.fn>;
         killSession: ReturnType<typeof vi.fn>;
+        moveManagedTerminalsToPanel: ReturnType<typeof vi.fn>;
         onDidActivateSession: ReturnType<typeof vi.fn>;
         onDidChangeDebugState: ReturnType<typeof vi.fn>;
         onDidChangeSessionTitle: ReturnType<typeof vi.fn>;
@@ -22,6 +27,7 @@ const testState = vi.hoisted(() => ({
         reconcileVisibleTerminals: ReturnType<typeof vi.fn>;
         renameSession: ReturnType<typeof vi.fn>;
         restartSession: ReturnType<typeof vi.fn>;
+        syncSessions: ReturnType<typeof vi.fn>;
         syncConfiguration: ReturnType<typeof vi.fn>;
         writeText: ReturnType<typeof vi.fn>;
       }
@@ -211,6 +217,7 @@ vi.mock("./native-terminal-workspace-backend", () => ({
     public readonly hasLiveTerminal = vi.fn(() => true);
     public readonly initialize = vi.fn(async () => undefined);
     public readonly killSession = vi.fn(async () => undefined);
+    public readonly moveManagedTerminalsToPanel = vi.fn(async () => undefined);
     public readonly onDidActivateSession = vi.fn(() => ({ dispose: vi.fn() }));
     public readonly onDidChangeDebugState = vi.fn(() => ({ dispose: vi.fn() }));
     public readonly onDidChangeSessionTitle = vi.fn(() => ({ dispose: vi.fn() }));
@@ -225,6 +232,7 @@ vi.mock("./native-terminal-workspace-backend", () => ({
       status: "running",
       workspaceId: "workspace-1",
     }));
+    public readonly syncSessions = vi.fn();
     public readonly syncConfiguration = vi.fn(async () => undefined);
     public readonly writeText = vi.fn(async () => undefined);
 
@@ -459,29 +467,33 @@ describe("NativeTerminalWorkspaceController", () => {
     });
     await (controller as any).store.setVisibleCount(2);
     await (controller as any).store.focusSession(secondTerminal!.sessionId);
+    await (controller as any).store.applyObservedActiveGroupState(secondTerminal!.sessionId, [
+      visibleT3Session!.sessionId,
+      secondTerminal!.sessionId,
+    ]);
 
     (vscode.window.tabGroups.all as any) = [
       {
-        activeTab: { label: `[${visibleT3Session!.displayId}] T3: ${visibleT3Session!.alias}` },
+        activeTab: { label: getT3SessionSurfaceTitle(visibleT3Session!) },
         isActive: false,
         tabs: [
           {
             isActive: false,
-            label: `[${hiddenT3Session!.displayId}] T3: ${hiddenT3Session!.alias}`,
+            label: getT3SessionSurfaceTitle(hiddenT3Session!),
           },
           {
             isActive: true,
-            label: `[${visibleT3Session!.displayId}] T3: ${visibleT3Session!.alias}`,
+            label: getT3SessionSurfaceTitle(visibleT3Session!),
           },
         ],
         viewColumn: 1,
       },
       {
-        activeTab: { label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
+        activeTab: { label: getTerminalSessionSurfaceTitle(secondTerminal!) },
         isActive: true,
         tabs: [
-          { isActive: false, label: `[${firstTerminal!.displayId}] ${firstTerminal!.alias}` },
-          { isActive: true, label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
+          { isActive: false, label: getTerminalSessionSurfaceTitle(firstTerminal!) },
+          { isActive: true, label: getTerminalSessionSurfaceTitle(secondTerminal!) },
         ],
         viewColumn: 2,
       },
@@ -539,30 +551,32 @@ describe("NativeTerminalWorkspaceController", () => {
     });
     await (controller as any).store.setVisibleCount(2);
     await (controller as any).store.focusSession(secondTerminal!.sessionId);
+    await (controller as any).store.applyObservedActiveGroupState(secondTerminal!.sessionId, [
+      visibleT3Session!.sessionId,
+      secondTerminal!.sessionId,
+    ]);
 
     (vscode.window.tabGroups.all as any) = [
       {
-        activeTab: { label: `[${visibleT3Session!.displayId}] T3: ${visibleT3Session!.alias}` },
+        activeTab: { label: getT3SessionSurfaceTitle(visibleT3Session!) },
         isActive: false,
         tabs: [
-          { isActive: false, label: `[${firstTerminal!.displayId}] ${firstTerminal!.alias}` },
+          { isActive: false, label: getTerminalSessionSurfaceTitle(firstTerminal!) },
           {
             isActive: false,
-            label: `[${hiddenT3Session!.displayId}] T3: ${hiddenT3Session!.alias}`,
+            label: getT3SessionSurfaceTitle(hiddenT3Session!),
           },
           {
             isActive: true,
-            label: `[${visibleT3Session!.displayId}] T3: ${visibleT3Session!.alias}`,
+            label: getT3SessionSurfaceTitle(visibleT3Session!),
           },
         ],
         viewColumn: 1,
       },
       {
-        activeTab: { label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
+        activeTab: { label: getTerminalSessionSurfaceTitle(secondTerminal!) },
         isActive: true,
-        tabs: [
-          { isActive: true, label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
-        ],
+        tabs: [{ isActive: true, label: getTerminalSessionSurfaceTitle(secondTerminal!) }],
         viewColumn: 2,
       },
     ];
@@ -587,6 +601,58 @@ describe("NativeTerminalWorkspaceController", () => {
     );
   });
 
+  test("should replace the focused visible slot when a hidden terminal exists in the non-focused visible group", async () => {
+    const controller = createController();
+    const firstTerminal = await (controller as any).store.createSession({
+      alias: "Publish to Store",
+    });
+    const secondTerminal = await (controller as any).store.createSession({
+      alias: "Fix indicators",
+    });
+    const thirdTerminal = await (controller as any).store.createSession({
+      alias: "Fixing layout issues",
+    });
+    await (controller as any).store.setVisibleCount(2);
+    await (controller as any).store.focusSession(thirdTerminal!.sessionId);
+    await (controller as any).store.applyObservedActiveGroupState(thirdTerminal!.sessionId, [
+      secondTerminal!.sessionId,
+      thirdTerminal!.sessionId,
+    ]);
+
+    (vscode.window.tabGroups.all as any) = [
+      {
+        activeTab: { label: getTerminalSessionSurfaceTitle(secondTerminal!) },
+        isActive: false,
+        tabs: [
+          { isActive: false, label: getTerminalSessionSurfaceTitle(firstTerminal!) },
+          { isActive: true, label: getTerminalSessionSurfaceTitle(secondTerminal!) },
+        ],
+        viewColumn: 1,
+      },
+      {
+        activeTab: { label: getTerminalSessionSurfaceTitle(thirdTerminal!) },
+        isActive: true,
+        tabs: [{ isActive: true, label: getTerminalSessionSurfaceTitle(thirdTerminal!) }],
+        viewColumn: 2,
+      },
+    ];
+    (vscode.window.tabGroups.activeTabGroup as any) = (vscode.window.tabGroups.all as any)[1];
+
+    await controller.initialize();
+    testState.backend?.reconcileVisibleTerminals.mockClear();
+
+    await controller.focusSession(firstTerminal!.sessionId);
+
+    expect((controller as any).store.getActiveGroup()?.snapshot.visibleSessionIds).toEqual([
+      secondTerminal!.sessionId,
+      firstTerminal!.sessionId,
+    ]);
+    expect((controller as any).store.getActiveGroup()?.snapshot.focusedSessionId).toBe(
+      firstTerminal!.sessionId,
+    );
+    expect(testState.backend?.reconcileVisibleTerminals).toHaveBeenCalled();
+  });
+
   test("should no-op when focusing the already active session", async () => {
     const controller = createController();
     const session = await (controller as any).store.createSession();
@@ -601,6 +667,68 @@ describe("NativeTerminalWorkspaceController", () => {
     expect(testState.backend?.reconcileVisibleTerminals).not.toHaveBeenCalled();
     expect(testState.backend?.focusSession).not.toHaveBeenCalled();
     expect(testState.t3WebviewManager?.focusComposer).not.toHaveBeenCalled();
+  });
+
+  test("should reject non-focused terminal activation events while projection reconcile is in flight", async () => {
+    const controller = createController();
+    const firstSession = await (controller as any).store.createSession({
+      alias: "Fixing layout issues",
+    });
+    const secondSession = await (controller as any).store.createSession({
+      alias: "Publish to Store",
+    });
+    await (controller as any).store.setVisibleCount(2);
+    await (controller as any).store.focusSession(firstSession!.sessionId);
+
+    await controller.initialize();
+
+    (controller as any).projectedReconcileDepth = 1;
+    (controller as any).projectedReconcileFocusedSessionId = firstSession!.sessionId;
+
+    await (controller as any).handleProjectedTerminalActivated(secondSession!.sessionId);
+
+    expect((controller as any).store.getActiveGroup()?.snapshot.focusedSessionId).toBe(
+      firstSession!.sessionId,
+    );
+  });
+
+  test("should suspend T3 tabs and move managed terminals to the panel in code mode, then restore on exit", async () => {
+    const controller = createController();
+    await (controller as any).store.createSession({
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/workspace",
+      },
+      title: "T3 Code",
+    });
+    await (controller as any).store.createSession();
+
+    await controller.initialize();
+    testState.backend?.moveManagedTerminalsToPanel.mockClear();
+    testState.t3WebviewManager?.disposeAllSessions.mockClear();
+    testState.backend?.reconcileVisibleTerminals.mockClear();
+    testState.executeCommand.mockClear();
+
+    await (controller as any).toggleVsMuxDisabled();
+
+    expect(testState.backend?.moveManagedTerminalsToPanel).toHaveBeenCalledTimes(1);
+    expect(testState.t3WebviewManager?.disposeAllSessions).toHaveBeenCalledTimes(1);
+    expect(testState.executeCommand).toHaveBeenCalledWith("workbench.action.joinAllGroups");
+    expect((controller as any).isVsMuxDisabled()).toBe(true);
+
+    testState.backend?.moveManagedTerminalsToPanel.mockClear();
+    testState.t3WebviewManager?.disposeAllSessions.mockClear();
+    testState.backend?.reconcileVisibleTerminals.mockClear();
+
+    await (controller as any).toggleVsMuxDisabled();
+
+    expect(testState.backend?.moveManagedTerminalsToPanel).not.toHaveBeenCalled();
+    expect(testState.t3WebviewManager?.disposeAllSessions).not.toHaveBeenCalled();
+    expect(testState.backend?.reconcileVisibleTerminals).toHaveBeenCalled();
+    expect((controller as any).isVsMuxDisabled()).toBe(false);
   });
 
   test("should create and attach a new terminal session", async () => {
@@ -651,6 +779,19 @@ describe("NativeTerminalWorkspaceController", () => {
     );
   });
 
+  test("should persist scratch pad content in sidebar messages", async () => {
+    const controller = createController();
+
+    await (controller as any).handleSidebarMessage({
+      content: "ship small modal\ncapture ideas here",
+      type: "saveScratchPad",
+    });
+
+    const message = (controller as any).createSidebarMessage("sessionState");
+
+    expect(message.scratchPadContent).toBe("ship small modal\ncapture ideas here");
+  });
+
   test("should render sidebar visibility and focus from observed foreground tabs", async () => {
     const controller = createController();
     const t3Session = await (controller as any).store.createSession({
@@ -669,17 +810,15 @@ describe("NativeTerminalWorkspaceController", () => {
 
     (vscode.window.tabGroups.all as any) = [
       {
-        activeTab: { label: `[${t3Session!.displayId}] T3: ${t3Session!.alias}` },
+        activeTab: { label: getT3SessionSurfaceTitle(t3Session!) },
         isActive: false,
-        tabs: [{ isActive: true, label: `[${t3Session!.displayId}] T3: ${t3Session!.alias}` }],
+        tabs: [{ isActive: true, label: getT3SessionSurfaceTitle(t3Session!) }],
         viewColumn: 1,
       },
       {
-        activeTab: { label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
+        activeTab: { label: getTerminalSessionSurfaceTitle(secondTerminal!) },
         isActive: true,
-        tabs: [
-          { isActive: true, label: `[${secondTerminal!.displayId}] ${secondTerminal!.alias}` },
-        ],
+        tabs: [{ isActive: true, label: getTerminalSessionSurfaceTitle(secondTerminal!) }],
         viewColumn: 2,
       },
     ];

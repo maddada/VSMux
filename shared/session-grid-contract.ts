@@ -17,7 +17,7 @@ import {
 export const GRID_COLUMN_COUNT = 3;
 export const MAX_SESSION_COUNT = GRID_COLUMN_COUNT * GRID_COLUMN_COUNT;
 export const MAX_GROUP_COUNT = 4;
-export const MAX_SESSION_DISPLAY_ID_COUNT = 1_000;
+export const MAX_SESSION_DISPLAY_ID_COUNT = 100;
 export const DEFAULT_MAIN_GROUP_ID = "group-1";
 export const DEFAULT_MAIN_GROUP_TITLE = "Main";
 
@@ -161,6 +161,7 @@ export type SidebarSessionItem = {
 export type SidebarPreviousSessionItem = SidebarSessionItem & {
   closedAt: string;
   historyId: string;
+  isGeneratedName: boolean;
   isRestorable: boolean;
 };
 
@@ -168,6 +169,7 @@ export type SidebarSessionGroup = {
   groupId: string;
   isActive: boolean;
   isFocusModeActive: boolean;
+  layoutVisibleCount: VisibleSessionCount;
   sessions: SidebarSessionItem[];
   title: string;
   viewMode: TerminalViewMode;
@@ -196,6 +198,7 @@ export type SidebarHudState = {
 export type SidebarHydrateMessage = {
   groups: SidebarSessionGroup[];
   previousSessions: SidebarPreviousSessionItem[];
+  scratchPadContent: string;
   type: "hydrate";
   hud: SidebarHudState;
 };
@@ -203,6 +206,7 @@ export type SidebarHydrateMessage = {
 export type SidebarSessionStateMessage = {
   groups: SidebarSessionGroup[];
   previousSessions: SidebarPreviousSessionItem[];
+  scratchPadContent: string;
   type: "sessionState";
   hud: SidebarHudState;
 };
@@ -292,6 +296,13 @@ export type SidebarToExtensionMessage =
   | {
       historyId: string;
       type: "deletePreviousSession";
+    }
+  | {
+      type: "clearGeneratedPreviousSessions";
+    }
+  | {
+      content: string;
+      type: "saveScratchPad";
     }
   | {
       type: "moveSessionToGroup";
@@ -450,6 +461,18 @@ export function createDefaultSessionGridSnapshot(): SessionGridSnapshot {
   };
 }
 
+export function isSessionGridFocusModeActive(
+  snapshot: Pick<SessionGridSnapshot, "fullscreenRestoreVisibleCount" | "visibleCount">,
+): boolean {
+  return snapshot.visibleCount === 1 && snapshot.fullscreenRestoreVisibleCount !== undefined;
+}
+
+export function getSessionGridLayoutVisibleCount(
+  snapshot: Pick<SessionGridSnapshot, "fullscreenRestoreVisibleCount" | "visibleCount">,
+): VisibleSessionCount {
+  return snapshot.fullscreenRestoreVisibleCount ?? snapshot.visibleCount;
+}
+
 export function createDefaultGroupedSessionWorkspaceSnapshot(): GroupedSessionWorkspaceSnapshot {
   return {
     activeGroupId: DEFAULT_MAIN_GROUP_ID,
@@ -469,7 +492,7 @@ export function createDefaultGroupedSessionWorkspaceSnapshot(): GroupedSessionWo
 export function formatSessionDisplayId(displayId: number | string): string {
   if (typeof displayId === "string") {
     const trimmedDisplayId = displayId.trim();
-    if (/^\d{3}$/.test(trimmedDisplayId)) {
+    if (/^\d{2}$/.test(trimmedDisplayId)) {
       return trimmedDisplayId;
     }
 
@@ -480,14 +503,14 @@ export function formatSessionDisplayId(displayId: number | string): string {
   }
 
   if (!Number.isFinite(Number(displayId))) {
-    return "000";
+    return "00";
   }
 
   const normalizedDisplayId =
     ((Math.floor(Number(displayId)) % MAX_SESSION_DISPLAY_ID_COUNT) +
       MAX_SESSION_DISPLAY_ID_COUNT) %
     MAX_SESSION_DISPLAY_ID_COUNT;
-  return String(normalizedDisplayId).padStart(3, "0");
+  return String(normalizedDisplayId).padStart(2, "0");
 }
 
 export function getSlotPosition(slotIndex: number): Pick<SessionRecord, "column" | "row"> {
@@ -526,6 +549,15 @@ export function createSessionAlias(sessionNumber: number, slotIndex: number): st
   ];
 
   return words[(sessionNumber * 11 + slotIndex * 3) % words.length] ?? words[0]!;
+}
+
+export function isGeneratedSessionAlias(
+  session: Pick<BaseSessionRecord, "alias" | "sessionId" | "slotIndex">,
+): boolean {
+  return (
+    session.alias.trim() ===
+    createSessionAlias(parseSessionNumber(session.sessionId), session.slotIndex)
+  );
 }
 
 export function createSessionRecord(
@@ -582,13 +614,23 @@ export function createSessionRecord(
 export function getTerminalSessionSurfaceTitle(
   session: Pick<BaseSessionRecord, "alias" | "displayId">,
 ): string {
-  return `[${formatSessionDisplayId(session.displayId)}] ${session.alias}`;
+  return `${formatSessionDisplayId(session.displayId)}_ ${session.alias}`;
+}
+
+function parseSessionNumber(sessionId: string): number {
+  const sessionIdMatch = /^session-(\d+)$/.exec(sessionId);
+  if (!sessionIdMatch) {
+    return 1;
+  }
+
+  const parsedNumber = Number.parseInt(sessionIdMatch[1], 10);
+  return Number.isInteger(parsedNumber) && parsedNumber > 0 ? parsedNumber : 1;
 }
 
 export function getT3SessionSurfaceTitle(
   session: Pick<BaseSessionRecord, "alias" | "displayId">,
 ): string {
-  return `[${formatSessionDisplayId(session.displayId)}] T3: ${session.alias}`;
+  return `${formatSessionDisplayId(session.displayId)}_ T3: ${session.alias}`;
 }
 
 export function getVisiblePrimaryTitle(title: string): string | undefined {
@@ -641,10 +683,9 @@ export function createSidebarHudState(
     completionSoundLabel: getCompletionSoundLabel(completionSound),
     debuggingMode,
     focusedSessionTitle: focusedSession?.title,
-    isFocusModeActive:
-      snapshot.visibleCount === 1 && snapshot.fullscreenRestoreVisibleCount !== undefined,
+    isFocusModeActive: isSessionGridFocusModeActive(snapshot),
     isVsMuxDisabled,
-    highlightedVisibleCount: snapshot.fullscreenRestoreVisibleCount ?? snapshot.visibleCount,
+    highlightedVisibleCount: getSessionGridLayoutVisibleCount(snapshot),
     showCloseButtonOnSessionCards,
     showHotkeysOnSessionCards,
     theme,

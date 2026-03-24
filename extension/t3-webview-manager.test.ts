@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import type { T3SessionRecord } from "../shared/session-grid-contract";
+import { getT3SessionSurfaceTitle, type T3SessionRecord } from "../shared/session-grid-contract";
 import { T3WebviewManager } from "./t3-webview-manager";
 
 const testState = vi.hoisted(() => {
@@ -189,13 +189,13 @@ describe("T3WebviewManager", () => {
     const visibleSession = createT3Session("session-1", "001", "Visible");
     const hiddenSession = createT3Session("session-2", "002", "Hidden");
     const hiddenPanel = testState.createPanel(2);
-    hiddenPanel.title = "[002] T3: Hidden";
+    hiddenPanel.title = getT3SessionSurfaceTitle(hiddenSession);
     testState.tabGroupsAll = [
       {
         tabs: [
           {
             input: new testState.TabInputWebviewClass("VSmux.t3Session"),
-            label: "[002] T3: Hidden",
+            label: getT3SessionSurfaceTitle(hiddenSession),
           },
         ],
         viewColumn: 2,
@@ -239,7 +239,7 @@ describe("T3WebviewManager", () => {
     const visibleSession = createT3Session("session-1", "001", "Visible");
     const hiddenSession = createT3Session("session-2", "002", "Hidden");
     const hiddenPanel = testState.createPanel(1);
-    hiddenPanel.title = "[002] T3: Hidden";
+    hiddenPanel.title = getT3SessionSurfaceTitle(hiddenSession);
     (manager as any).panelsBySessionId.set(hiddenSession.sessionId, {
       panel: hiddenPanel,
       pendingComposerFocus: false,
