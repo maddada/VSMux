@@ -35,7 +35,7 @@
     "check": "vp check",
     "prepare": "vp config",
     "vsix:package": "node ./scripts/vsix.mjs package",
-    "vsix:install": "node ./scripts/vsix.mjs install",
+    "install": "node ./scripts/vsix.mjs install",
     "vsix:publish": "node ./scripts/publish-extension.mjs"
   },
   "dependencies": {
