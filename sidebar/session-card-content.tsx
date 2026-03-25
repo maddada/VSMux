@@ -53,7 +53,7 @@ export function SessionCardContent({
           aria-hidden="true"
           className="session-agent-tabler-watermark"
           data-agent-icon="browser"
-          size={18}
+          size={20}
           stroke={1.8}
         />
       ) : session.agentIcon ? (

@@ -1527,7 +1527,7 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="browser"] 
 
 .session-agent-tabler-watermark {
   position: absolute;
-  right: 10px;
+  right: 9px;
   top: 50%;
   color: var(--session-agent-watermark-color, var(--app-foreground));
   opacity: 0.7;
