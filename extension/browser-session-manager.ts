@@ -130,6 +130,10 @@ export class BrowserSessionManager implements vscode.Disposable {
     return this.resolveLiveTab(sessionId)?.group.viewColumn;
   }
 
+  public isSessionForegroundVisible(sessionId: string): boolean {
+    return this.resolveLiveTab(sessionId)?.isActive ?? false;
+  }
+
   public async revealSessionInGroup(
     sessionRecord: BrowserSessionRecord,
     targetGroupIndex: number,

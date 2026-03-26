@@ -515,6 +515,7 @@ export abstract class NativeTerminalWorkspaceControllerBaseInternals implements 
   }
 
   protected async applyDisabledVsMuxMode(): Promise<void> {
+    await this.backend.parkAllEditorTerminalsToPanel();
     this.t3Webviews.disposeAllSessions();
   }
 

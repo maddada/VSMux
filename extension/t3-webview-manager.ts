@@ -127,6 +127,10 @@ export class T3WebviewManager implements vscode.Disposable {
     return this.panelsBySessionId.get(sessionId)?.panel.viewColumn;
   }
 
+  public isSessionForegroundVisible(sessionId: string): boolean {
+    return this.panelsBySessionId.get(sessionId)?.panel.visible ?? false;
+  }
+
   public async revealSessionInGroup(
     sessionRecord: T3SessionRecord,
     targetGroupIndex: number,

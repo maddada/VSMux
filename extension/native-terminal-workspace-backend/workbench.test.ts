@@ -1,0 +1,180 @@
+import { beforeEach, describe, expect, test } from "vite-plus/test";
+import { vi } from "vitest";
+
+vi.mock("vscode", () => ({
+  TabInputTerminal: class MockTabInputTerminal {},
+  ViewColumn: {
+    Nine: 9,
+    One: 1,
+  },
+  window: {
+    activeTerminal: undefined,
+    tabGroups: {
+      activeTabGroup: undefined,
+      all: [],
+    },
+  },
+}));
+
+import * as vscode from "vscode";
+import {
+  getActivePanelTerminalTabLabel,
+  getActiveTerminalTabLocation,
+  getTerminalDisplayName,
+  resolveTerminalRestoreTarget,
+} from "./workbench";
+
+type MockTab = {
+  input: unknown;
+  isActive: boolean;
+  label: string;
+};
+
+type MockTabGroup = {
+  activeTab?: MockTab;
+  tabs: MockTab[];
+  viewColumn?: number;
+};
+
+type MockTerminal = {
+  creationOptions?: {
+    name?: string;
+  };
+  exitStatus?: {
+    code?: number;
+  };
+  name?: string;
+};
+
+describe("native terminal workbench helpers", () => {
+  beforeEach(() => {
+    getMockWindow().activeTerminal = undefined;
+    getMockWindow().tabGroups.activeTabGroup = undefined;
+    getMockWindow().tabGroups.all = [];
+  });
+
+  test("should read the selected terminal tab in the panel", () => {
+    const editorGroup = createTerminalGroup(1, [{ isActive: true, label: "editor" }]);
+    const panelGroup = createTerminalGroup(undefined, [{ isActive: true, label: "panel" }]);
+
+    getMockWindow().tabGroups.all = [editorGroup, panelGroup];
+
+    expect(getActivePanelTerminalTabLabel()).toBe("panel");
+  });
+
+  test("should classify an active terminal tab in the editor area", () => {
+    getMockWindow().tabGroups.activeTabGroup = createTerminalGroup(2, [
+      { isActive: true, label: "editor" },
+    ]);
+
+    expect(getActiveTerminalTabLocation()).toBe("editor");
+  });
+
+  test("should classify an active terminal tab in the panel", () => {
+    getMockWindow().tabGroups.activeTabGroup = createTerminalGroup(undefined, [
+      { isActive: true, label: "panel" },
+    ]);
+
+    expect(getActiveTerminalTabLocation()).toBe("panel");
+  });
+
+  test("should return other when the active tab is not a terminal", () => {
+    getMockWindow().tabGroups.activeTabGroup = {
+      activeTab: {
+        input: {},
+        isActive: true,
+        label: "notes",
+      },
+      tabs: [
+        {
+          input: {},
+          isActive: true,
+          label: "notes",
+        },
+      ],
+      viewColumn: 1,
+    };
+
+    expect(getActiveTerminalTabLocation()).toBe("other");
+  });
+
+  test("should prefer the exact saved terminal when restoring the panel selection", () => {
+    const activeTerminal = createTerminal("panel");
+    const otherTerminal = createTerminal("panel");
+
+    expect(resolveTerminalRestoreTarget([otherTerminal, activeTerminal], activeTerminal, "panel")).toBe(
+      activeTerminal,
+    );
+  });
+
+  test("should fall back to the matching panel tab label when the saved terminal changed", () => {
+    const replacementTerminal = createTerminal("panel");
+
+    expect(
+      resolveTerminalRestoreTarget([createTerminal("other"), replacementTerminal], undefined, "panel"),
+    ).toBe(replacementTerminal);
+  });
+
+  test("should ignore exited terminals when restoring the panel selection", () => {
+    const exitedTerminal = createTerminal("panel", {
+      exitStatus: {
+        code: 0,
+      },
+    });
+
+    expect(resolveTerminalRestoreTarget([exitedTerminal], exitedTerminal, "panel")).toBeUndefined();
+  });
+
+  test("should read the terminal creation name when no runtime name is available", () => {
+    expect(
+      getTerminalDisplayName({
+        creationOptions: {
+          name: "created-name",
+        },
+      }),
+    ).toBe("created-name");
+  });
+});
+
+function createTerminalGroup(
+  viewColumn: number | undefined,
+  tabs: Array<{ isActive: boolean; label: string }>,
+): MockTabGroup {
+  const resolvedTabs = tabs.map<MockTab>(({ isActive, label }) => ({
+    input: new vscode.TabInputTerminal(),
+    isActive,
+    label,
+  }));
+
+  return {
+    activeTab: resolvedTabs.find((tab) => tab.isActive),
+    tabs: resolvedTabs,
+    viewColumn,
+  };
+}
+
+function createTerminal(name: string, overrides: Partial<MockTerminal> = {}): MockTerminal {
+  return {
+    creationOptions: {
+      name,
+    },
+    name,
+    ...overrides,
+  };
+}
+
+function getMockWindow(): {
+  activeTerminal: unknown;
+  tabGroups: {
+    activeTabGroup: MockTabGroup | undefined;
+    all: MockTabGroup[];
+  };
+} {
+  return vscode.window as unknown as {
+    activeTerminal: unknown;
+    tabGroups: {
+      activeTabGroup: MockTabGroup | undefined;
+      all: MockTabGroup[];
+    };
+  };
+}

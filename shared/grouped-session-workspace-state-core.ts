@@ -8,7 +8,6 @@ import {
   type GroupedSessionWorkspaceSnapshot,
   type SessionGroupRecord,
 } from "./session-grid-contract";
-import { normalizeSessionGridSnapshot } from "./session-grid-state";
 import {
   isGroupedWorkspaceSnapshot,
   isSessionGroupRecord,
@@ -81,42 +80,4 @@ export function getGroupForSession(
   return snapshot.groups.find((group) =>
     group.snapshot.sessions.some((session) => session.sessionId === sessionId),
   );
-}
-
-export function applyObservedActiveGroupStateInWorkspace(
-  snapshot: GroupedSessionWorkspaceSnapshot,
-  focusedSessionId: string | undefined,
-  visibleSessionIds: readonly string[],
-): { changed: boolean; snapshot: GroupedSessionWorkspaceSnapshot } {
-  const normalizedSnapshot = normalizeGroupedSessionWorkspaceSnapshot(snapshot);
-  const activeGroup = getActiveGroup(normalizedSnapshot);
-  if (!activeGroup) {
-    return { changed: false, snapshot: normalizedSnapshot };
-  }
-
-  const nextGroupSnapshot = normalizeSessionGridSnapshot({
-    ...activeGroup.snapshot,
-    focusedSessionId,
-    visibleSessionIds: [...visibleSessionIds],
-  });
-  const changed =
-    activeGroup.snapshot.focusedSessionId !== nextGroupSnapshot.focusedSessionId ||
-    activeGroup.snapshot.visibleSessionIds.length !== nextGroupSnapshot.visibleSessionIds.length ||
-    activeGroup.snapshot.visibleSessionIds.some(
-      (sessionId, index) => sessionId !== nextGroupSnapshot.visibleSessionIds[index],
-    );
-
-  return changed
-    ? {
-        changed: true,
-        snapshot: {
-          ...normalizedSnapshot,
-          groups: normalizedSnapshot.groups.map((group) =>
-            group.groupId === activeGroup.groupId
-              ? { ...group, snapshot: nextGroupSnapshot }
-              : group,
-          ),
-        },
-      }
-    : { changed: false, snapshot: normalizedSnapshot };
 }

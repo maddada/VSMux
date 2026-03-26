@@ -22,6 +22,8 @@ export type TerminalWorkspaceBackend = vscode.Disposable & {
   createOrAttachSession: (sessionRecord: SessionRecord) => Promise<TerminalSessionSnapshot>;
   focusSession: (sessionId: string, preserveFocus?: boolean) => Promise<boolean>;
   getObservedGroupIndex: (sessionId: string) => number | undefined;
+  isSessionForegroundVisible: (sessionId: string) => boolean;
+  parkAllEditorTerminalsToPanel: () => Promise<void>;
   revealSessionInGroup: (
     sessionRecord: SessionRecord,
     targetGroupIndex: number,

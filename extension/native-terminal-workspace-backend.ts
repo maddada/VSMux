@@ -38,8 +38,12 @@ import {
 } from "./terminal-workspace-environment";
 import {
   findTerminalGroupIndex as findTerminalGroupIndexByTitle,
+  getActivePanelTerminalTabLabel,
+  getActiveTerminalTabLocation,
+  getTerminalDisplayName,
   isTerminalTabActive as isTerminalTabActiveByTitle,
   isTerminalTabForeground as isTerminalTabForegroundByTitle,
+  resolveTerminalRestoreTarget,
   waitForActiveTerminal as waitForActiveTerminalInstance,
 } from "./native-terminal-workspace-backend/workbench";
 import { createWorkspaceTrace } from "./runtime-trace";
@@ -346,6 +350,58 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     return this.findTerminalGroupIndex(sessionId);
   }
 
+  public isSessionForegroundVisible(sessionId: string): boolean {
+    const groupIndex = this.findTerminalGroupIndex(sessionId);
+    return groupIndex !== undefined && this.isTerminalTabForeground(sessionId, groupIndex);
+  }
+
+  public async parkAllEditorTerminalsToPanel(): Promise<void> {
+    const terminals = [...vscode.window.terminals];
+    const panelTerminalTabLabel = getActivePanelTerminalTabLabel();
+    const activeTerminalBefore = vscode.window.activeTerminal;
+
+    await this.logState("MOVE", "park-editor-terminals-start", {
+      activeTerminalName: activeTerminalBefore
+        ? getTerminalDisplayName(activeTerminalBefore) ?? activeTerminalBefore.name
+        : undefined,
+      panelTerminalTabLabel,
+      terminalNames: terminals.map((terminal) => getTerminalDisplayName(terminal) ?? terminal.name),
+    });
+
+    for (const terminal of terminals) {
+      const isActive = await this.activateTerminalForWorkbenchCommand(terminal);
+      if (!isActive) {
+        await this.logState("MOVE", "park-editor-terminal-skip-inactive", {
+          terminalName: getTerminalDisplayName(terminal) ?? terminal.name,
+        });
+        continue;
+      }
+
+      if (getActiveTerminalTabLocation() !== "editor") {
+        continue;
+      }
+
+      await vscode.commands.executeCommand("workbench.action.terminal.moveToTerminalPanel");
+      await this.logState("MOVE", "park-editor-terminal", {
+        terminalName: getTerminalDisplayName(terminal) ?? terminal.name,
+      });
+    }
+
+    const restoreTarget = resolveTerminalRestoreTarget(
+      vscode.window.terminals,
+      activeTerminalBefore,
+      panelTerminalTabLabel,
+    );
+    if (!restoreTarget) {
+      return;
+    }
+
+    restoreTarget.show(true);
+    await this.logState("FOCUS", "restore-panel-terminal", {
+      terminalName: getTerminalDisplayName(restoreTarget) ?? restoreTarget.name,
+    });
+  }
+
   public getSessionSnapshot(sessionId: string): TerminalSessionSnapshot | undefined {
     return this.sessions.get(sessionId);
   }
@@ -646,6 +702,22 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   private async waitForActiveTerminal(terminal: vscode.Terminal): Promise<void> {
     await waitForActiveTerminalInstance(terminal);
+  }
+
+  private async activateTerminalForWorkbenchCommand(terminal: vscode.Terminal): Promise<boolean> {
+    if (vscode.window.activeTerminal === terminal) {
+      return true;
+    }
+
+    terminal.show(true);
+    await this.waitForActiveTerminal(terminal);
+    if (vscode.window.activeTerminal === terminal) {
+      return true;
+    }
+
+    terminal.show(false);
+    await this.waitForActiveTerminal(terminal);
+    return vscode.window.activeTerminal === terminal;
   }
 
   private findTerminalGroupIndex(sessionId: string): number | undefined {

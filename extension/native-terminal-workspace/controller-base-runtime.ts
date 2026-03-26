@@ -22,6 +22,10 @@ import {
   persistSessionAgentLaunches,
 } from "../native-terminal-workspace-session-agent-launch";
 import { getClampedCompletionSoundSetting } from "./settings";
+import {
+  isProjectedSessionSurfaceVisibleInTargetGroup,
+  type ObservedSessionSurfaceState,
+} from "./projection-visibility";
 import { createSessionSplitProjection, type SessionSplitProjection } from "./splits";
 import { NativeTerminalWorkspaceControllerBaseInternals } from "./controller-base-internals";
 
@@ -112,7 +116,12 @@ export abstract class NativeTerminalWorkspaceControllerBaseRuntime extends Nativ
 
     for (let slotIndex = 0; slotIndex < splitProjection.slotSessionIds.length; slotIndex += 1) {
       const sessionId = splitProjection.slotSessionIds[slotIndex];
-      if (this.getObservedSessionViewColumn(sessionId) === slotIndex + 1) {
+      if (
+        isProjectedSessionSurfaceVisibleInTargetGroup(
+          this.getObservedSessionSurfaceState(sessionId),
+          slotIndex,
+        )
+      ) {
         continue;
       }
 
@@ -162,7 +171,9 @@ export abstract class NativeTerminalWorkspaceControllerBaseRuntime extends Nativ
     }
   }
 
-  protected getObservedSessionViewColumn(sessionId: string): number | undefined {
+  protected getObservedSessionSurfaceState(
+    sessionId: string,
+  ): ObservedSessionSurfaceState | undefined {
     const sessionRecord = this.store.getSession(sessionId);
     if (!sessionRecord) {
       return undefined;
@@ -170,15 +181,24 @@ export abstract class NativeTerminalWorkspaceControllerBaseRuntime extends Nativ
 
     if (isTerminalSession(sessionRecord)) {
       const groupIndex = this.backend.getObservedGroupIndex(sessionId);
-      return groupIndex === undefined ? undefined : groupIndex + 1;
+      return {
+        isForegroundVisible: this.backend.isSessionForegroundVisible(sessionId),
+        observedViewColumn: groupIndex === undefined ? undefined : groupIndex + 1,
+      };
     }
 
     if (isT3Session(sessionRecord)) {
-      return this.t3Webviews.getObservedViewColumn(sessionId);
+      return {
+        isForegroundVisible: this.t3Webviews.isSessionForegroundVisible(sessionId),
+        observedViewColumn: this.t3Webviews.getObservedViewColumn(sessionId),
+      };
     }
 
     if (isBrowserSession(sessionRecord)) {
-      return this.browserSessions.getObservedViewColumn(sessionId);
+      return {
+        isForegroundVisible: this.browserSessions.isSessionForegroundVisible(sessionId),
+        observedViewColumn: this.browserSessions.getObservedViewColumn(sessionId),
+      };
     }
 
     return undefined;

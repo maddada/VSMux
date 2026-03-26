@@ -11,7 +11,6 @@ import {
   getOrderedSessions,
 } from "../shared/session-grid-contract";
 import {
-  applyObservedActiveGroupStateInWorkspace,
   createGroupFromSessionInWorkspace,
   createSessionInWorkspace,
   focusGroupByIndexInWorkspace,
@@ -121,23 +120,6 @@ export class SessionGridStore {
 
   public async focusSession(sessionId: string): Promise<boolean> {
     const result = focusSessionInWorkspace(this.snapshot, sessionId);
-    this.snapshot = result.snapshot;
-    if (result.changed) {
-      await this.persist();
-    }
-
-    return result.changed;
-  }
-
-  public async applyObservedActiveGroupState(
-    focusedSessionId: string | undefined,
-    visibleSessionIds: readonly string[],
-  ): Promise<boolean> {
-    const result = applyObservedActiveGroupStateInWorkspace(
-      this.snapshot,
-      focusedSessionId,
-      visibleSessionIds,
-    );
     this.snapshot = result.snapshot;
     if (result.changed) {
       await this.persist();
