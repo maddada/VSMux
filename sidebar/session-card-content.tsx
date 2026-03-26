@@ -34,15 +34,14 @@ export function SessionCardContent({
   showCloseButton,
   showHotkeys,
 }: SessionCardContentProps) {
+  const headingText = session.primaryTitle?.trim() || session.alias;
   const terminalTitle = getAgentSecondaryText(session.terminalTitle, session.agentIcon);
-  const primaryTitle = getAgentSecondaryText(session.primaryTitle, session.agentIcon);
   const secondaryText =
     session.detail ??
     terminalTitle ??
-    primaryTitle ??
     session.activityLabel ??
     getSidebarAgentNameByIcon(session.agentIcon);
-  const titleTooltip = [session.alias, secondaryText].filter(Boolean).join("\n");
+  const titleTooltip = [headingText, secondaryText].filter(Boolean).join("\n");
   const showDebugSessionNumber = showDebugSessionNumbers && session.sessionNumber !== undefined;
   const showMeta = showHotkeys || showDebugSessionNumber;
 
@@ -72,7 +71,7 @@ export function SessionCardContent({
         <OverflowTooltipText
           className="session-alias-heading"
           textRef={aliasHeadingRef}
-          text={session.alias}
+          text={headingText}
           tooltip={titleTooltip}
           tooltipWhen={secondaryText ? "always" : "overflow"}
         />

@@ -4,6 +4,7 @@ import type {
   ExtensionToSidebarMessage,
   SidebarToExtensionMessage,
 } from "../shared/session-grid-contract";
+import { logVSmuxDebug } from "./vsmux-debug-log";
 
 const EXTENSION_ID = "maddada.VSmux";
 
@@ -72,6 +73,11 @@ export class SessionSidebarViewProvider implements vscode.Disposable, vscode.Web
           return;
         }
 
+        if (message.type === "promptRenameSession") {
+          logVSmuxDebug("sidebar.webview.received.promptRenameSession", {
+            sessionId: message.sessionId,
+          });
+        }
         void this.options.onMessage(message);
       }),
     );

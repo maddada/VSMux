@@ -52,23 +52,19 @@ export function isTerminalTabForeground(
 }
 
 export function isTerminalTabActive(
-  sessionTitle: string | undefined,
   terminal: vscode.Terminal,
 ): boolean {
-  if (vscode.window.activeTerminal !== terminal || !sessionTitle) {
+  if (vscode.window.activeTerminal !== terminal) {
     return false;
   }
 
   const activeGroup = vscode.window.tabGroups.activeTabGroup;
-  if (!activeGroup) {
+  const activeTab = activeGroup?.activeTab;
+  if (!activeTab) {
     return false;
   }
 
-  return activeGroup.tabs.some((tab) => {
-    return (
-      tab.isActive && tab.input instanceof vscode.TabInputTerminal && tab.label === sessionTitle
-    );
-  });
+  return activeTab.input instanceof vscode.TabInputTerminal;
 }
 
 export function getActivePanelTerminalTabLabel(

@@ -134,6 +134,11 @@ export function SortableSessionCard({
 
   const requestRename = () => {
     setContextMenuPosition(undefined);
+    console.debug("[VSmux Sidebar] promptRenameSession click", {
+      groupId,
+      sessionAlias: session.alias,
+      sessionId: session.sessionId,
+    });
     vscode.postMessage({
       sessionId: session.sessionId,
       type: "promptRenameSession",

@@ -37,7 +37,7 @@ import {
   getActivePanelTerminalTabLabel,
   getActiveTerminalTabLocation,
   getTerminalDisplayName,
-  isTerminalTabActive as isTerminalTabActiveByTitle,
+  isTerminalTabActive as isBoundTerminalTabActive,
   isTerminalTabForeground as isTerminalTabForegroundByTitle,
   resolveTerminalRestoreTarget,
   waitForActiveTerminal as waitForActiveTerminalInstance,
@@ -78,6 +78,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   private readonly disposables: vscode.Disposable[] = [];
   private readonly lastTerminalActivityAtBySessionId = new Map<string, number>();
   private lastActivatedEditorSessionId: string | undefined;
+  private readonly observedEditorGroupIndexBySessionId = new Map<string, number>();
   private pollTimer: NodeJS.Timeout | undefined;
   private readonly projections = new Map<string, SessionProjection>();
   private readonly sessionIdByProcessId = new Map<number, string>();
@@ -121,6 +122,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
         });
         this.terminalToSessionId.delete(terminal);
         this.projections.delete(sessionId);
+        this.observedEditorGroupIndexBySessionId.delete(sessionId);
         this.sessions.set(sessionId, {
           ...(this.sessions.get(sessionId) ??
             createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
@@ -131,13 +133,13 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
           status: terminal.exitStatus ? "exited" : "disconnected",
         });
         this.changeSessionsEmitter.fire();
-        this.emitActiveEditorSessionFromTabs();
+        void this.emitActiveEditorSessionFromTabs();
       }),
       vscode.window.tabGroups.onDidChangeTabs(() => {
-        this.emitActiveEditorSessionFromTabs();
+        void this.emitActiveEditorSessionFromTabs();
       }),
       vscode.window.tabGroups.onDidChangeTabGroups(() => {
-        this.emitActiveEditorSessionFromTabs();
+        void this.emitActiveEditorSessionFromTabs();
       }),
       vscode.window.onDidChangeTerminalState((terminal) => {
         void this.attachManagedTerminal(terminal);
@@ -158,7 +160,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     for (const terminal of vscode.window.terminals) {
       await this.attachManagedTerminal(terminal);
     }
-    this.emitActiveEditorSessionFromTabs();
+    await this.emitActiveEditorSessionFromTabs();
 
     await this.refreshSessionSnapshots();
     this.pollTimer = setInterval(() => {
@@ -327,6 +329,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     });
 
     for (const terminal of terminals) {
+      const sessionId = this.terminalToSessionId.get(terminal);
       const isActive = await this.activateTerminalForWorkbenchCommand(terminal);
       await appendCodeModeDebugLog("park-editor-terminals-to-panel:activated-terminal", {
         activeLocation: getActiveTerminalTabLocation(),
@@ -345,6 +348,9 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       }
 
       await vscode.commands.executeCommand("workbench.action.terminal.moveToTerminalPanel");
+      if (sessionId) {
+        this.observedEditorGroupIndexBySessionId.delete(sessionId);
+      }
       await appendCodeModeDebugLog("park-editor-terminals-to-panel:moved-terminal", {
         terminalName: getTerminalDisplayName(terminal) ?? terminal.name,
       });
@@ -449,6 +455,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       }
 
       this.sessionRecordBySessionId.delete(sessionId);
+      this.observedEditorGroupIndexBySessionId.delete(sessionId);
       this.sessionTitleBySessionId.delete(sessionId);
     }
   }
@@ -514,6 +521,10 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       terminal,
     } satisfies SessionProjection;
     this.bindTerminalToSession(sessionRecord.sessionId, terminal);
+    const initialViewColumn = vscode.window.tabGroups.activeTabGroup?.viewColumn;
+    if (typeof initialViewColumn === "number") {
+      this.observedEditorGroupIndexBySessionId.set(sessionRecord.sessionId, initialViewColumn - 1);
+    }
     await this.captureProcessAssociation(sessionRecord.sessionId, terminal);
     await this.logState("ENSURE", "terminal-created", {
       sessionId: sessionRecord.sessionId,
@@ -551,6 +562,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
         await focusEditorGroupByIndex(targetGroupIndex);
         await vscode.commands.executeCommand(TERMINAL_MOVE_TO_EDITOR_COMMAND);
         await this.waitForTerminalGroupIndex(sessionRecord.sessionId, targetGroupIndex);
+        this.observedEditorGroupIndexBySessionId.set(sessionRecord.sessionId, targetGroupIndex);
         await appendCodeModeDebugLog("ensure-terminal-in-group:moved-to-editor", {
           sessionId: sessionRecord.sessionId,
           targetGroupIndex,
@@ -631,7 +643,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return processIdentity.sessionId;
     }
 
-    const sessionRecord = this.findSessionRecordByTitle(
+    const sessionRecord = this.findSessionRecordBySurfaceTitleHeuristic(
       terminal.name ?? terminal.creationOptions.name,
     );
     if (sessionRecord) {
@@ -665,32 +677,44 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     this.terminalToSessionId.set(terminal, sessionId);
   }
 
-  private emitActiveEditorSessionFromTabs(): void {
-    const activeEditorTerminalTitle = getActiveEditorTerminalTabLabel();
-    if (!activeEditorTerminalTitle) {
+  private async emitActiveEditorSessionFromTabs(): Promise<void> {
+    const activeGroupIndex = this.getActiveEditorGroupIndex();
+    const activeTerminal = vscode.window.activeTerminal;
+    if (activeGroupIndex === undefined || !activeTerminal) {
       this.lastActivatedEditorSessionId = undefined;
       return;
     }
 
-    const sessionRecord = this.findSessionRecordByTitle(activeEditorTerminalTitle);
-    if (!sessionRecord) {
+    let sessionId = this.terminalToSessionId.get(activeTerminal);
+    if (!sessionId) {
+      sessionId = await this.resolveManagedSessionId(activeTerminal);
+      if (sessionId) {
+        this.bindTerminalToSession(sessionId, activeTerminal);
+      }
+    }
+
+    if (!sessionId) {
       this.lastActivatedEditorSessionId = undefined;
       return;
     }
 
-    if (this.lastActivatedEditorSessionId === sessionRecord.sessionId) {
+    this.observedEditorGroupIndexBySessionId.set(sessionId, activeGroupIndex);
+
+    if (this.lastActivatedEditorSessionId === sessionId) {
       return;
     }
 
-    this.lastActivatedEditorSessionId = sessionRecord.sessionId;
+    this.lastActivatedEditorSessionId = sessionId;
     void this.logState("EVENT", "active-editor-terminal-tab-changed", {
-      sessionId: sessionRecord.sessionId,
-      terminalTitle: activeEditorTerminalTitle,
+      sessionId,
+      terminalTitle: getActiveEditorTerminalTabLabel(),
     });
-    this.activateSessionEmitter.fire(sessionRecord.sessionId);
+    this.activateSessionEmitter.fire(sessionId);
   }
 
-  private findSessionRecordByTitle(title: string | undefined): TerminalSessionRecord | undefined {
+  private findSessionRecordBySurfaceTitleHeuristic(
+    title: string | undefined,
+  ): TerminalSessionRecord | undefined {
     const normalizedTitle = title?.trim();
     if (!normalizedTitle) {
       return undefined;
@@ -741,7 +765,22 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   private findTerminalGroupIndex(sessionId: string): number | undefined {
-    return findTerminalGroupIndexByTitle(this.getSessionSurfaceTitle(sessionId));
+    const activeGroupIndex = this.getActiveEditorGroupIndexForBoundTerminal(sessionId);
+    if (activeGroupIndex !== undefined) {
+      this.observedEditorGroupIndexBySessionId.set(sessionId, activeGroupIndex);
+      return activeGroupIndex;
+    }
+
+    const observedGroupIndex = this.observedEditorGroupIndexBySessionId.get(sessionId);
+    if (observedGroupIndex !== undefined) {
+      return observedGroupIndex;
+    }
+
+    const heuristicGroupIndex = findTerminalGroupIndexByTitle(this.getSessionSurfaceTitle(sessionId));
+    if (heuristicGroupIndex !== undefined) {
+      this.observedEditorGroupIndexBySessionId.set(sessionId, heuristicGroupIndex);
+    }
+    return heuristicGroupIndex;
   }
 
   private async moveTerminalToGroup(sessionId: string, targetGroupIndex: number): Promise<void> {
@@ -758,6 +797,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
     await moveActiveEditorToGroup(targetGroupIndex);
     await this.waitForTerminalGroupIndex(sessionId, targetGroupIndex);
+    this.observedEditorGroupIndexBySessionId.set(sessionId, targetGroupIndex);
     await this.logState("MOVE", "terminal-group", {
       currentGroupIndex,
       sessionId,
@@ -766,7 +806,12 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   private isTerminalTabActive(sessionId: string, terminal: vscode.Terminal): boolean {
-    return isTerminalTabActiveByTitle(this.getSessionSurfaceTitle(sessionId), terminal);
+    const boundSessionId = this.terminalToSessionId.get(terminal);
+    if (boundSessionId !== sessionId) {
+      return false;
+    }
+
+    return isBoundTerminalTabActive(terminal);
   }
 
   private async refreshSessionSnapshots(): Promise<void> {
@@ -950,7 +995,30 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   private isTerminalTabForeground(sessionId: string, groupIndex: number): boolean {
+    const activeGroupIndex = this.getActiveEditorGroupIndexForBoundTerminal(sessionId);
+    if (activeGroupIndex !== undefined) {
+      return activeGroupIndex === groupIndex;
+    }
+
     return isTerminalTabForegroundByTitle(this.getSessionSurfaceTitle(sessionId), groupIndex);
+  }
+
+  private getActiveEditorGroupIndex(): number | undefined {
+    const activeTabGroup = vscode.window.tabGroups.activeTabGroup;
+    if (activeTabGroup?.viewColumn === undefined) {
+      return undefined;
+    }
+
+    return activeTabGroup.viewColumn - 1;
+  }
+
+  private getActiveEditorGroupIndexForBoundTerminal(sessionId: string): number | undefined {
+    const projection = this.projections.get(sessionId);
+    if (!projection || vscode.window.activeTerminal !== projection.terminal) {
+      return undefined;
+    }
+
+    return getActiveTerminalTabLocation() === "editor" ? this.getActiveEditorGroupIndex() : undefined;
   }
 
   private async logState(tag: string, message: string, details?: unknown): Promise<void> {

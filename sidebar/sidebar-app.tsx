@@ -107,7 +107,7 @@ const sensors = [
   KeyboardSensor,
 ];
 
-const SIDEBAR_STARTUP_INTERACTION_BLOCK_MS = 3_000;
+const SIDEBAR_STARTUP_INTERACTION_BLOCK_MS = 1500;
 
 function getInitialSidebarTheme(): SidebarTheme {
   return document.body.classList.contains("vscode-light") ||

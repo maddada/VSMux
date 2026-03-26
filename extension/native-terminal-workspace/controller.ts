@@ -276,6 +276,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     const sessionRecord = this.store.getSession(sessionId);
     if (sessionRecord?.kind === "terminal") {
       await this.backend.renameSession(sessionRecord);
+      await this.backend.writeText(sessionId, `/rename ${sessionRecord.title}`);
     }
     await this.refreshSidebar();
   }
@@ -283,12 +284,22 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   public async promptRenameSession(sessionId: string): Promise<void> {
     const sessionRecord = this.store.getSession(sessionId);
     if (!sessionRecord) {
+      logVSmuxDebug("controller.promptRenameSession.missingSession", { sessionId });
       return;
     }
 
+    logVSmuxDebug("controller.promptRenameSession.start", {
+      sessionId,
+      sessionTitle: sessionRecord.title,
+    });
     const nextTitle = await vscode.window.showInputBox({
       prompt: "Rename session",
       value: sessionRecord.title,
+    });
+    logVSmuxDebug("controller.promptRenameSession.result", {
+      didSubmit: typeof nextTitle === "string",
+      nextTitle,
+      sessionId,
     });
     if (nextTitle) {
       await this.renameSession(sessionId, nextTitle);

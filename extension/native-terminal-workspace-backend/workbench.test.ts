@@ -23,6 +23,7 @@ import {
   getActivePanelTerminalTabLabel,
   getActiveTerminalTabLocation,
   getTerminalDisplayName,
+  isTerminalTabActive,
   resolveTerminalRestoreTarget,
 } from "./workbench";
 
@@ -79,11 +80,14 @@ describe("native terminal workbench helpers", () => {
   });
 
   test("should classify an active terminal tab in the editor area", () => {
+    const activeTerminal = createTerminal("editor");
+    getMockWindow().activeTerminal = activeTerminal;
     getMockWindow().tabGroups.activeTabGroup = createTerminalGroup(2, [
       { isActive: true, label: "editor" },
     ]);
 
     expect(getActiveTerminalTabLocation()).toBe("editor");
+    expect(isTerminalTabActive(activeTerminal as unknown as vscode.Terminal)).toBe(true);
   });
 
   test("should classify an active terminal tab in the panel", () => {
@@ -95,6 +99,8 @@ describe("native terminal workbench helpers", () => {
   });
 
   test("should return other when the active tab is not a terminal", () => {
+    const activeTerminal = createTerminal("notes");
+    getMockWindow().activeTerminal = activeTerminal;
     getMockWindow().tabGroups.activeTabGroup = {
       activeTab: {
         input: {},
@@ -112,6 +118,7 @@ describe("native terminal workbench helpers", () => {
     };
 
     expect(getActiveTerminalTabLocation()).toBe("other");
+    expect(isTerminalTabActive(activeTerminal as unknown as vscode.Terminal)).toBe(false);
   });
 
   test("should prefer the exact saved terminal when restoring the panel selection", () => {

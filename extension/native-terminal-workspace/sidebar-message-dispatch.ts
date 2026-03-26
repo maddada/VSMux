@@ -4,6 +4,7 @@ import type {
 } from "../../shared/session-grid-contract";
 import type { TerminalViewMode } from "../../shared/session-grid-contract";
 import type { SidebarActionType } from "../../shared/sidebar-commands";
+import { logVSmuxDebug } from "../vsmux-debug-log";
 
 export type SidebarMessageHandlers = {
   clearStartupSidebarRefreshes: () => void;
@@ -121,6 +122,9 @@ export async function dispatchSidebarMessage(
       return;
     case "promptRenameSession":
       if (message.sessionId) {
+        logVSmuxDebug("sidebar.dispatch.promptRenameSession", {
+          sessionId: message.sessionId,
+        });
         await handlers.promptRenameSession(message.sessionId);
       }
       return;

@@ -226,6 +226,31 @@ describe("session surface titles", () => {
     expect(getTerminalSessionSurfaceTitle(terminalSession)).toBe("99 Backend");
     expect(getT3SessionSurfaceTitle(t3Session)).toBe("42 Design");
   });
+
+  test("should prefer a custom title for terminal and t3 surface titles", () => {
+    const terminalSession = {
+      ...createSessionRecord(18, 0, { displayId: "99" }),
+      alias: "Backend",
+      title: "Bug Fixing",
+    };
+    const t3Session = {
+      ...createSessionRecord(17, 0, {
+        displayId: "42",
+        kind: "t3",
+        t3: {
+          projectId: "project-1",
+          serverOrigin: "https://example.com",
+          threadId: "thread-1",
+          workspaceRoot: "/workspace",
+        },
+        title: "Design Review",
+      }),
+      alias: "Design",
+    };
+
+    expect(getTerminalSessionSurfaceTitle(terminalSession)).toBe("99. Bug Fixing");
+    expect(getT3SessionSurfaceTitle(t3Session)).toBe("42. Design Review");
+  });
 });
 
 describe("sidebar HUD state", () => {

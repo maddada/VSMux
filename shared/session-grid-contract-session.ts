@@ -269,13 +269,13 @@ export function createSessionRecord(
 }
 
 export function getTerminalSessionSurfaceTitle(
-  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex">,
+  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex" | "title">,
 ): string {
   return formatSessionSurfaceTitle(session);
 }
 
 export function getT3SessionSurfaceTitle(
-  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex">,
+  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex" | "title">,
 ): string {
   return formatSessionSurfaceTitle(session);
 }
@@ -326,8 +326,13 @@ function getSessionNumber(session: Pick<BaseSessionRecord, "sessionId" | "slotIn
 }
 
 function formatSessionSurfaceTitle(
-  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex">,
+  session: Pick<BaseSessionRecord, "alias" | "displayId" | "sessionId" | "slotIndex" | "title">,
 ): string {
   const displayId = formatSessionDisplayId(session.displayId ?? getSessionNumber(session) - 1);
+  const visiblePrimaryTitle = getVisiblePrimaryTitle(session.title);
+  if (visiblePrimaryTitle) {
+    return `${displayId}. ${visiblePrimaryTitle}`;
+  }
+
   return isGeneratedSessionAlias(session) ? displayId : `${displayId} ${session.alias}`;
 }
