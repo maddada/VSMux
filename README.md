@@ -14,9 +14,9 @@ For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 
-> Current UI in v1.3 (still under development. Will be much nicer with time.)
+---
 
-![VSmux v1.3 Screenshot](media/1.3-screenshot.png)
+![VSmux v1.11 Screenshot](media/Screenshot.png)
 
 ---
 
@@ -24,9 +24,7 @@ Early version video showing the core experience of VSmux (will create a new vide
 
 ---
 
-## The shpeel:
-
-This extension is for you if:
+## This extension is for you if:
 
 - You like to code using multiple agent CLIs in parallel.
 - You don't want to be locked into a tool like conductor or superset or w/e.
