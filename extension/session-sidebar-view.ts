@@ -73,6 +73,11 @@ export class SessionSidebarViewProvider implements vscode.Disposable, vscode.Web
           return;
         }
 
+        if (message.type === "sidebarDebugLog") {
+          logVSmuxDebug(`sidebar.webview.${message.event}`, message.details);
+          return;
+        }
+
         if (message.type === "promptRenameSession") {
           logVSmuxDebug("sidebar.webview.received.promptRenameSession", {
             sessionId: message.sessionId,
@@ -168,11 +173,19 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
   const message = candidate as Partial<SidebarToExtensionMessage>;
   switch (message.type) {
     case "ready":
+      return true;
+    case "sidebarDebugLog":
+      return (
+        typeof message.event === "string" &&
+        message.event.length > 0 &&
+        (message.details === undefined || typeof message.details === "string")
+      );
     case "openSettings":
     case "toggleCompletionBell":
     case "toggleVsMuxDisabled":
     case "moveSidebarToOtherSide":
     case "createSession":
+      return true;
     case "toggleFullscreenSession":
       return true;
 

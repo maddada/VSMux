@@ -509,17 +509,21 @@ export function createGroupFromSessionInSimpleWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   sessionId: string,
 ): CreateGroupResult {
-  const sourceGroup = getGroupForSession(snapshot, sessionId);
-  if (!sourceGroup || snapshot.groups.length >= MAX_GROUP_COUNT) {
-    return { changed: false, snapshot };
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  const sourceGroup = getGroupForSession(normalizedSnapshot, sessionId);
+  if (!sourceGroup || normalizedSnapshot.groups.length >= MAX_GROUP_COUNT) {
+    return { changed: false, snapshot: normalizedSnapshot };
   }
 
   const session = sourceGroup.snapshot.sessions.find((candidate) => candidate.sessionId === sessionId);
   if (!session) {
-    return { changed: false, snapshot };
+    return { changed: false, snapshot: normalizedSnapshot };
   }
 
-  const nextGroupNumber = Math.max(snapshot.nextGroupNumber, getNextGroupNumber(snapshot.groups));
+  const nextGroupNumber = Math.max(
+    normalizedSnapshot.nextGroupNumber,
+    getNextGroupNumber(normalizedSnapshot.groups),
+  );
   const nextGroupId = `group-${nextGroupNumber}`;
   const nextGroup: SessionGroupRecord = {
     groupId: nextGroupId,
@@ -532,24 +536,25 @@ export function createGroupFromSessionInSimpleWorkspace(
     }),
     title: `Group ${nextGroupNumber}`,
   };
+  const snapshotWithoutSession = updateGroup(normalizedSnapshot, sourceGroup.groupId, (group) => ({
+    ...group,
+    snapshot: normalizeGroupSnapshot({
+      ...group.snapshot,
+      sessions: group.snapshot.sessions.filter((candidate) => candidate.sessionId !== sessionId),
+      visibleSessionIds: group.snapshot.visibleSessionIds.filter((id) => id !== sessionId),
+      focusedSessionId:
+        group.snapshot.focusedSessionId === sessionId ? undefined : group.snapshot.focusedSessionId,
+    }),
+  }));
   const nextSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot({
-    ...updateGroup(snapshot, sourceGroup.groupId, (group) => ({
-      ...group,
-      snapshot: normalizeGroupSnapshot({
-        ...group.snapshot,
-        sessions: group.snapshot.sessions.filter((candidate) => candidate.sessionId !== sessionId),
-        visibleSessionIds: group.snapshot.visibleSessionIds.filter((id) => id !== sessionId),
-        focusedSessionId:
-          group.snapshot.focusedSessionId === sessionId ? undefined : group.snapshot.focusedSessionId,
-      }),
-    })),
+    ...snapshotWithoutSession,
     activeGroupId: nextGroupId,
-    groups: [...snapshot.groups, nextGroup],
+    groups: [...snapshotWithoutSession.groups, nextGroup],
     nextGroupNumber: nextGroupNumber + 1,
   });
 
   return {
-    changed: !areSnapshotsEqual(snapshot, nextSnapshot),
+    changed: !areSnapshotsEqual(normalizedSnapshot, nextSnapshot),
     groupId: nextGroupId,
     snapshot: nextSnapshot,
   };

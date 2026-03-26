@@ -105,6 +105,11 @@ export type SidebarToExtensionMessage =
       type: "ready";
     }
   | {
+      type: "sidebarDebugLog";
+      event: string;
+      details?: string;
+    }
+  | {
       type: "openSettings";
     }
   | {

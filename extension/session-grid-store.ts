@@ -32,6 +32,7 @@ import {
   syncSessionOrderInSimpleWorkspace,
   toggleFullscreenSessionInSimpleWorkspace,
 } from "../shared/simple-grouped-session-workspace-state";
+import { logVSmuxDebug } from "./vsmux-debug-log";
 
 const WORKSPACE_SNAPSHOT_KEY = "VSmux.sessionGridSnapshot";
 
@@ -206,8 +207,16 @@ export class SessionGridStore {
   }
 
   public async syncSessionOrder(groupId: string, sessionIds: readonly string[]): Promise<boolean> {
+    const previousSnapshot = this.snapshot;
     const result = syncSessionOrderInSimpleWorkspace(this.snapshot, groupId, sessionIds);
     this.snapshot = result.snapshot;
+    logVSmuxDebug("store.syncSessionOrder", {
+      changed: result.changed,
+      groupId,
+      requestedSessionIds: [...sessionIds],
+      next: summarizeWorkspaceSnapshot(this.snapshot),
+      previous: summarizeWorkspaceSnapshot(previousSnapshot),
+    });
     if (result.changed) {
       await this.persist();
     }
@@ -215,8 +224,15 @@ export class SessionGridStore {
   }
 
   public async syncGroupOrder(groupIds: readonly string[]): Promise<boolean> {
+    const previousSnapshot = this.snapshot;
     const result = syncGroupOrderInSimpleWorkspace(this.snapshot, groupIds);
     this.snapshot = result.snapshot;
+    logVSmuxDebug("store.syncGroupOrder", {
+      changed: result.changed,
+      next: summarizeWorkspaceSnapshot(this.snapshot),
+      previous: summarizeWorkspaceSnapshot(previousSnapshot),
+      requestedGroupIds: [...groupIds],
+    });
     if (result.changed) {
       await this.persist();
     }
@@ -228,8 +244,17 @@ export class SessionGridStore {
     groupId: string,
     targetIndex?: number,
   ): Promise<boolean> {
+    const previousSnapshot = this.snapshot;
     const result = moveSessionToGroupInSimpleWorkspace(this.snapshot, sessionId, groupId, targetIndex);
     this.snapshot = result.snapshot;
+    logVSmuxDebug("store.moveSessionToGroup", {
+      changed: result.changed,
+      groupId,
+      next: summarizeWorkspaceSnapshot(this.snapshot),
+      previous: summarizeWorkspaceSnapshot(previousSnapshot),
+      sessionId,
+      targetIndex,
+    });
     if (result.changed) {
       await this.persist();
     }
@@ -237,8 +262,16 @@ export class SessionGridStore {
   }
 
   public async createGroupFromSession(sessionId: string): Promise<string | undefined> {
+    const previousSnapshot = this.snapshot;
     const result = createGroupFromSessionInSimpleWorkspace(this.snapshot, sessionId);
     this.snapshot = result.snapshot;
+    logVSmuxDebug("store.createGroupFromSession", {
+      changed: result.changed,
+      groupId: result.groupId,
+      next: summarizeWorkspaceSnapshot(this.snapshot),
+      previous: summarizeWorkspaceSnapshot(previousSnapshot),
+      sessionId,
+    });
     if (result.changed) {
       await this.persist();
     }
@@ -252,4 +285,17 @@ export class SessionGridStore {
   private async persist(): Promise<void> {
     await this.context.workspaceState.update(WORKSPACE_SNAPSHOT_KEY, this.snapshot);
   }
+}
+
+function summarizeWorkspaceSnapshot(snapshot: GroupedSessionWorkspaceSnapshot) {
+  return {
+    activeGroupId: snapshot.activeGroupId,
+    groups: snapshot.groups.map((group) => ({
+      focusedSessionId: group.snapshot.focusedSessionId,
+      groupId: group.groupId,
+      sessionIds: group.snapshot.sessions.map((session) => session.sessionId),
+      title: group.title,
+      visibleSessionIds: [...group.snapshot.visibleSessionIds],
+    })),
+  };
 }

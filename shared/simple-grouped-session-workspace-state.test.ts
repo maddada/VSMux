@@ -291,7 +291,56 @@ describe("createGroupFromSessionInSimpleWorkspace", () => {
 
     expect(result.groupId).toBe("group-2");
     expect(result.snapshot.activeGroupId).toBe("group-2");
-    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(2)]);
+    expect(result.snapshot.groups).toHaveLength(2);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(0)]);
+    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+      sessionIdForDisplay(0),
+    ]);
+    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(1)]);
+    expect(result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+      sessionIdForDisplay(1),
+    ]);
+  });
+
+  test("should remove the canonicalized dragged session from the source group", () => {
+    const draggedSession = {
+      ...createSessionRecord(5, 1, { displayId: "04" }),
+      sessionId: sessionIdForDisplay("00"),
+    };
+    const result = createGroupFromSessionInSimpleWorkspace(
+      {
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay("04"),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(4, 0, { displayId: "03" }), draggedSession],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay("03"), sessionIdForDisplay("04")],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 5,
+        nextSessionNumber: 6,
+      },
+      sessionIdForDisplay("04"),
+    );
+
+    expect(result.groupId).toBe("group-2");
+    expect(result.snapshot.groups).toHaveLength(2);
+    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+      sessionIdForDisplay("03"),
+    ]);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay("03")]);
+    expect(result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+      sessionIdForDisplay("04"),
+    ]);
+    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay("04")]);
   });
 });
 
