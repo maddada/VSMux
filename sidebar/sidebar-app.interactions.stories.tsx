@@ -61,19 +61,14 @@ export const ToolbarActions: Story = {
       await expect(body.queryByRole("menuitem", { name: "4" })).toBeNull();
       await expect(body.queryByRole("menuitem", { name: "6" })).toBeNull();
       await expect(body.queryByRole("menuitem", { name: "9" })).toBeNull();
-      await userEvent.click(await body.findByRole("menuitem", { name: "2" }));
+      await userEvent.click(await body.findByRole("menuitem", { name: "Show 2 splits" }));
       await expectMessage({ type: "setVisibleCount", visibleCount: 2 });
     });
 
-    await step("switch layout mode", async () => {
-      resetSidebarStoryMessages();
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Open layout options for Group 4" }),
-      );
-      await expect(body.queryByRole("menuitem", { name: "Focus" })).toBeNull();
-      await expect(body.queryByRole("menuitem", { name: "Grid" })).toBeNull();
-      await userEvent.click(await body.findByRole("menuitem", { name: "Columns" }));
-      await expectMessage({ type: "setViewMode", viewMode: "horizontal" });
+    await step("keep the layout selector hidden", async () => {
+      await expect(
+        canvas.queryByRole("button", { name: "Open layout options for Group 4" }),
+      ).toBeNull();
     });
 
     await step("open sidebar settings", async () => {

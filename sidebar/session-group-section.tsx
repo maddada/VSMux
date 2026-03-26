@@ -1,4 +1,4 @@
-import { IconFocusCentered, IconPencil, IconPlus, IconX } from "@tabler/icons-react";
+import { IconLayoutColumns, IconPencil, IconPlus, IconSquare, IconX } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
@@ -13,7 +13,6 @@ import {
 import type {
   SidebarSessionGroup,
   SidebarSessionItem,
-  TerminalViewMode,
   VisibleSessionCount,
 } from "../shared/session-grid-contract";
 import { ConfirmationModal } from "./confirmation-modal";
@@ -35,22 +34,15 @@ type ContextMenuPosition = {
   y: number;
 };
 
-type GroupControlMenu = "layout" | "visible-count";
-
-type GroupLayoutIconProps = {
-  viewMode: TerminalViewMode;
-};
+type GroupControlMenu = "visible-count";
 
 type GroupVisibleCountIconProps = {
   visibleCount: VisibleSessionCount;
 };
 
-type LayoutOption = { label: string; viewMode: TerminalViewMode };
-
-const LAYOUT_OPTIONS: readonly LayoutOption[] = [
-  { label: "Rows", viewMode: "vertical" },
-  { label: "Columns", viewMode: "horizontal" },
-];
+type SplitSelectionMenuIconProps = {
+  visibleCount: VisibleSessionCount;
+};
 
 export type SessionGroupSectionProps = {
   autoEdit: boolean;
@@ -96,40 +88,26 @@ function getControlMenuPosition(button: HTMLButtonElement | null): ContextMenuPo
   };
 }
 
-function GroupLayoutIcon({ viewMode }: GroupLayoutIconProps) {
-  switch (viewMode) {
-    case "horizontal":
-      return (
-        <svg aria-hidden="true" className="group-meta-icon" viewBox="0 0 16 16">
-          <rect className="group-meta-frame" height="12" rx="2" width="12" x="2" y="2" />
-          <path className="group-meta-line" d="M6 4v8M10 4v8" />
-        </svg>
-      );
-    case "vertical":
-      return (
-        <svg aria-hidden="true" className="group-meta-icon" viewBox="0 0 16 16">
-          <rect className="group-meta-frame" height="12" rx="2" width="12" x="2" y="2" />
-          <path className="group-meta-line" d="M4 6h8M4 10h8" />
-        </svg>
-      );
-    case "grid":
-      return (
-        <svg aria-hidden="true" className="group-meta-icon" viewBox="0 0 16 16">
-          <rect className="group-meta-frame" height="12" rx="2" width="12" x="2" y="2" />
-          <path className="group-meta-line" d="M8 4v8M4 8h8" />
-        </svg>
-      );
+function GroupVisibleCountIcon({ visibleCount }: GroupVisibleCountIconProps) {
+  if (visibleCount === 1) {
+    return <IconSquare aria-hidden="true" className="group-meta-icon" size={14} />;
   }
+
+  return <IconLayoutColumns aria-hidden="true" className="group-meta-icon" size={14} />;
 }
 
-function GroupVisibleCountIcon({ visibleCount }: GroupVisibleCountIconProps) {
+function SplitSelectionMenuIcon({ visibleCount }: SplitSelectionMenuIconProps) {
+  if (visibleCount === 1) {
+    return <IconSquare aria-hidden="true" className="session-context-menu-icon" size={14} />;
+  }
+
   return (
-    <svg aria-hidden="true" className="group-meta-icon" viewBox="0 0 16 16">
-      <text className="group-meta-count-text" textAnchor="middle" x="8" y="8">
-        {visibleCount}
-      </text>
-    </svg>
+    <IconLayoutColumns aria-hidden="true" className="session-context-menu-icon" size={14} />
   );
+}
+
+function getVisibleCountMenuLabel(visibleCount: VisibleSessionCount): string {
+  return visibleCount === 1 ? "Show 1 split" : "Show 2 splits";
 }
 
 export function SessionGroupSection({
@@ -149,10 +127,8 @@ export function SessionGroupSection({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [openControlMenu, setOpenControlMenu] = useState<GroupControlMenu>();
-  const layoutButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const controlMenuRef = useRef<HTMLDivElement>(null);
-  const controlAnchorRef = useRef<HTMLDivElement>(null);
   const visibleCountButtonRef = useRef<HTMLButtonElement>(null);
   const sortable = useSortable({
     accept: ["group", "session"],
@@ -255,7 +231,10 @@ export function SessionGroupSection({
         return;
       }
 
-      if (controlMenuRef.current?.contains(target) || controlAnchorRef.current?.contains(target)) {
+      if (
+        controlMenuRef.current?.contains(target) ||
+        visibleCountButtonRef.current?.contains(target)
+      ) {
         return;
       }
 
@@ -323,14 +302,6 @@ export function SessionGroupSection({
     vscode.postMessage({
       type: "setVisibleCount",
       visibleCount,
-    });
-  };
-
-  const setLayout = (option: LayoutOption) => {
-    setOpenControlMenu(undefined);
-    vscode.postMessage({
-      type: "setViewMode",
-      viewMode: option.viewMode,
     });
   };
 
@@ -409,34 +380,7 @@ export function SessionGroupSection({
                       event.preventDefault();
                       event.stopPropagation();
                     }}
-                    ref={controlAnchorRef}
                   >
-                    <div className="group-control-anchor">
-                      <button
-                        aria-expanded={openControlMenu === "layout"}
-                        aria-haspopup="menu"
-                        aria-label={`Open layout options for ${group.title}`}
-                        className="group-add-button group-control-button"
-                        data-open={String(openControlMenu === "layout")}
-                        onClick={() => {
-                          setOpenControlMenu((previous) =>
-                            previous === "layout" ? undefined : "layout",
-                          );
-                        }}
-                        ref={layoutButtonRef}
-                        type="button"
-                      >
-                        {group.isFocusModeActive ? (
-                          <IconFocusCentered
-                            aria-hidden="true"
-                            className="group-meta-focus-icon"
-                            stroke={1.8}
-                          />
-                        ) : (
-                          <GroupLayoutIcon viewMode={group.viewMode} />
-                        )}
-                      </button>
-                    </div>
                     <div className="group-control-anchor">
                       <button
                         aria-expanded={openControlMenu === "visible-count"}
@@ -541,45 +485,6 @@ export function SessionGroupSection({
             document.body,
           )
         : null}
-      {openControlMenu === "layout"
-        ? createPortal(
-            <div
-              className="group-control-menu session-context-menu"
-              onClick={(event) => event.stopPropagation()}
-              ref={controlMenuRef}
-              role="menu"
-              style={getPortalMenuStyle(layoutButtonRef.current)}
-            >
-              {LAYOUT_OPTIONS.map((option) => {
-                const isSelected = !group.isFocusModeActive && group.viewMode === option.viewMode;
-                const isDisabled = isViewModeDisabled(option.viewMode, group.layoutVisibleCount);
-
-                return (
-                  <button
-                    aria-pressed={isSelected}
-                    className="session-context-menu-item group-control-menu-item"
-                    data-selected={String(isSelected)}
-                    disabled={isDisabled}
-                    key={option.label}
-                    onClick={() => {
-                      if (isDisabled) {
-                        return;
-                      }
-
-                      setLayout(option);
-                    }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <GroupLayoutIcon viewMode={option.viewMode} />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>,
-            document.body,
-          )
-        : null}
       {openControlMenu === "visible-count"
         ? createPortal(
             <div
@@ -592,14 +497,16 @@ export function SessionGroupSection({
               {SIDEBAR_VISIBLE_COUNT_OPTIONS.map((visibleCount) => (
                 <button
                   aria-pressed={group.layoutVisibleCount === visibleCount}
+                  aria-label={getVisibleCountMenuLabel(visibleCount)}
                   className="session-context-menu-item group-control-menu-item"
                   data-selected={String(group.layoutVisibleCount === visibleCount)}
                   key={visibleCount}
                   onClick={() => setVisibleCount(visibleCount)}
                   role="menuitem"
+                  title={getVisibleCountMenuLabel(visibleCount)}
                   type="button"
                 >
-                  {visibleCount}
+                  <SplitSelectionMenuIcon visibleCount={visibleCount} />
                 </button>
               ))}
             </div>,
@@ -636,19 +543,4 @@ function getPortalMenuStyle(button: HTMLButtonElement | null) {
     top: `${position.y}px`,
     transform: "translateX(-50%)",
   };
-}
-
-function isViewModeDisabled(
-  viewMode: TerminalViewMode,
-  visibleCount: VisibleSessionCount,
-): boolean {
-  if (visibleCount === 1) {
-    return true;
-  }
-
-  if (visibleCount === 2 && viewMode === "grid") {
-    return true;
-  }
-
-  return false;
 }

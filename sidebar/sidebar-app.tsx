@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { move } from "@dnd-kit/helpers";
-import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
+import { DragDropProvider, DragOverlay, type DragDropEventHandlers } from "@dnd-kit/react";
 import {
   IconBell,
   IconBellOff,
@@ -39,6 +39,7 @@ import { CommandsPanel } from "./commands-panel";
 import { CreateGroupDropTarget } from "./create-group-drop-target";
 import { PreviousSessionsModal } from "./previous-sessions-modal";
 import { ScratchPadModal } from "./scratch-pad-modal";
+import { SessionCardContent } from "./session-card-content";
 import { getSidebarDropData } from "./sidebar-dnd";
 import { SessionGroupSection } from "./session-group-section";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
@@ -119,6 +120,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [sessionIdsByGroup, setSessionIdsByGroup] = useState<SessionIdsByGroup>({});
   const [draggedSessionId, setDraggedSessionId] = useState<string>();
+  const [dragOverlayWidth, setDragOverlayWidth] = useState<number>();
   const [agentCreateRequestId, setAgentCreateRequestId] = useState(0);
   const [commandCreateRequestId, setCommandCreateRequestId] = useState(0);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
@@ -300,10 +302,25 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       }));
   }, [groupIds, serverState.groups, sessionIdsByGroup]);
 
+  const draggedSession = useMemo(() => {
+    if (!draggedSessionId) {
+      return undefined;
+    }
+
+    return orderedGroups
+      .flatMap((group) => group.orderedSessions)
+      .find((session) => session.sessionId === draggedSessionId);
+  }, [draggedSessionId, orderedGroups]);
+
   const handleDragStart = ((event) => {
     const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
     if (sourceData?.kind !== "session") {
       return;
+    }
+
+    const sourceElement = (event.operation.source as { element?: Element | undefined }).element;
+    if (sourceElement instanceof HTMLElement) {
+      setDragOverlayWidth(sourceElement.getBoundingClientRect().width);
     }
 
     sessionDragSnapshotRef.current = cloneSessionIdsByGroup(sessionIdsByGroupRef.current);
@@ -326,6 +343,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
 
   const handleDragEnd = ((event) => {
     setDraggedSessionId(undefined);
+    setDragOverlayWidth(undefined);
 
     const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
     const targetData = getSidebarDropData(event.operation.target as { data?: unknown });
@@ -667,6 +685,33 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                 isVisible={Boolean(draggedSessionId) && orderedGroups.length < MAX_GROUP_COUNT}
               />
             </div>
+            <DragOverlay
+              dropAnimation={{
+                duration: 220,
+                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              {draggedSession ? (
+                <div
+                  className="session session-drag-overlay"
+                  data-activity={draggedSession.activity}
+                  data-focused={String(draggedSession.isFocused)}
+                  data-has-agent-icon={String(Boolean(draggedSession.agentIcon))}
+                  data-running={String(draggedSession.isRunning)}
+                  data-visible={String(draggedSession.isVisible)}
+                  style={
+                    dragOverlayWidth ? { width: `${Math.round(dragOverlayWidth)}px` } : undefined
+                  }
+                >
+                  <SessionCardContent
+                    session={draggedSession}
+                    showCloseButton={false}
+                    showDebugSessionNumbers={serverState.hud.debuggingMode}
+                    showHotkeys={serverState.hud.showHotkeysOnSessionCards}
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
           </DragDropProvider>
           {orderedGroups.every((group) => group.sessions.length === 0) ? (
             <div className="empty" data-empty-space-blocking="true">

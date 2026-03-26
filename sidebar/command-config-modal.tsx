@@ -89,7 +89,7 @@ export function CommandConfigModal({ draft, isOpen, onCancel, onSave }: CommandC
         </button>
         <div className="confirm-modal-header confirm-modal-header-with-close">
           <div className="confirm-modal-title" id={titleId}>
-            Configure action
+            Configure Action
           </div>
           <div className="confirm-modal-description" id={descriptionId}>
             {description}

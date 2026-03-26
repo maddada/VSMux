@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
-import { IconCode, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
+import { IconCode, IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -250,7 +250,7 @@ export function CommandsPanel({
             <div aria-hidden="true" className="section-titlebar-line" />
           )}
         </div>
-        <div className="card commands-panel">
+        <div className="card commands-panel commands-panel-scroll-shell">
           <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
             <DragDropProvider onDragEnd={handleDragEnd}>
               <div className="commands-grid">
@@ -336,7 +336,7 @@ export function CommandsPanel({
                 type="button"
               >
                 <IconPencil aria-hidden="true" className="session-context-menu-icon" size={14} />
-                Configure Action
+                Configure
               </button>
               <button
                 className="session-context-menu-item session-context-menu-item-danger"
@@ -351,7 +351,7 @@ export function CommandsPanel({
                 type="button"
               >
                 <IconTrash aria-hidden="true" className="session-context-menu-icon" size={14} />
-                Remove Action
+                Remove
               </button>
             </div>,
             document.body,

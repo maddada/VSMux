@@ -149,7 +149,7 @@
 .group-control-count-menu {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(3, 18px);
+  grid-template-columns: repeat(2, 18px);
   justify-content: center;
   min-width: 0;
 }

@@ -1,0 +1,440 @@
+[     245ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:6006/favicon.ico:0
+[     300ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:6006/favicon.ico:0
+[    2323ms] [ERROR] AssertionError: expected false to be true // Object.is equality
+
+Ignored nodes: comments, script, style
+<html
+  lang="en"
+>
+  <head>
+    
+    
+    
+
+    
+    <meta
+      charset="utf-8"
+    />
+    
+    
+    <title>
+      sidebar-interactions--drag-to-reorder-within-group
+    </title>
+    
+    
+    <meta
+      content="width=device-width, initial-scale=1"
+      name="viewport"
+    />
+    
+
+    
+    
+
+    
+    
+    
+    <base
+      target="_parent"
+    />
+    
+
+
+    
+
+
+    
+
+  
+  </head>
+  
+
+  
+  <body
+    class="sb-main-fullscreen sb-show-main"
+    data-sidebar-theme="dark-blue"
+  >
+    
+    
+    <div
+      class="sb-preparing-story sb-wrapper"
+    >
+      
+  
+      <div
+        class="sb-loader"
+      />
+      
+
+    </div>
+    
+
+
+    <div
+      class="sb-preparing-docs sb-wrapper"
+    >
+      
+  
+      <div
+        class="sb-previewBlock"
+      >
+        
+    
+        <div
+          class="sb-previewBlock_header"
+        >
+          
+      
+          <div
+            class="sb-previewBlock_icon"
+          />
+          
+      
+          <div
+            class="sb-previewBlock_icon"
+          />
+          
+      
+          <div
+            class="sb-previewBlock_icon"
+          />
+          
+      
+          <div
+            class="sb-previewBlock_icon"
+          />
+          
+    
+        </div>
+        
+    
+        <div
+          class="sb-previewBlock_body"
+        >
+          
+      
+          <div
+            class="sb-loader"
+          />
+          
+    
+        </div>
+        
+  
+      </div>
+      
+  
+      <table
+        aria-hidden="true"
+        class="sb-argstableBlock"
+      >
+        
+    
+        <thead
+          class="sb-argstableBlock-head"
+        >
+          
+      
+          <tr>
+            
+        
+            <th>
+              <span>
+                Name
+              </span>
+            </th>
+            
+        
+            <th>
+              <span>
+                Description
+              </span>
+            </th>
+            
+        
+            <th>
+              <span>
+                Default
+              </span>
+            </th>
+            
+        
+            <th>
+              <span>
+                Control 
+              </span>
+            </th>
+            
+      
+          </tr>
+          
+    
+        </thead>
+        
+    
+        <tbody
+          class="sb-argstableBlock-body"
+        >
+          
+      
+          <tr>
+            
+        
+            <td>
+              <span>
+                propertyName
+              </span>
+              <span
+                title="Required"
+              >
+                *
+              </span>
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span>
+                  This is a short description
+                </span>
+              </div>
+              
+          
+              <div
+                class="sb-argstableBlock-summary"
+              >
+                
+            
+                <div>
+                  <span
+                    class="sb-argstableBlock-code"
+                  >
+                    summary
+                  </span>
+                </div>
+                
+          
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span
+                  class="sb-argstableBlock-code"
+                >
+                  defaultValue
+                </span>
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              <button>
+                Set string
+              </button>
+            </td>
+            
+      
+          </tr>
+          
+      
+          <tr>
+            
+        
+            <td>
+              <span>
+                propertyName
+              </span>
+              <span>
+                *
+              </span>
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span>
+                  This is a short description
+                </span>
+              </div>
+              
+          
+              <div
+                class="sb-argstableBlock-summary"
+              >
+                
+            
+                <div>
+                  <span
+                    class="sb-argstableBlock-code"
+                  >
+                    summary
+                  </span>
+                </div>
+                
+          
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span
+                  class="sb-argstableBlock-code"
+                >
+                  defaultValue
+                </span>
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              <button>
+                Set string
+              </button>
+            </td>
+            
+      
+          </tr>
+          
+      
+          <tr>
+            
+        
+            <td>
+              <span>
+                propertyName
+              </span>
+              <span>
+                *
+              </span>
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span>
+                  This is a short description
+                </span>
+              </div>
+              
+          
+              <div
+                class="sb-argstableBlock-summary"
+              >
+                
+            
+                <div>
+                  <span
+                    class="sb-argstableBlock-code"
+                  >
+                    summary
+                  </span>
+                </div>
+                
+          
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              
+          
+              <div>
+                <span
+                  class="sb-argstableBlock-code"
+                >
+                  defaultValue
+                </span>
+              </div>
+              
+        
+            </td>
+            
+        
+            <td>
+              <button>
+                Set string
+              </button>
+            </td>
+            
+      
+          </tr>
+          
+    
+        </tbody>
+        
+  
+      </table>
+      
+
+    </div>
+    
+
+
+    <div
+      class="sb-nopreview sb-wrapper"
+    >
+      
+  
+      <div
+        class="sb-nopreview_main"
+      >
+        
+    
+        <h1
+          class="sb-nopreview_heading sb-heading"
+        >
+          No Preview
+        </h1>
+        
+    
+        <p>
+          Sorry, but you either have no stories or none are selected somehow.
+        </p>
+        
+    
+        <ul>
+          
+      
+          <li>
+            Please check the Storybook config.
+          </li>
+          
+      
+          <li>
+            Try reloading the page.
+          </li>
+          
+    
+        </ul>
+        
+    
+        <p>
+          
+      If the problem persists, check the bro...
+    at http://127.0.0.1:6006/sidebar/sidebar-app.interactions.helpers.ts:10:103
+    at runWithExpensiveErrorDiagnosticsDisabled (http://127.0.0.1:6006/node_modules/.cache/storybook/10.3.0/1c3385a5d25e538d10b518b310c74d3ca2690b6aaffeadccd74da79736171f86/sb-vite/deps/storybook_internal_preview_runtime.js?v=8a4bd690:24565:58)
+    at checkCallback (http://127.0.0.1:6006/node_modules/.cache/storybook/10.3.0/1c3385a5d25e538d10b518b310c74d3ca2690b6aaffeadccd74da79736171f86/sb-vite/deps/storybook_internal_preview_runtime.js?v=8a4bd690:24913:18)
+    at checkRealTimersCallback (http://127.0.0.1:6006/node_modules/.cache/storybook/10.3.0/1c3385a5d25e538d10b518b310c74d3ca2690b6aaffeadccd74da79736171f86/sb-vite/deps/storybook_internal_preview_runtime.js?v=8a4bd690:24909:18) @ http://127.0.0.1:6006/node_modules/.cache/storybook/10.3.0/1c3385a5d25e538d10b518b310c74d3ca2690b6aaffeadccd74da79736171f86/sb-vite/deps/storybook_internal_preview_runtime.js?v=8a4bd690:31716

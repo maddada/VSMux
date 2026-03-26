@@ -13,6 +13,10 @@
   gap: 12px;
 }
 
+.commands-panel-scroll-shell {
+  overflow: hidden;
+}
+
 .agents-grid {
   display: grid;
   gap: 8px;
@@ -26,11 +30,47 @@
 .commands-grid {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 42px;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  max-height: calc(42px * 3 + 8px * 2);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-y: overlay;
+  overscroll-behavior: contain;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+  width: calc(100% + 14px);
 }
 
 .commands-grid > * {
+  height: 100%;
   min-width: 0;
+}
+
+.commands-grid:hover,
+.commands-grid:focus-within {
+  scrollbar-color:
+    rgb(from #808080 r g b / 0.5)
+    transparent;
+}
+
+.commands-grid::-webkit-scrollbar {
+  height: 2px;
+  width: 2px;
+}
+
+.commands-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.commands-grid::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.commands-grid:hover::-webkit-scrollbar-thumb,
+.commands-grid:focus-within::-webkit-scrollbar-thumb {
+  background: rgb(from #808080 r g b / 0.5);
 }
 
 .agent-button,
@@ -70,7 +110,9 @@
 
 .command-button {
   justify-content: flex-start;
+  min-height: 42px;
   min-width: 0;
+  height: 100%;
   width: 100%;
 }
 
