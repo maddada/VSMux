@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { type TerminalViewMode, type VisibleSessionCount } from "../shared/session-grid-contract";
+import { type VisibleSessionCount } from "../shared/session-grid-contract";
 import { DebuggingStatusIndicator } from "./debugging-status-indicator";
 import { NativeTerminalWorkspaceController, SESSIONS_VIEW_ID } from "./native-terminal-workspace";
 
@@ -12,7 +12,6 @@ export function activate(context: vscode.ExtensionContext): void {
     debuggingStatusIndicator,
     vscode.window.registerWebviewViewProvider(SESSIONS_VIEW_ID, workspace.sidebarProvider),
     registerCommand("VSmux.openWorkspace", () => workspace.openWorkspace()),
-    registerCommand("VSmux.openDebugInspector", () => workspace.openDebugInspector()),
     registerCommand("VSmux.openSettings", () => workspace.openSettings()),
     registerCommand("VSmux.moveToSecondarySidebar", () =>
       workspace.moveSidebarToSecondarySidebar(),
@@ -32,17 +31,10 @@ export function activate(context: vscode.ExtensionContext): void {
     registerSlotFocusCommand("VSmux.focusSessionSlot", workspace),
     registerVisibleCountCommand("VSmux.showOne", workspace, 1),
     registerVisibleCountCommand("VSmux.showTwo", workspace, 2),
-    registerVisibleCountCommand("VSmux.showThree", workspace, 3),
-    registerVisibleCountCommand("VSmux.showFour", workspace, 4),
-    registerVisibleCountCommand("VSmux.showSix", workspace, 6),
-    registerVisibleCountCommand("VSmux.showNine", workspace, 9),
     registerCommand("VSmux.toggleFullscreenSession", async () => {
       await workspace.toggleFullscreenSession();
       await workspace.revealSidebar();
     }),
-    registerViewModeCommand("VSmux.setHorizontalView", workspace, "horizontal"),
-    registerViewModeCommand("VSmux.setVerticalView", workspace, "vertical"),
-    registerViewModeCommand("VSmux.setGridView", workspace, "grid"),
     registerCommand("VSmux.resetWorkspace", () => workspace.resetWorkspace()),
   );
 
@@ -96,17 +88,6 @@ function registerSlotFocusCommand(
     void workspace.focusSessionSlot(resolvedSlotNumber).catch((error) => {
       void vscode.window.showErrorMessage(getErrorMessage(error));
     });
-  });
-}
-
-function registerViewModeCommand(
-  command: string,
-  workspace: NativeTerminalWorkspaceController,
-  viewMode: TerminalViewMode,
-): vscode.Disposable {
-  return registerCommand(command, async () => {
-    await workspace.setViewMode(viewMode);
-    await workspace.revealSidebar();
   });
 }
 

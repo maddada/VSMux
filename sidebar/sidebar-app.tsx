@@ -5,7 +5,6 @@ import { DragDropProvider, DragOverlay, type DragDropEventHandlers } from "@dnd-
 import {
   IconBell,
   IconBellOff,
-  IconBug,
   IconHistory,
   IconLayoutSidebar,
   IconPencil,
@@ -61,6 +60,7 @@ type SessionIdsByGroup = Record<string, string[]>;
 const INITIAL_STATE: SidebarState = {
   groups: [],
   hud: {
+    agentManagerZoomPercent: 100,
     agents: createDefaultSidebarAgentButtons(),
     commands: createDefaultSidebarCommandButtons(),
     completionBellEnabled: false,
@@ -107,6 +107,8 @@ const sensors = [
   KeyboardSensor,
 ];
 
+const SIDEBAR_STARTUP_INTERACTION_BLOCK_MS = 3_000;
+
 function getInitialSidebarTheme(): SidebarTheme {
   return document.body.classList.contains("vscode-light") ||
     document.body.classList.contains("vscode-high-contrast-light")
@@ -116,6 +118,7 @@ function getInitialSidebarTheme(): SidebarTheme {
 
 export function SidebarApp({ vscode }: SidebarAppProps) {
   const [serverState, setServerState] = useState<SidebarState>(INITIAL_STATE);
+  const [isStartupInteractionBlocked, setIsStartupInteractionBlocked] = useState(true);
   const [autoEditingGroupId, setAutoEditingGroupId] = useState<string>();
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [sessionIdsByGroup, setSessionIdsByGroup] = useState<SessionIdsByGroup>({});
@@ -172,8 +175,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
     applySidebarMessage(nextMessage);
   };
 
+  const isSidebarInteractionBlocked =
+    serverState.hud.isVsMuxDisabled || isStartupInteractionBlocked;
+
   const requestNewSession = () => {
-    if (serverState.hud.isVsMuxDisabled) {
+    if (isSidebarInteractionBlocked) {
       return;
     }
 
@@ -225,6 +231,16 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
   }, [draggedSessionId]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setIsStartupInteractionBlocked(false);
+    }, SIDEBAR_STARTUP_INTERACTION_BLOCK_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  useEffect(() => {
     groupIdsRef.current = groupIds;
   }, [groupIds]);
 
@@ -245,12 +261,23 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
   }, [serverState.hud.theme]);
 
   useEffect(() => {
+    document.body.style.setProperty(
+      "--vsmux-agent-manager-zoom",
+      `${serverState.hud.agentManagerZoomPercent}%`,
+    );
+
+    return () => {
+      document.body.style.removeProperty("--vsmux-agent-manager-zoom");
+    };
+  }, [serverState.hud.agentManagerZoomPercent]);
+
+  useEffect(() => {
     if (!sessionGroupsPanelRef.current) {
       return;
     }
 
-    sessionGroupsPanelRef.current.inert = serverState.hud.isVsMuxDisabled;
-  }, [serverState.hud.isVsMuxDisabled]);
+    sessionGroupsPanelRef.current.inert = isSidebarInteractionBlocked;
+  }, [isSidebarInteractionBlocked]);
 
   useEffect(() => {
     if (!isOverflowMenuOpen) {
@@ -459,6 +486,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
     <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
       <div
         className="stack"
+        data-dimmed={String(isStartupInteractionBlocked)}
         data-sidebar-theme={serverState.hud.theme}
         onDoubleClick={handleSidebarDoubleClick}
       >
@@ -574,25 +602,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                     />
                     Sidebar Settings
                   </button>
-                  {serverState.hud.debuggingMode ? (
-                    <button
-                      className="session-context-menu-item"
-                      onClick={() => {
-                        setIsOverflowMenuOpen(false);
-                        vscode.postMessage({ type: "openDebugInspector" });
-                      }}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <IconBug
-                        aria-hidden="true"
-                        className="session-context-menu-icon"
-                        size={14}
-                        stroke={1.8}
-                      />
-                      Open Move Debugger
-                    </button>
-                  ) : null}
                 </div>
               ) : null}
             </div>

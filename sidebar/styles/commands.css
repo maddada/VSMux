@@ -52,9 +52,7 @@
 
 .commands-grid:hover,
 .commands-grid:focus-within {
-  scrollbar-color:
-    rgb(from #808080 r g b / 0.5)
-    transparent;
+  scrollbar-color: rgb(from #808080 r g b / 0.5) transparent;
 }
 
 .commands-grid::-webkit-scrollbar {

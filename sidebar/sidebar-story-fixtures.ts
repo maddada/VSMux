@@ -49,6 +49,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     };
   });
   const hud: SidebarHudState = {
+    agentManagerZoomPercent: 100,
     agents: createDefaultSidebarAgentButtons(),
     commands: createDefaultSidebarCommandButtons(),
     completionBellEnabled: false,

@@ -1,9 +1,12 @@
 import {
+  DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   DEFAULT_MAIN_GROUP_ID,
   DEFAULT_MAIN_GROUP_TITLE,
   GRID_COLUMN_COUNT,
+  MAX_AGENT_MANAGER_ZOOM_PERCENT,
   MAX_SESSION_COUNT,
   MAX_SESSION_DISPLAY_ID_COUNT,
+  MIN_AGENT_MANAGER_ZOOM_PERCENT,
   type BaseSessionRecord,
   type CreateSessionRecordOptions,
   type GroupedSessionWorkspaceSnapshot,
@@ -52,6 +55,17 @@ export function clampTerminalViewMode(value: string | undefined): TerminalViewMo
     default:
       return "grid";
   }
+}
+
+export function clampAgentManagerZoomPercent(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_AGENT_MANAGER_ZOOM_PERCENT;
+  }
+
+  return Math.min(
+    MAX_AGENT_MANAGER_ZOOM_PERCENT,
+    Math.max(MIN_AGENT_MANAGER_ZOOM_PERCENT, Math.round(value)),
+  );
 }
 
 export function clampSidebarThemeSetting(value: string | undefined): SidebarThemeSetting {

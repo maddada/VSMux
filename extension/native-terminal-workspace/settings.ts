@@ -4,7 +4,9 @@ import {
   type CompletionSoundSetting,
 } from "../../shared/completion-sound";
 import {
+  clampAgentManagerZoomPercent,
   clampSidebarThemeSetting,
+  DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   type SidebarThemeSetting,
   type SidebarThemeVariant,
 } from "../../shared/session-grid-contract";
@@ -16,6 +18,7 @@ export const NATIVE_TERMINAL_ACTION_DELAY_MS_SETTING = "nativeTerminalActionDela
 export const KEEP_SESSION_GROUPS_UNLOCKED_SETTING = "keepSessionGroupsUnlocked";
 export const SEND_RENAME_COMMAND_ON_SIDEBAR_RENAME_SETTING = "sendRenameCommandOnSidebarRename";
 export const SIDEBAR_THEME_SETTING = "sidebarTheme";
+export const AGENT_MANAGER_ZOOM_SETTING = "agentManagerZoom";
 export const SHOW_CLOSE_BUTTON_ON_SESSION_CARDS_SETTING = "showCloseButtonOnSessionCards";
 export const SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING = "showHotkeysOnSessionCards";
 export const DEBUGGING_MODE_SETTING = "debuggingMode";
@@ -41,6 +44,10 @@ export function getBackgroundSessionTimeoutConfigurationKey(): string {
 
 export function getSidebarThemeConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${SIDEBAR_THEME_SETTING}`;
+}
+
+export function getAgentManagerZoomConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${AGENT_MANAGER_ZOOM_SETTING}`;
 }
 
 export function getMatchVisibleTerminalOrderConfigurationKey(): string {
@@ -117,6 +124,15 @@ export function getClampedSidebarThemeSetting(): SidebarThemeSetting {
       .getConfiguration(SETTINGS_SECTION)
       .get<string>(SIDEBAR_THEME_SETTING, "auto") ?? "auto";
   return clampSidebarThemeSetting(value);
+}
+
+export function getClampedAgentManagerZoomPercent(): number {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(AGENT_MANAGER_ZOOM_SETTING, DEFAULT_AGENT_MANAGER_ZOOM_PERCENT) ??
+    DEFAULT_AGENT_MANAGER_ZOOM_PERCENT;
+  return clampAgentManagerZoomPercent(value);
 }
 
 export function getClampedCompletionSoundSetting(): CompletionSoundSetting {

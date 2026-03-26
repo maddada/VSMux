@@ -170,8 +170,11 @@ export function normalizeWorkspaceSessionDisplayIds(groups: readonly SessionGrou
       changed = true;
       const claimedDisplayId = claimDisplayId(usedDisplayIds, nextAvailableDisplayId);
       nextAvailableDisplayId = claimedDisplayId.nextSessionDisplayId;
+      const normalizedAlias = session.alias.trim();
       return {
         ...session,
+        alias:
+          normalizedAlias === normalizedDisplayId ? claimedDisplayId.displayId : session.alias,
         displayId: claimedDisplayId.displayId,
       };
     });

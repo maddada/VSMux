@@ -241,6 +241,7 @@ body,
 
 body {
   padding: 12px;
+  zoom: var(--vsmux-agent-manager-zoom, 100%);
   font-family: var(
     --vscode-font-family,
     -apple-system,
@@ -286,6 +287,12 @@ button:disabled {
   min-height: 100%;
   align-content: start;
   position: relative;
+}
+
+.stack[data-dimmed="true"] {
+  filter: saturate(0.7);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .sidebar-titlebar-controls {

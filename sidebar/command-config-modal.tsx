@@ -97,20 +97,9 @@ export function CommandConfigModal({ draft, isOpen, onCancel, onSave }: CommandC
         </div>
         <div className="command-config-fields">
           <label className="command-config-field">
-            <span className="command-config-label">Type</span>
-            <select
-              autoFocus
-              className="group-title-input command-config-input"
-              onChange={(event) => setActionType(event.currentTarget.value as SidebarActionType)}
-              value={actionType}
-            >
-              <option value="terminal">Terminal</option>
-              <option value="browser">Browser</option>
-            </select>
-          </label>
-          <label className="command-config-field">
             <span className="command-config-label">Name</span>
             <input
+              autoFocus
               className="group-title-input command-config-input"
               onChange={(event) => setName(event.currentTarget.value)}
               placeholder={actionType === "browser" ? "Docs" : "Dev"}

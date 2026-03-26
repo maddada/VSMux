@@ -75,11 +75,6 @@
         "category": "VSmux"
       },
       {
-        "command": "VSmux.openDebugInspector",
-        "title": "Open Move Debugger",
-        "category": "VSmux"
-      },
-      {
         "command": "VSmux.createSession",
         "title": "New Session",
         "category": "VSmux"
@@ -155,43 +150,8 @@
         "category": "VSmux"
       },
       {
-        "command": "VSmux.showThree",
-        "title": "Show 3 Terminals",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.showFour",
-        "title": "Show 4 Terminals",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.showSix",
-        "title": "Show 6 Terminals",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.showNine",
-        "title": "Show 9 Terminals",
-        "category": "VSmux"
-      },
-      {
         "command": "VSmux.toggleFullscreenSession",
         "title": "Toggle Fullscreen Session",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.setHorizontalView",
-        "title": "Set Horizontal View",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.setVerticalView",
-        "title": "Set Vertical View",
-        "category": "VSmux"
-      },
-      {
-        "command": "VSmux.setGridView",
-        "title": "Set Grid View",
         "category": "VSmux"
       },
       {
@@ -284,6 +244,14 @@
             "A light orange-tinted palette with an amber accent."
           ],
           "description": "Theme preset used by the VSmux sidebar app. Auto follows the active VS Code light or dark theme."
+        },
+        "VSmux.agentManagerZoom": {
+          "title": "Agent Manager Zoom",
+          "type": "number",
+          "minimum": 50,
+          "maximum": 200,
+          "default": 100,
+          "description": "Zoom percentage used by the VSmux agent manager sidebar UI. 100 is default size, 95 or 90 zoom out, and values above 100 zoom in."
         },
         "VSmux.debuggingMode": {
           "title": "Debugging Mode",
@@ -414,18 +382,6 @@
         "when": "!inputFocus || terminalFocus"
       },
       {
-        "command": "VSmux.showSix",
-        "key": "ctrl+alt+shift+6",
-        "mac": "cmd+alt+shift+6",
-        "when": "!inputFocus || terminalFocus"
-      },
-      {
-        "command": "VSmux.showNine",
-        "key": "ctrl+alt+shift+9",
-        "mac": "cmd+alt+shift+9",
-        "when": "!inputFocus || terminalFocus"
-      },
-      {
         "args": 1,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+1",
@@ -486,24 +442,6 @@
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+9",
         "mac": "cmd+alt+9",
-        "when": "!inputFocus || terminalFocus"
-      },
-      {
-        "command": "VSmux.setHorizontalView",
-        "key": "ctrl+alt+h",
-        "mac": "cmd+alt+h",
-        "when": "!inputFocus || terminalFocus"
-      },
-      {
-        "command": "VSmux.setVerticalView",
-        "key": "ctrl+alt+v",
-        "mac": "cmd+alt+v",
-        "when": "!inputFocus || terminalFocus"
-      },
-      {
-        "command": "VSmux.setGridView",
-        "key": "ctrl+alt+g",
-        "mac": "cmd+alt+g",
         "when": "!inputFocus || terminalFocus"
       },
       {

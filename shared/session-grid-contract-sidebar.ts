@@ -44,6 +44,7 @@ export type SidebarSessionGroup = {
 };
 
 export type SidebarHudState = {
+  agentManagerZoomPercent: number;
   agents: SidebarAgentButton[];
   commands: SidebarCommandButton[];
   completionBellEnabled: boolean;
@@ -105,9 +106,6 @@ export type SidebarToExtensionMessage =
     }
   | {
       type: "openSettings";
-    }
-  | {
-      type: "openDebugInspector";
     }
   | {
       type: "toggleCompletionBell";

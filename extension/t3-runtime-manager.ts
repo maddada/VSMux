@@ -66,7 +66,6 @@ export class T3RuntimeManager implements vscode.Disposable {
   private ensureRunningPromise: Promise<string> | undefined;
   private connectPromise: Promise<WebSocket> | undefined;
   private leaseHeartbeatTimer: NodeJS.Timeout | undefined;
-  private output: vscode.OutputChannel | undefined;
 
   public constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -81,8 +80,6 @@ export class T3RuntimeManager implements vscode.Disposable {
       pending.reject(new Error("T3 runtime disposed."));
     }
     this.pendingRequests.clear();
-    this.output?.dispose();
-    this.output = undefined;
   }
 
   public getServerOrigin(): string {
@@ -316,23 +313,6 @@ export class T3RuntimeManager implements vscode.Disposable {
     pending.resolve(message.result);
   }
 
-  private getOutputChannel(): vscode.OutputChannel | undefined {
-    if (this.output) {
-      return this.output;
-    }
-
-    if (typeof vscode.window.createOutputChannel !== "function") {
-      return undefined;
-    }
-
-    this.output = vscode.window.createOutputChannel("VSmux T3");
-    return this.output;
-  }
-
-  private writeOutputLine(value: string): void {
-    this.getOutputChannel()?.appendLine(value);
-  }
-
   private async startSupervisorIfNeeded(
     workspaceRoot: string,
     startupCommand: string,
@@ -381,8 +361,6 @@ export class T3RuntimeManager implements vscode.Disposable {
         },
       );
       child.unref();
-      this.writeOutputLine(`[start] ${startupCommand}`);
-      this.writeOutputLine(`[runtime] ${nodeRuntimePath}`);
     } finally {
       await releaseLock();
     }

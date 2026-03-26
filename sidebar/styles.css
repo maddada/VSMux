@@ -7,3 +7,14 @@
 @import "./styles/session-cards.css";
 @import "./styles/session-chrome.css";
 @import "./styles/session-overlays.css";
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  height: 0;
+  width: 0;
+}

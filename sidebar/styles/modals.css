@@ -1,5 +1,9 @@
 .confirm-modal-root {
+  display: grid;
   inset: 0;
+  overflow: auto;
+  padding: 12px;
+  place-items: center;
   position: fixed;
   z-index: 1200;
 }
@@ -22,13 +26,14 @@
   color: inherit;
   display: grid;
   gap: 18px;
-  left: 50%;
-  max-width: min(420px, calc(100vw - 24px));
+  margin: auto;
+  max-height: calc(100vh - 24px);
+  max-width: min(420px, 100%);
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 18px;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(100vw - 24px);
+  position: relative;
+  width: 100%;
 }
 
 .confirm-modal-header {
@@ -54,6 +59,7 @@
 
 .confirm-modal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
@@ -86,28 +92,27 @@
 }
 
 .command-config-modal {
-  max-width: min(480px, calc(100vw - 24px));
+  max-width: min(480px, 100%);
 }
 
 .previous-sessions-modal {
   gap: 14px;
-  left: 50%;
   max-height: calc(100vh - 24px);
-  max-width: 280px;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(280px, calc(100vw - 24px));
+  max-width: min(280px, 100%);
+  width: min(280px, 100%);
 }
 
 .previous-sessions-toolbar {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .previous-sessions-search-input {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  min-width: 0;
   text-transform: none;
 }
 
@@ -123,7 +128,9 @@
   justify-content: center;
   letter-spacing: 0.05em;
   min-height: 32px;
+  min-width: 0;
   padding: 0 12px;
+  text-align: center;
   text-transform: uppercase;
   transition:
     background-color 120ms ease,
@@ -149,6 +156,7 @@
   display: grid;
   gap: 14px;
   max-height: calc(100vh - 120px);
+  min-width: 0;
   overflow: auto;
   padding-right: 2px;
 }
@@ -167,19 +175,19 @@
 }
 
 .previous-sessions-empty-state {
+  line-height: 1.2;
   min-height: 96px;
+  padding: 12px;
+  text-align: center;
 }
 
 .scratch-pad-modal {
   gap: 14px;
   grid-template-rows: auto minmax(0, 1fr);
   height: min(90vh, calc(100vh - 24px));
-  left: 50%;
   max-height: min(90vh, calc(100vh - 24px));
-  max-width: min(420px, calc(100vw - 24px));
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(420px, calc(100vw - 24px));
+  max-width: min(420px, 100%);
+  width: min(420px, 100%);
 }
 
 .scratch-pad-modal-body {
@@ -255,6 +263,7 @@
   border-radius: 14px;
   display: flex;
   gap: 10px;
+  min-width: 0;
   padding: 10px 12px;
 }
 
@@ -268,8 +277,38 @@
   color: color-mix(in srgb, var(--app-foreground) 88%, var(--app-muted) 12%);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .confirm-modal-button {
+  flex: 1 1 112px;
+  max-width: 100%;
   min-width: 112px;
+}
+
+@media (max-width: 280px) {
+  .confirm-modal-root {
+    padding: 8px;
+  }
+
+  .confirm-modal {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .previous-sessions-clear-button {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    padding: 8px 10px;
+    white-space: normal;
+  }
+
+  .previous-sessions-empty-state {
+    min-height: 84px;
+  }
+
+  .previous-sessions-search-input {
+    font-size: 11px;
+  }
 }

@@ -21,7 +21,6 @@ export type SidebarMessageHandlers = {
   focusSession: (sessionId: string, preserveFocus?: boolean) => Promise<void>;
   moveSessionToGroup: (sessionId: string, groupId: string, targetIndex?: number) => Promise<void>;
   moveSidebarToOtherSide: () => Promise<void>;
-  openDebugInspector: () => Promise<void>;
   openSettings: () => Promise<void>;
   promptRenameSession: (sessionId: string) => Promise<void>;
   refreshSidebarHydrate: () => Promise<void>;
@@ -77,9 +76,6 @@ export async function dispatchSidebarMessage(
       return;
     case "openSettings":
       await handlers.openSettings();
-      return;
-    case "openDebugInspector":
-      await handlers.openDebugInspector();
       return;
     case "toggleCompletionBell":
       await handlers.toggleCompletionBell();

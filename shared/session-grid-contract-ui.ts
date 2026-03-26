@@ -5,10 +5,11 @@ import {
 } from "./completion-sound";
 import { createDefaultSidebarAgentButtons, type SidebarAgentButton } from "./sidebar-agents";
 import { createDefaultSidebarCommandButtons, type SidebarCommandButton } from "./sidebar-commands";
-import type {
-  SessionGridSnapshot,
-  SessionRecord,
-  SidebarTheme,
+import {
+  DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
+  type SessionGridSnapshot,
+  type SessionRecord,
+  type SidebarTheme,
 } from "./session-grid-contract-core";
 import type { SidebarHudState, SidebarSessionItem } from "./session-grid-contract-sidebar";
 import {
@@ -24,6 +25,7 @@ import {
 export function createSidebarHudState(
   snapshot: SessionGridSnapshot,
   theme: SidebarTheme = "dark-blue",
+  agentManagerZoomPercent = DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   showCloseButtonOnSessionCards = false,
   showHotkeysOnSessionCards = false,
   debuggingMode = false,
@@ -39,6 +41,7 @@ export function createSidebarHudState(
     : undefined;
 
   return {
+    agentManagerZoomPercent,
     agents,
     commands,
     completionBellEnabled,

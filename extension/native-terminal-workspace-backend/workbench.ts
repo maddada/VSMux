@@ -17,11 +17,15 @@ export function findTerminalGroupIndices(sessionTitle: string | undefined): numb
 
   return vscode.window.tabGroups.all
     .filter((group) => {
+      if (group.viewColumn === undefined) {
+        return false;
+      }
+
       return group.tabs.some((tab) => {
         return tab.input instanceof vscode.TabInputTerminal && tab.label === sessionTitle;
       });
     })
-    .map((group) => (group.viewColumn ?? 1) - 1)
+    .map((group) => group.viewColumn - 1)
     .sort((left, right) => left - right);
 }
 
@@ -79,6 +83,21 @@ export function getActivePanelTerminalTabLabel(
   return activeTab.label;
 }
 
+export function getActiveEditorTerminalTabLabel(
+  activeGroup: vscode.TabGroup | undefined = vscode.window.tabGroups.activeTabGroup,
+): string | undefined {
+  const activeTab = activeGroup?.activeTab;
+  if (
+    !activeTab ||
+    activeGroup?.viewColumn === undefined ||
+    !(activeTab.input instanceof vscode.TabInputTerminal)
+  ) {
+    return undefined;
+  }
+
+  return activeTab.label;
+}
+
 export function getActiveTerminalTabLocation(
   activeGroup: vscode.TabGroup | undefined = vscode.window.tabGroups.activeTabGroup,
 ): "editor" | "other" | "panel" {
@@ -120,8 +139,7 @@ export function resolveTerminalRestoreTarget<T extends TerminalLike>(
   }
 
   return terminals.find(
-    (terminal) =>
-      !terminal.exitStatus && getTerminalDisplayName(terminal) === panelTabLabel,
+    (terminal) => !terminal.exitStatus && getTerminalDisplayName(terminal) === panelTabLabel,
   );
 }
 

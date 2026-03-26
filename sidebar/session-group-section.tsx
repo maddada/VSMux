@@ -101,9 +101,7 @@ function SplitSelectionMenuIcon({ visibleCount }: SplitSelectionMenuIconProps) {
     return <IconSquare aria-hidden="true" className="session-context-menu-icon" size={14} />;
   }
 
-  return (
-    <IconLayoutColumns aria-hidden="true" className="session-context-menu-icon" size={14} />
-  );
+  return <IconLayoutColumns aria-hidden="true" className="session-context-menu-icon" size={14} />;
 }
 
 function getVisibleCountMenuLabel(visibleCount: VisibleSessionCount): string {

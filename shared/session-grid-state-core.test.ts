@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
+  clampAgentManagerZoomPercent,
   clampTerminalViewMode,
   createDefaultSessionGridSnapshot,
   createSidebarHudState,
@@ -232,6 +233,7 @@ describe("sidebar HUD state", () => {
     const hud = createSidebarHudState(
       createDefaultSessionGridSnapshot(),
       "dark-green",
+      95,
       false,
       false,
       false,
@@ -242,6 +244,7 @@ describe("sidebar HUD state", () => {
     expect(hud.completionBellEnabled).toBe(true);
     expect(hud.completionSound).toBe("glass");
     expect(hud.completionSoundLabel).toBe("Glass");
+    expect(hud.agentManagerZoomPercent).toBe(95);
     expect(hud.showCloseButtonOnSessionCards).toBe(false);
     expect(hud.showHotkeysOnSessionCards).toBe(false);
     expect(hud.isFocusModeActive).toBe(false);
@@ -258,6 +261,7 @@ describe("sidebar HUD state", () => {
         visibleSessionIds: ["session-2"],
       },
       "dark-green",
+      100,
       false,
       false,
       false,
@@ -266,6 +270,16 @@ describe("sidebar HUD state", () => {
     );
 
     expect(hud.isFocusModeActive).toBe(true);
+  });
+});
+
+describe("agent manager zoom settings", () => {
+  test("should clamp invalid zoom values to the supported range", () => {
+    expect(clampAgentManagerZoomPercent(undefined)).toBe(100);
+    expect(clampAgentManagerZoomPercent(49)).toBe(50);
+    expect(clampAgentManagerZoomPercent(90.4)).toBe(90);
+    expect(clampAgentManagerZoomPercent(95.6)).toBe(96);
+    expect(clampAgentManagerZoomPercent(240)).toBe(200);
   });
 });
 

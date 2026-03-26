@@ -13,6 +13,7 @@ export function ScratchPadModal({ content, isOpen, onClose, onSave }: ScratchPad
   const [draftContent, setDraftContent] = useState(content);
   const lastSavedContentRef = useRef(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const wasOpenRef = useRef(false);
 
   const flushDraft = () => {
     if (draftContent === lastSavedContentRef.current) {
@@ -29,8 +30,18 @@ export function ScratchPadModal({ content, isOpen, onClose, onSave }: ScratchPad
   };
 
   useEffect(() => {
-    setDraftContent(content);
-    lastSavedContentRef.current = content;
+    if (!isOpen) {
+      setDraftContent(content);
+      lastSavedContentRef.current = content;
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) {
+      setDraftContent(content);
+      lastSavedContentRef.current = content;
+      wasOpenRef.current = true;
+    }
   }, [content, isOpen]);
 
   useEffect(() => {

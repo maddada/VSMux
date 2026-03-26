@@ -18,6 +18,8 @@ vi.mock("vscode", () => ({
 
 import * as vscode from "vscode";
 import {
+  findTerminalGroupIndex,
+  getActiveEditorTerminalTabLabel,
   getActivePanelTerminalTabLabel,
   getActiveTerminalTabLocation,
   getTerminalDisplayName,
@@ -62,6 +64,20 @@ describe("native terminal workbench helpers", () => {
     expect(getActivePanelTerminalTabLabel()).toBe("panel");
   });
 
+  test("should read the selected terminal tab in the active editor group", () => {
+    getMockWindow().tabGroups.activeTabGroup = createTerminalGroup(2, [
+      { isActive: true, label: "editor" },
+    ]);
+
+    expect(getActiveEditorTerminalTabLabel()).toBe("editor");
+  });
+
+  test("should not treat panel terminals as editor-group terminals", () => {
+    getMockWindow().tabGroups.all = [createTerminalGroup(undefined, [{ isActive: true, label: "panel" }])];
+
+    expect(findTerminalGroupIndex("panel")).toBeUndefined();
+  });
+
   test("should classify an active terminal tab in the editor area", () => {
     getMockWindow().tabGroups.activeTabGroup = createTerminalGroup(2, [
       { isActive: true, label: "editor" },
@@ -102,16 +118,20 @@ describe("native terminal workbench helpers", () => {
     const activeTerminal = createTerminal("panel");
     const otherTerminal = createTerminal("panel");
 
-    expect(resolveTerminalRestoreTarget([otherTerminal, activeTerminal], activeTerminal, "panel")).toBe(
-      activeTerminal,
-    );
+    expect(
+      resolveTerminalRestoreTarget([otherTerminal, activeTerminal], activeTerminal, "panel"),
+    ).toBe(activeTerminal);
   });
 
   test("should fall back to the matching panel tab label when the saved terminal changed", () => {
     const replacementTerminal = createTerminal("panel");
 
     expect(
-      resolveTerminalRestoreTarget([createTerminal("other"), replacementTerminal], undefined, "panel"),
+      resolveTerminalRestoreTarget(
+        [createTerminal("other"), replacementTerminal],
+        undefined,
+        "panel",
+      ),
     ).toBe(replacementTerminal);
   });
 

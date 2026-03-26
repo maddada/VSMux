@@ -27,6 +27,7 @@ import {
 } from "../shared/grouped-session-workspace-state";
 
 type SidebarStoryWorkspaceOptions = {
+  agentManagerZoomPercent: number;
   agents: SidebarAgentButton[];
   commands: SidebarCommandButton[];
   completionBellEnabled: boolean;
@@ -53,6 +54,7 @@ export type SidebarStoryWorkspace = {
 export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): SidebarStoryWorkspace {
   return {
     options: {
+      agentManagerZoomPercent: message.hud.agentManagerZoomPercent,
       agents: message.hud.agents,
       commands: message.hud.commands,
       completionBellEnabled: message.hud.completionBellEnabled,
@@ -124,6 +126,7 @@ export function createSidebarStoryMessage(
     hud: createSidebarHudState(
       activeGroup?.snapshot ?? workspace.snapshot.groups[0]?.snapshot,
       workspace.options.theme,
+      workspace.options.agentManagerZoomPercent,
       workspace.options.showCloseButtonOnSessionCards,
       workspace.options.showHotkeysOnSessionCards,
       workspace.options.debuggingMode,

@@ -97,7 +97,7 @@ export function PreviousSessionsModal({
             onChange={(event) => {
               setSearchQuery(event.target.value);
             }}
-            placeholder="Search previous sessions"
+            placeholder="Search sessions"
             type="text"
             value={searchQuery}
           />
