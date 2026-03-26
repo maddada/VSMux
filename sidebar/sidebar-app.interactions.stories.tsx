@@ -52,11 +52,16 @@ export const ToolbarActions: Story = {
       await expectMessage({ groupId: "group-4", type: "createSessionInGroup" });
     });
 
-    await step("change sessions shown", async () => {
+    await step("toggle sessions shown", async () => {
       resetSidebarStoryMessages();
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Open visible session options for Group 4" }),
-      );
+      await userEvent.click(canvas.getByRole("button", { name: "Toggle split mode for Group 4" }));
+      await expectMessage({ type: "setVisibleCount", visibleCount: 2 });
+    });
+
+    await step("keep the split menu available on right click", async () => {
+      resetSidebarStoryMessages();
+      const splitModeButton = canvas.getByRole("button", { name: "Toggle split mode for Group 4" });
+      await openContextMenu(splitModeButton);
       await expect(body.queryByRole("menuitem", { name: "3" })).toBeNull();
       await expect(body.queryByRole("menuitem", { name: "4" })).toBeNull();
       await expect(body.queryByRole("menuitem", { name: "6" })).toBeNull();

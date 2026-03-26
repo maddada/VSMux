@@ -82,9 +82,11 @@ export function CommandsPanel({
   titlebarActions,
   vscode,
 }: CommandsPanelProps) {
+  const [isCommandsGridScrollable, setIsCommandsGridScrollable] = useState(false);
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
   const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
+  const commandsGridRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -195,6 +197,26 @@ export function CommandsPanel({
       .filter((command): command is SidebarCommandButton => command !== undefined);
   }, [commands, draftCommandIds]);
 
+  useEffect(() => {
+    const gridElement = commandsGridRef.current;
+    if (!gridElement) {
+      return;
+    }
+
+    const updateScrollableState = () => {
+      setIsCommandsGridScrollable(gridElement.scrollHeight > gridElement.clientHeight + 1);
+    };
+
+    updateScrollableState();
+
+    const resizeObserver = new ResizeObserver(updateScrollableState);
+    resizeObserver.observe(gridElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [orderedCommands.length]);
+
   const handleDragEnd = (event: {
     canceled?: boolean;
     operation: {
@@ -253,7 +275,11 @@ export function CommandsPanel({
         <div className="card commands-panel commands-panel-scroll-shell">
           <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
             <DragDropProvider onDragEnd={handleDragEnd}>
-              <div className="commands-grid">
+              <div
+                className="commands-grid"
+                data-scrollable={String(isCommandsGridScrollable)}
+                ref={commandsGridRef}
+              >
                 {orderedCommands.map((command, index) => (
                   <SortableCommandButton
                     command={command}

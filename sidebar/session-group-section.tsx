@@ -305,6 +305,10 @@ export function SessionGroupSection({
     });
   };
 
+  const toggleVisibleCount = () => {
+    setVisibleCount(group.layoutVisibleCount === 1 ? 2 : 1);
+  };
+
   const requestCloseGroup = () => {
     if (!canClose) {
       return;
@@ -385,15 +389,21 @@ export function SessionGroupSection({
                       <button
                         aria-expanded={openControlMenu === "visible-count"}
                         aria-haspopup="menu"
-                        aria-label={`Open visible session options for ${group.title}`}
+                        aria-label={`Toggle split mode for ${group.title}`}
                         className="group-add-button group-control-button"
                         data-open={String(openControlMenu === "visible-count")}
                         onClick={() => {
+                          toggleVisibleCount();
+                        }}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
                           setOpenControlMenu((previous) =>
                             previous === "visible-count" ? undefined : "visible-count",
                           );
                         }}
                         ref={visibleCountButtonRef}
+                        title={`Toggle split mode for ${group.title}`}
                         type="button"
                       >
                         <GroupVisibleCountIcon visibleCount={group.layoutVisibleCount} />

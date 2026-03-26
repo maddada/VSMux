@@ -39,6 +39,9 @@
   overscroll-behavior: contain;
   scrollbar-color: transparent transparent;
   scrollbar-width: thin;
+}
+
+.commands-grid[data-scrollable="true"] {
   width: calc(100% + 14px);
 }
 
