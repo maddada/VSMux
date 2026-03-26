@@ -1,8 +1,5 @@
 import type { SidebarAgentIcon } from "../shared/sidebar-agents";
-import type {
-  SidebarSessionGroup,
-  SidebarSessionItem,
-} from "../shared/session-grid-contract";
+import type { SidebarSessionGroup, SidebarSessionItem } from "../shared/session-grid-contract";
 
 export type SidebarStoryGroup = Omit<
   SidebarSessionGroup,
@@ -67,10 +64,10 @@ export function getFocusedSessionTitle(groups: readonly SidebarSessionGroup[]): 
     .find((session) => session.isFocused);
 
   return focusedSession
-    ? focusedSession.alias ??
+    ? (focusedSession.alias ??
         focusedSession.terminalTitle ??
         focusedSession.primaryTitle ??
-        focusedSession.detail
+        focusedSession.detail)
     : undefined;
 }
 

@@ -307,9 +307,7 @@ export function isT3Session(session: SessionRecord): session is T3SessionRecord 
   return session.kind === "t3";
 }
 
-function getSessionNumber(
-  session: Pick<BaseSessionRecord, "sessionId" | "slotIndex">,
-): number {
+function getSessionNumber(session: Pick<BaseSessionRecord, "sessionId" | "slotIndex">): number {
   return getSessionNumberFromSessionId(session.sessionId) ?? session.slotIndex + 1;
 }
 

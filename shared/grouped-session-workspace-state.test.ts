@@ -3,6 +3,7 @@ import {
   DEFAULT_MAIN_GROUP_ID,
   createDefaultGroupedSessionWorkspaceSnapshot,
   createSessionRecord,
+  type GroupedSessionWorkspaceSnapshot,
 } from "./session-grid-contract";
 import {
   createGroupFromSessionInWorkspace,
@@ -81,7 +82,7 @@ describe("createSessionInWorkspace", () => {
 describe("createGroupFromSessionInWorkspace", () => {
   test("should move the dragged session into a newly created active group", () => {
     const result = createGroupFromSessionInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -98,7 +99,7 @@ describe("createGroupFromSessionInWorkspace", () => {
         ],
         nextGroupNumber: 2,
         nextSessionNumber: 3,
-      },
+      }),
       "session-2",
     );
 
@@ -119,7 +120,7 @@ describe("createGroupFromSessionInWorkspace", () => {
 describe("moveSessionToGroupInWorkspace", () => {
   test("should append the moved session to the target group and activate it", () => {
     const result = moveSessionToGroupInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -147,7 +148,7 @@ describe("moveSessionToGroupInWorkspace", () => {
         ],
         nextGroupNumber: 3,
         nextSessionNumber: 4,
-      },
+      }),
       "session-2",
       "group-2",
     );
@@ -165,7 +166,7 @@ describe("moveSessionToGroupInWorkspace", () => {
 
   test("should insert the moved session at the requested index in the target group", () => {
     const result = moveSessionToGroupInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -193,7 +194,7 @@ describe("moveSessionToGroupInWorkspace", () => {
         ],
         nextGroupNumber: 3,
         nextSessionNumber: 5,
-      },
+      }),
       "session-2",
       "group-2",
       1,
@@ -213,7 +214,7 @@ describe("moveSessionToGroupInWorkspace", () => {
 describe("focusSessionInWorkspace", () => {
   test("should activate the owning group when focusing a session outside the current group", () => {
     const result = focusSessionInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -241,7 +242,7 @@ describe("focusSessionInWorkspace", () => {
         ],
         nextGroupNumber: 3,
         nextSessionNumber: 4,
-      },
+      }),
       "session-3",
     );
 
@@ -282,7 +283,7 @@ describe("active-group preferences", () => {
 
   test("should allow removing the active main group when another group remains", () => {
     const result = removeGroupInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -310,7 +311,7 @@ describe("active-group preferences", () => {
         ],
         nextGroupNumber: 3,
         nextSessionNumber: 3,
-      },
+      }),
       DEFAULT_MAIN_GROUP_ID,
     );
 
@@ -321,7 +322,7 @@ describe("active-group preferences", () => {
 
   test("should reorder groups when the incoming order matches the current set", () => {
     const result = syncGroupOrderInWorkspace(
-      {
+      createWorkspaceSnapshot({
         activeGroupId: DEFAULT_MAIN_GROUP_ID,
         groups: [
           {
@@ -360,7 +361,7 @@ describe("active-group preferences", () => {
         ],
         nextGroupNumber: 4,
         nextSessionNumber: 1,
-      },
+      }),
       ["group-3", DEFAULT_MAIN_GROUP_ID, "group-2"],
     );
 
@@ -373,3 +374,17 @@ describe("active-group preferences", () => {
     expect(result.snapshot.activeGroupId).toBe(DEFAULT_MAIN_GROUP_ID);
   });
 });
+
+type TestWorkspaceSnapshotInput = Omit<GroupedSessionWorkspaceSnapshot, "nextSessionDisplayId"> & {
+  nextSessionDisplayId?: number;
+};
+
+function createWorkspaceSnapshot(
+  input: TestWorkspaceSnapshotInput,
+): GroupedSessionWorkspaceSnapshot {
+  return {
+    ...createDefaultGroupedSessionWorkspaceSnapshot(),
+    ...input,
+    nextSessionDisplayId: input.nextSessionDisplayId ?? 0,
+  };
+}

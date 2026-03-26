@@ -8,7 +8,7 @@ import {
 
 describe("completion sound settings", () => {
   test("should keep supported sound ids", () => {
-    expect(clampCompletionSoundSetting('glass')).toBe('glass');
+    expect(clampCompletionSoundSetting("glass")).toBe("glass");
   });
 
   test("should fall back to the default sound for unknown ids", () => {

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createSessionAlias, createSessionRecord } from "./session-grid-contract";
+import {
+  createSessionAlias,
+  createSessionRecord,
+  type SessionGridSnapshot,
+} from "./session-grid-contract";
 import {
   normalizeSessionGridSnapshot,
   removeSessionInSnapshot,
@@ -57,7 +61,7 @@ describe("renameSessionAliasInSnapshot", () => {
       viewMode: "grid",
       visibleCount: 1 as const,
       visibleSessionIds: ["session-1"],
-    };
+    } satisfies SessionGridSnapshot;
     const normalizedSnapshot = normalizeSessionGridSnapshot(snapshot);
 
     const result = renameSessionAliasInSnapshot(snapshot, "session-1", "   ");
@@ -73,7 +77,7 @@ describe("renameSessionAliasInSnapshot", () => {
       viewMode: "grid",
       visibleCount: 1 as const,
       visibleSessionIds: ["session-1"],
-    };
+    } satisfies SessionGridSnapshot;
     const normalizedSnapshot = normalizeSessionGridSnapshot(snapshot);
 
     const result = renameSessionAliasInSnapshot(snapshot, "session-1", " 123 ");

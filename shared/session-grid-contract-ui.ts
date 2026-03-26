@@ -3,14 +3,8 @@ import {
   getCompletionSoundLabel,
   type CompletionSoundSetting,
 } from "./completion-sound";
-import {
-  createDefaultSidebarAgentButtons,
-  type SidebarAgentButton,
-} from "./sidebar-agents";
-import {
-  createDefaultSidebarCommandButtons,
-  type SidebarCommandButton,
-} from "./sidebar-commands";
+import { createDefaultSidebarAgentButtons, type SidebarAgentButton } from "./sidebar-agents";
+import { createDefaultSidebarCommandButtons, type SidebarCommandButton } from "./sidebar-commands";
 import type {
   SessionGridSnapshot,
   SessionRecord,

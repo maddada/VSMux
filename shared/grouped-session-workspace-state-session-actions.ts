@@ -44,10 +44,14 @@ export function createSessionInWorkspace(
   }
 
   const nextDisplayId = claimNextSessionDisplayId(normalizedSnapshot);
-  const result = createSessionInSnapshot(activeGroup.snapshot, normalizedSnapshot.nextSessionNumber, {
-    ...options,
-    displayId: nextDisplayId.displayId,
-  } as CreateSessionRecordOptions & { displayId: string });
+  const result = createSessionInSnapshot(
+    activeGroup.snapshot,
+    normalizedSnapshot.nextSessionNumber,
+    {
+      ...options,
+      displayId: nextDisplayId.displayId,
+    } as CreateSessionRecordOptions & { displayId: string },
+  );
   if (!result.session) {
     return { snapshot: normalizedSnapshot };
   }

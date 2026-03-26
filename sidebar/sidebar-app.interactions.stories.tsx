@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fireEvent, waitFor, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 import type { SidebarStoryArgs } from "./sidebar-story-fixtures";
 import { resetSidebarStoryMessages } from "./sidebar-story-harness";
 import {
@@ -34,8 +34,8 @@ type Story = StoryObj<typeof meta>;
 
 export const ToolbarActions: Story = {
   args: {
-    highlightedVisibleCount: 4,
-    visibleCount: 4,
+    highlightedVisibleCount: 2,
+    visibleCount: 2,
   },
   play: async ({ canvas, canvasElement, step, userEvent }) => {
     const body = within(canvasElement.ownerDocument.body);
@@ -57,8 +57,12 @@ export const ToolbarActions: Story = {
       await userEvent.click(
         canvas.getByRole("button", { name: "Open visible session options for Group 4" }),
       );
-      await userEvent.click(await body.findByRole("menuitem", { name: "6" }));
-      await expectMessage({ type: "setVisibleCount", visibleCount: 6 });
+      await expect(body.queryByRole("menuitem", { name: "3" })).toBeNull();
+      await expect(body.queryByRole("menuitem", { name: "4" })).toBeNull();
+      await expect(body.queryByRole("menuitem", { name: "6" })).toBeNull();
+      await expect(body.queryByRole("menuitem", { name: "9" })).toBeNull();
+      await userEvent.click(await body.findByRole("menuitem", { name: "2" }));
+      await expectMessage({ type: "setVisibleCount", visibleCount: 2 });
     });
 
     await step("switch layout mode", async () => {
@@ -66,6 +70,8 @@ export const ToolbarActions: Story = {
       await userEvent.click(
         canvas.getByRole("button", { name: "Open layout options for Group 4" }),
       );
+      await expect(body.queryByRole("menuitem", { name: "Focus" })).toBeNull();
+      await expect(body.queryByRole("menuitem", { name: "Grid" })).toBeNull();
       await userEvent.click(await body.findByRole("menuitem", { name: "Columns" }));
       await expectMessage({ type: "setViewMode", viewMode: "horizontal" });
     });

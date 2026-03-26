@@ -26,9 +26,6 @@ export function quoteShellLiteral(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-export function matchesLogPattern(
-  line: string,
-  patterns: readonly (readonly string[])[],
-): boolean {
+export function matchesLogPattern(line: string, patterns: readonly (readonly string[])[]): boolean {
   return patterns.some((pattern) => pattern.every((fragment) => line.includes(fragment)));
 }

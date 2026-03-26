@@ -82,7 +82,9 @@ export function removeGroupInWorkspace(
     return { changed: false, snapshot: normalizedSnapshot };
   }
 
-  const removedGroupIndex = normalizedSnapshot.groups.findIndex((group) => group.groupId === groupId);
+  const removedGroupIndex = normalizedSnapshot.groups.findIndex(
+    (group) => group.groupId === groupId,
+  );
   const groups = normalizedSnapshot.groups.filter((group) => group.groupId !== groupId);
 
   return {

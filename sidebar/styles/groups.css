@@ -1,0 +1,348 @@
+.group-list {
+  display: grid;
+  gap: 10px;
+}
+
+.group {
+  border: 1px solid var(--app-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--app-card) 94%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--app-shadow) 12%, transparent);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  overflow: visible;
+  padding: 12px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.group[data-dragging="true"] {
+  opacity: 0.72;
+}
+
+.group[data-active="true"] {
+  background: color-mix(in srgb, var(--app-card) 94%, transparent);
+  box-shadow:
+    0 16px 36px color-mix(in srgb, var(--app-shadow) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 10%, transparent);
+}
+
+.group[data-drop-target="true"] {
+  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 28%, transparent),
+    0 18px 32px color-mix(in srgb, var(--app-button-background) 14%, transparent);
+}
+
+.group-head {
+  min-width: 0;
+  position: relative;
+  z-index: 4;
+}
+
+.group-title-wrap {
+  min-width: 0;
+}
+
+.group-title-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.group-title-handle {
+  cursor: grab;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.group-title-handle:active {
+  cursor: grabbing;
+}
+
+.group-title {
+  text-transform: uppercase;
+}
+
+.group-title,
+.group-title-input {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.group-title {
+  color: color-mix(in srgb, var(--app-foreground) 58%, var(--app-muted) 42%);
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-add-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-card-active) 88%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--app-button-background) 74%, var(--app-foreground) 26%);
+  display: inline-flex;
+  flex: none;
+  height: 22px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  visibility: hidden;
+  width: 22px;
+}
+
+.group-add-button:hover,
+.group-add-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 12%, var(--app-card-active) 88%);
+  border-color: color-mix(in srgb, var(--app-button-background) 54%, var(--app-border));
+  color: var(--app-button-background);
+  outline: none;
+}
+
+.group-layout-controls {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.group-control-anchor {
+  position: relative;
+}
+
+.group-control-button {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.group-control-button[data-open="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 12%, var(--app-card-active) 88%);
+  border-color: color-mix(in srgb, var(--app-button-background) 54%, var(--app-border));
+  color: var(--app-button-background);
+}
+
+.group-control-menu,
+.group-control-menu.session-context-menu {
+  max-width: calc(100vw - 24px);
+  min-width: 0;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  z-index: 40;
+}
+
+.group-control-count-menu {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 18px);
+  justify-content: center;
+  min-width: 0;
+}
+
+.group-control-menu-item {
+  align-items: center;
+  gap: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  width: 100%;
+}
+
+.group-control-count-menu .group-control-menu-item {
+  height: 24px;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  justify-content: center;
+}
+
+.group-control-menu-item[data-selected="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 20%, transparent);
+  color: color-mix(in srgb, var(--app-button-background) 78%, var(--app-foreground) 22%);
+}
+
+.group-add-icon {
+  display: block;
+  flex: none;
+}
+
+.group-meta {
+  align-items: center;
+  align-self: center;
+  color: color-mix(in srgb, var(--app-muted) 82%, var(--app-foreground) 18%);
+  cursor: default;
+  display: inline-flex;
+  flex: none;
+  gap: 7px;
+  justify-content: flex-end;
+  margin-left: auto;
+  min-height: 14px;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.group-meta-item {
+  align-items: center;
+  align-self: center;
+  cursor: default;
+  display: inline-flex;
+  justify-content: center;
+  opacity: 0.84;
+}
+
+.group-meta-icon,
+.group-meta-focus-icon {
+  display: block;
+  height: 14px;
+  width: 14px;
+}
+
+.group-meta-frame,
+.group-meta-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.group-meta-frame {
+  stroke-width: 1.2;
+}
+
+.group-meta-line {
+  stroke-width: 1.15;
+}
+
+.group-meta-count-text {
+  dominant-baseline: middle;
+  fill: currentColor;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.92;
+  transform: translateY(1px);
+}
+
+.group-title-input {
+  background: color-mix(in srgb, var(--app-card-active) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-button-background) 44%, var(--app-border));
+  border-radius: 12px;
+  color: inherit;
+  outline: none;
+  padding: 6px 9px;
+  width: 100%;
+}
+
+.group-title-input:focus {
+  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-button-background) 24%, transparent);
+}
+
+.group[data-active="true"] .group-title {
+  color: var(--app-foreground);
+}
+
+.group[data-active="true"] .group-meta,
+.group[data-active="true"] .group-add-button,
+.group:hover .group-meta,
+.group:hover .group-add-button,
+.group:focus-within .group-add-button {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.group-sessions {
+  display: grid;
+  gap: 8px;
+}
+
+.group-sessions[data-drop-target="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 8%, transparent);
+  border-radius: 16px;
+}
+
+.group-empty-drop-target {
+  display: grid;
+}
+
+.group-empty-drop-target[data-drop-target="true"] .group-empty-state {
+  background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
+  border-color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 18%, transparent),
+    0 12px 24px color-mix(in srgb, var(--app-button-background) 8%, transparent);
+}
+
+.group-empty-state {
+  align-items: center;
+  align-self: center;
+  border: 1px dashed color-mix(in srgb, var(--app-button-background) 44%, var(--app-border));
+  border-radius: 18px;
+  color: color-mix(in srgb, var(--app-muted) 82%, var(--app-foreground) 18%);
+  display: flex;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  height: 72px;
+  justify-content: center;
+  justify-self: stretch;
+  line-height: 1;
+  width: 100%;
+}
+
+.group-create-target {
+  align-items: center;
+  border: 1px dashed color-mix(in srgb, var(--app-button-background) 42%, var(--app-border));
+  border-radius: 22px;
+  color: var(--app-muted);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-height: 84px;
+  padding: 16px 12px;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.group-create-target[data-drop-target="true"] {
+  border-color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-border));
+  background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 18%, transparent),
+    0 14px 30px color-mix(in srgb, var(--app-button-background) 10%, transparent);
+}
+
+.group-create-plus {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-button-background) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-button-background) 34%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-foreground) 28%);
+  display: inline-flex;
+  font-size: 24px;
+  height: 42px;
+  justify-content: center;
+  line-height: 1;
+  width: 42px;
+}
+
+.group-create-copy {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}

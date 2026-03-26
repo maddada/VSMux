@@ -112,7 +112,9 @@ export function applyObservedActiveGroupStateInWorkspace(
         snapshot: {
           ...normalizedSnapshot,
           groups: normalizedSnapshot.groups.map((group) =>
-            group.groupId === activeGroup.groupId ? { ...group, snapshot: nextGroupSnapshot } : group,
+            group.groupId === activeGroup.groupId
+              ? { ...group, snapshot: nextGroupSnapshot }
+              : group,
           ),
         },
       }

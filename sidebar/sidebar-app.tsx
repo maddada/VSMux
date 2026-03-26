@@ -514,7 +514,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                         size={14}
                       />
                     ) : (
-                      <IconBell aria-hidden="true" className="session-context-menu-icon" size={14} />
+                      <IconBell
+                        aria-hidden="true"
+                        className="session-context-menu-icon"
+                        size={14}
+                      />
                     )}
                     {getCompletionBellMenuLabel(serverState.hud)}
                   </button>

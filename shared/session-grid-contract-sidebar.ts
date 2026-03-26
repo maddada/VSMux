@@ -247,5 +247,10 @@ export type SidebarToExtensionMessage =
 
 export type SidebarHudSnapshot = Pick<
   SessionGridSnapshot,
-  "focusedSessionId" | "fullscreenRestoreVisibleCount" | "sessions" | "visibleCount" | "visibleSessionIds" | "viewMode"
+  | "focusedSessionId"
+  | "fullscreenRestoreVisibleCount"
+  | "sessions"
+  | "visibleCount"
+  | "visibleSessionIds"
+  | "viewMode"
 >;

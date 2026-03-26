@@ -3,6 +3,7 @@ import {
   createSessionRecord,
   type SessionGridSnapshot,
   type TerminalViewMode,
+  type VisibleSessionCount,
 } from "./session-grid-contract";
 import { createParkedTerminalReconcilePlan } from "./session-grid-parked-terminal-plan";
 
@@ -172,7 +173,23 @@ function createSnapshot(
       createSessionRecord(sessionNumber, slotIndex),
     ),
     viewMode,
-    visibleCount: visibleSessionIds.length === 0 ? 1 : visibleSessionIds.length,
+    visibleCount: toVisibleSessionCount(
+      visibleSessionIds.length === 0 ? 1 : visibleSessionIds.length,
+    ),
     visibleSessionIds: [...visibleSessionIds],
   };
+}
+
+function toVisibleSessionCount(value: number): VisibleSessionCount {
+  switch (value) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 6:
+    case 9:
+      return value;
+    default:
+      throw new Error(`Invalid visible session count: ${value}`);
+  }
 }

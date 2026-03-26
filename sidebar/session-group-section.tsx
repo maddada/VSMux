@@ -25,6 +25,9 @@ const CONTEXT_MENU_HEIGHT_PX = 90;
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 164;
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
+const SIDEBAR_VISIBLE_COUNT_OPTIONS: VisibleSessionCount[] = COUNT_OPTIONS.filter(
+  (visibleCount) => visibleCount <= 2,
+);
 const GROUP_CONTROL_MENU_MARGIN_PX = 12;
 
 type ContextMenuPosition = {
@@ -42,15 +45,11 @@ type GroupVisibleCountIconProps = {
   visibleCount: VisibleSessionCount;
 };
 
-type LayoutOption =
-  | { kind: "focus"; label: string }
-  | { kind: "view-mode"; label: string; viewMode: TerminalViewMode };
+type LayoutOption = { label: string; viewMode: TerminalViewMode };
 
 const LAYOUT_OPTIONS: readonly LayoutOption[] = [
-  { kind: "focus", label: "Focus" },
-  { kind: "view-mode", label: "Rows", viewMode: "vertical" },
-  { kind: "view-mode", label: "Columns", viewMode: "horizontal" },
-  { kind: "view-mode", label: "Grid", viewMode: "grid" },
+  { label: "Rows", viewMode: "vertical" },
+  { label: "Columns", viewMode: "horizontal" },
 ];
 
 export type SessionGroupSectionProps = {
@@ -329,12 +328,6 @@ export function SessionGroupSection({
 
   const setLayout = (option: LayoutOption) => {
     setOpenControlMenu(undefined);
-
-    if (option.kind === "focus") {
-      vscode.postMessage({ type: "toggleFullscreenSession" });
-      return;
-    }
-
     vscode.postMessage({
       type: "setViewMode",
       viewMode: option.viewMode,
@@ -558,13 +551,8 @@ export function SessionGroupSection({
               style={getPortalMenuStyle(layoutButtonRef.current)}
             >
               {LAYOUT_OPTIONS.map((option) => {
-                const isSelected =
-                  option.kind === "focus"
-                    ? group.isFocusModeActive
-                    : !group.isFocusModeActive && group.viewMode === option.viewMode;
-                const isDisabled =
-                  option.kind === "view-mode" &&
-                  isViewModeDisabled(option.viewMode, group.layoutVisibleCount);
+                const isSelected = !group.isFocusModeActive && group.viewMode === option.viewMode;
+                const isDisabled = isViewModeDisabled(option.viewMode, group.layoutVisibleCount);
 
                 return (
                   <button
@@ -583,16 +571,7 @@ export function SessionGroupSection({
                     role="menuitem"
                     type="button"
                   >
-                    {option.kind === "focus" ? (
-                      <IconFocusCentered
-                        aria-hidden="true"
-                        className="session-context-menu-icon"
-                        size={14}
-                        stroke={1.8}
-                      />
-                    ) : (
-                      <GroupLayoutIcon viewMode={option.viewMode} />
-                    )}
+                    <GroupLayoutIcon viewMode={option.viewMode} />
                     {option.label}
                   </button>
                 );
@@ -610,7 +589,7 @@ export function SessionGroupSection({
               role="menu"
               style={getPortalMenuStyle(visibleCountButtonRef.current)}
             >
-              {COUNT_OPTIONS.map((visibleCount) => (
+              {SIDEBAR_VISIBLE_COUNT_OPTIONS.map((visibleCount) => (
                 <button
                   aria-pressed={group.layoutVisibleCount === visibleCount}
                   className="session-context-menu-item group-control-menu-item"

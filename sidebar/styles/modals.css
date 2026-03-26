@@ -1,0 +1,275 @@
+.confirm-modal-root {
+  inset: 0;
+  position: fixed;
+  z-index: 1200;
+}
+
+.confirm-modal-backdrop {
+  background: color-mix(in srgb, #05070a 68%, transparent);
+  border: 0;
+  border-radius: 0;
+  inset: 0;
+  position: absolute;
+}
+
+.confirm-modal {
+  background: var(--app-card);
+  border: 1px solid color-mix(in srgb, var(--app-border) 84%, transparent);
+  border-radius: 20px;
+  box-shadow:
+    0 24px 60px color-mix(in srgb, var(--app-shadow) 34%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 12%, transparent);
+  color: inherit;
+  display: grid;
+  gap: 18px;
+  left: 50%;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 18px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100vw - 24px);
+}
+
+.confirm-modal-header {
+  display: grid;
+  gap: 8px;
+}
+
+.confirm-modal-header-with-close {
+  padding-right: 28px;
+}
+
+.confirm-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.confirm-modal-description {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirm-modal-close-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--app-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+  width: 22px;
+}
+
+.confirm-modal-close-button:hover,
+.confirm-modal-close-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 10%, transparent);
+  color: var(--app-foreground);
+  outline: none;
+}
+
+.command-config-modal {
+  max-width: min(480px, calc(100vw - 24px));
+}
+
+.previous-sessions-modal {
+  gap: 14px;
+  left: 50%;
+  max-height: calc(100vh - 24px);
+  max-width: 280px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(280px, calc(100vw - 24px));
+}
+
+.previous-sessions-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.previous-sessions-search-input {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.previous-sessions-clear-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 12px;
+  color: color-mix(in srgb, var(--app-muted) 54%, var(--app-foreground) 46%);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: 0.05em;
+  min-height: 32px;
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+.previous-sessions-clear-button:hover,
+.previous-sessions-clear-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 12%, var(--app-card-active) 88%);
+  border-color: color-mix(in srgb, var(--app-button-background) 54%, var(--app-border));
+  color: color-mix(in srgb, var(--app-button-background) 80%, var(--app-foreground) 20%);
+  outline: none;
+}
+
+.previous-sessions-clear-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.previous-sessions-modal-body {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.previous-sessions-day-group {
+  display: grid;
+  gap: 8px;
+}
+
+.previous-sessions-day-label {
+  color: color-mix(in srgb, var(--app-foreground) 76%, var(--app-muted) 24%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.previous-sessions-empty-state {
+  min-height: 96px;
+}
+
+.scratch-pad-modal {
+  gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(90vh, calc(100vh - 24px));
+  left: 50%;
+  max-height: min(90vh, calc(100vh - 24px));
+  max-width: min(420px, calc(100vw - 24px));
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 24px));
+}
+
+.scratch-pad-modal-body {
+  display: grid;
+  min-height: 0;
+}
+
+.scratch-pad-textarea {
+  background: color-mix(in srgb, var(--app-card-active) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-button-background) 32%, var(--app-border));
+  border-radius: 14px;
+  height: 100%;
+  color: inherit;
+  font-family: var(
+    --vscode-editor-font-family,
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
+  font-size: var(--vscode-editor-font-size, 12px);
+  line-height: 1.55;
+  min-height: 0;
+  outline: none;
+  padding: 12px 13px;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+  width: 100%;
+}
+
+.scratch-pad-textarea:focus {
+  border-color: color-mix(in srgb, var(--app-button-background) 68%, var(--app-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-button-background) 22%, transparent);
+}
+
+.scratch-pad-textarea::placeholder {
+  color: color-mix(in srgb, var(--app-muted) 88%, transparent);
+}
+
+.command-config-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.command-config-field {
+  display: grid;
+  gap: 6px;
+}
+
+.command-config-label {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.command-config-input {
+  width: 100%;
+}
+
+.command-config-textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.command-config-toggle {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--app-card-active) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 14px;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.command-config-checkbox {
+  accent-color: var(--app-button-background);
+  flex: none;
+  margin: 2px 0 0;
+}
+
+.command-config-toggle-copy {
+  color: color-mix(in srgb, var(--app-foreground) 88%, var(--app-muted) 12%);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.confirm-modal-button {
+  min-width: 112px;
+}

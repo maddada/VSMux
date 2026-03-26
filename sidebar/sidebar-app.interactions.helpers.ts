@@ -121,11 +121,7 @@ export async function expectSessionMembership(
   });
 }
 
-export async function findRequiredElement(
-  root: ParentNode,
-  selector: string,
-  description: string,
-) {
+export async function findRequiredElement(root: ParentNode, selector: string, description: string) {
   let matchedElement: HTMLElement | undefined;
 
   await waitFor(() => {

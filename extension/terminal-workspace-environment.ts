@@ -11,6 +11,17 @@ import type {
 export const DEFAULT_TERMINAL_COLS = 120;
 export const DEFAULT_TERMINAL_ROWS = 34;
 
+export type WorkbenchEditorLayoutGroup = {
+  groups?: WorkbenchEditorLayoutGroup[];
+  orientation?: 0 | 1;
+  size?: number;
+};
+
+export type WorkbenchEditorLayout = {
+  groups: WorkbenchEditorLayoutGroup[];
+  orientation?: 0 | 1;
+};
+
 const FOCUS_EDITOR_GROUP_COMMANDS = [
   "workbench.action.focusFirstEditorGroup",
   "workbench.action.focusSecondEditorGroup",
@@ -128,6 +139,51 @@ export async function unlockActiveEditorGroup(): Promise<void> {
   await vscode.commands.executeCommand("workbench.action.unlockEditorGroup");
 }
 
+export async function getCurrentEditorLayout(): Promise<WorkbenchEditorLayout | undefined> {
+  const layout =
+    await vscode.commands.executeCommand<WorkbenchEditorLayout>("vscode.getEditorLayout");
+  return isWorkbenchEditorLayout(layout) ? layout : undefined;
+}
+
+export async function setEditorLayout(layout: WorkbenchEditorLayout): Promise<void> {
+  await vscode.commands.executeCommand("vscode.setEditorLayout", layout);
+}
+
+export async function moveActiveEditorToGroup(targetGroupIndex: number): Promise<boolean> {
+  const activeViewColumn = getActiveEditorGroupViewColumn();
+  if (activeViewColumn === undefined) {
+    return false;
+  }
+
+  const activeGroupIndex = activeViewColumn - 1;
+  if (activeGroupIndex === targetGroupIndex) {
+    return true;
+  }
+
+  const command =
+    activeGroupIndex < targetGroupIndex
+      ? "workbench.action.moveEditorToRightGroup"
+      : "workbench.action.moveEditorToLeftGroup";
+  const moveCount = Math.abs(targetGroupIndex - activeGroupIndex);
+
+  for (let index = 0; index < moveCount; index += 1) {
+    await vscode.commands.executeCommand(command);
+  }
+
+  return true;
+}
+
+export function haveSameEditorLayoutShape(
+  left: WorkbenchEditorLayout | undefined,
+  right: WorkbenchEditorLayout,
+): boolean {
+  if (!left) {
+    return false;
+  }
+
+  return haveSameEditorLayoutGroupShape(left, right);
+}
+
 export function matchesVisibleTerminalLayout(
   snapshot: SessionGridSnapshot,
   terminalTitleBySessionId: ReadonlyMap<string, string>,
@@ -162,4 +218,28 @@ export function getWorkspaceId(): string {
 
 export function getWorkspaceStorageKey(key: string, workspaceId: string): string {
   return `${key}:${workspaceId}`;
+}
+
+function isWorkbenchEditorLayout(value: unknown): value is WorkbenchEditorLayout {
+  return Boolean(
+    value && typeof value === "object" && Array.isArray((value as WorkbenchEditorLayout).groups),
+  );
+}
+
+function haveSameEditorLayoutGroupShape(
+  left: WorkbenchEditorLayoutGroup,
+  right: WorkbenchEditorLayoutGroup,
+): boolean {
+  const leftGroups = left.groups ?? [];
+  const rightGroups = right.groups ?? [];
+  if (
+    (left.orientation ?? 0) !== (right.orientation ?? 0) ||
+    leftGroups.length !== rightGroups.length
+  ) {
+    return false;
+  }
+
+  return leftGroups.every((group, index) =>
+    haveSameEditorLayoutGroupShape(group, rightGroups[index]),
+  );
 }

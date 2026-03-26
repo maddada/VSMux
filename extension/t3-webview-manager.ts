@@ -4,7 +4,10 @@ import {
   type SessionRecord,
   type T3SessionRecord,
 } from "../shared/session-grid-contract";
-import { getActiveEditorGroupViewColumn } from "./terminal-workspace-helpers";
+import {
+  focusEditorGroupByIndex,
+  getActiveEditorGroupViewColumn,
+} from "./terminal-workspace-environment";
 import { captureWorkbenchState } from "./session-layout-trace";
 import { createWorkspaceTrace } from "./runtime-trace";
 import { createT3PanelHtml, getEmbeddedT3Root } from "./t3-webview-manager/html";
@@ -80,10 +83,7 @@ export class T3WebviewManager implements vscode.Disposable {
     });
   }
 
-  public async openSession(
-    sessionRecord: T3SessionRecord,
-    preserveFocus = false,
-  ): Promise<void> {
+  public async openSession(sessionRecord: T3SessionRecord, preserveFocus = false): Promise<void> {
     this.syncSessions([
       ...Array.from(this.sessionRecordBySessionId.values()).filter(
         (existingSessionRecord) => existingSessionRecord.sessionId !== sessionRecord.sessionId,
@@ -92,7 +92,8 @@ export class T3WebviewManager implements vscode.Disposable {
     ]);
     const managedPanel = this.panelsBySessionId.get(sessionRecord.sessionId);
     const renderKey = getRenderKey(sessionRecord);
-    const targetViewColumn = managedPanel?.panel.viewColumn ?? getActiveEditorGroupViewColumn() ?? 1;
+    const targetViewColumn =
+      managedPanel?.panel.viewColumn ?? getActiveEditorGroupViewColumn() ?? 1;
 
     if (managedPanel && managedPanel.renderKey === renderKey) {
       managedPanel.panel.title = getPanelTitle(sessionRecord);
@@ -120,6 +121,37 @@ export class T3WebviewManager implements vscode.Disposable {
 
   public hasLivePanel(sessionId: string): boolean {
     return this.panelsBySessionId.has(sessionId);
+  }
+
+  public getObservedViewColumn(sessionId: string): number | undefined {
+    return this.panelsBySessionId.get(sessionId)?.panel.viewColumn;
+  }
+
+  public async revealSessionInGroup(
+    sessionRecord: T3SessionRecord,
+    targetGroupIndex: number,
+    preserveFocus = false,
+  ): Promise<boolean> {
+    const targetViewColumn = targetGroupIndex + 1;
+    const restoreViewColumn = preserveFocus ? getActiveEditorGroupViewColumn() : undefined;
+    await this.openSession(sessionRecord, preserveFocus);
+
+    const managedPanel = this.panelsBySessionId.get(sessionRecord.sessionId);
+    if (!managedPanel) {
+      return false;
+    }
+
+    managedPanel.panel.reveal(targetViewColumn, preserveFocus);
+    if (preserveFocus && restoreViewColumn && restoreViewColumn !== targetViewColumn) {
+      await focusEditorGroupByIndex(restoreViewColumn - 1);
+    }
+
+    await this.logState("REVEAL", "panel-group", {
+      preserveFocus,
+      sessionId: sessionRecord.sessionId,
+      targetGroupIndex,
+    });
+    return true;
   }
 
   public focusComposer(sessionId: string): void {

@@ -35,8 +35,7 @@ export function createSessionActivationPlan(
     shouldFocusStoredSession: !options.isAlreadyFocused,
     shouldNoop,
     shouldRefreshAfterActivation: !hasLiveSurface,
-    shouldResumeAgentAfterReveal:
-      shouldCreateOrAttachTerminal && options.hasStoredAgentLaunch,
+    shouldResumeAgentAfterReveal: shouldCreateOrAttachTerminal && options.hasStoredAgentLaunch,
   };
 }
 

@@ -11,10 +11,7 @@ import {
   getSessionShortcutLabel,
   getVisiblePrimaryTitle,
 } from "./session-grid-contract";
-import {
-  createSessionInSnapshot,
-  normalizeSessionGridSnapshot,
-} from "./session-grid-state";
+import { createSessionInSnapshot, normalizeSessionGridSnapshot } from "./session-grid-state";
 
 describe("createSessionInSnapshot", () => {
   test("should allocate the lowest free slot in row-major order", () => {

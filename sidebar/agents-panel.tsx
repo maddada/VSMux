@@ -48,7 +48,12 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
   };
 }
 
-export function AgentsPanel({ agents, createRequestId, titlebarActions, vscode }: AgentsPanelProps) {
+export function AgentsPanel({
+  agents,
+  createRequestId,
+  titlebarActions,
+  vscode,
+}: AgentsPanelProps) {
   const [contextMenu, setContextMenu] = useState<AgentMenuState>();
   const [editingAgent, setEditingAgent] = useState<AgentConfigDraft>();
   const menuRef = useRef<HTMLDivElement>(null);
