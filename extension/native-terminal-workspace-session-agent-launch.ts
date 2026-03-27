@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
-import { isNumericSessionAlias } from "../shared/session-grid-contract";
+import { getVisiblePrimaryTitle } from "../shared/session-grid-contract";
+import {
+  getDefaultSidebarAgentByIcon,
+  getDefaultSidebarAgentById,
+  type SidebarAgentIcon,
+} from "../shared/sidebar-agents";
 import { getWorkspaceStorageKey } from "./terminal-workspace-helpers";
 
 const SESSION_AGENT_COMMANDS_KEY = "VSmux.sessionAgentCommands";
@@ -9,28 +14,27 @@ export type StoredSessionAgentLaunch = {
   command: string;
 };
 
+export type DetachedResumeAction = {
+  shouldExecute: boolean;
+  text: string;
+};
+
 export function buildResumeAgentCommand(
   agentLaunch: StoredSessionAgentLaunch | undefined,
-  sessionAlias: string | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+  sessionTitle: string | undefined,
 ): string | undefined {
-  const agentId = agentLaunch?.agentId.trim().toLowerCase();
-  const agentCommand = agentLaunch?.command.trim();
-  const normalizedAlias = normalizeResumeAlias(sessionAlias);
+  const agentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  const agentCommand = resolveAgentCommand(agentLaunch, agentIconId);
   if (!agentCommand) {
     return undefined;
   }
 
   switch (agentId) {
     case "codex":
-      return normalizedAlias
-        ? `${agentCommand} resume ${quoteForSingleShellArgument(normalizedAlias)}`
-        : undefined;
+      return appendResumeTarget(`${agentCommand} resume`, sessionTitle);
     case "claude":
-      return normalizedAlias
-        ? `${agentCommand} -r ${quoteForSingleShellArgument(normalizedAlias)}`
-        : undefined;
-    case "opencode":
-      return `${agentCommand} --continue`;
+      return appendResumeTarget(`${agentCommand} -r`, sessionTitle);
     default:
       return undefined;
   }
@@ -38,24 +42,68 @@ export function buildResumeAgentCommand(
 
 export function buildCopyResumeCommandText(
   agentLaunch: StoredSessionAgentLaunch | undefined,
-  agentIconId: string | undefined,
-  sessionAlias: string | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+  sessionTitle: string | undefined,
 ): string | undefined {
-  const normalizedAlias = normalizeResumeAlias(sessionAlias);
-  if (!normalizedAlias) {
+  const agentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  const agentCommand = resolveAgentCommand(agentLaunch, agentIconId);
+  if (!agentId || !agentCommand) {
     return undefined;
   }
 
-  const agentId = agentLaunch?.agentId.trim().toLowerCase() ?? agentIconId?.trim().toLowerCase();
-  const agentCommand = agentLaunch?.command.trim();
-
   switch (agentId) {
     case "codex":
-      return `${agentCommand || "codex"} resume ${quoteForSingleShellArgument(normalizedAlias)}`;
+      return appendResumeTarget(`${agentCommand} resume`, sessionTitle);
     case "claude":
-      return `${agentCommand || "claude"} -r ${quoteForSingleShellArgument(normalizedAlias)}`;
+      return appendResumeTarget(`${agentCommand} -r`, sessionTitle);
+    case "gemini":
+      return `${agentCommand} --list-sessions && echo 'Enter ${agentCommand} -r id' to resume a session`;
     case "opencode":
-      return normalizedAlias;
+      return `${agentCommand} list && echo 'Enter ${agentCommand} -s id' to resume a session`;
+    default:
+      return undefined;
+  }
+}
+
+export function buildDetachedResumeAction(
+  agentLaunch: StoredSessionAgentLaunch | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+  sessionTitle: string | undefined,
+): DetachedResumeAction | undefined {
+  const agentCommand = resolveAgentCommand(agentLaunch, agentIconId);
+  if (!agentCommand) {
+    return undefined;
+  }
+
+  if (isCustomStoredAgentLaunch(agentLaunch)) {
+    return {
+      shouldExecute: false,
+      text: agentCommand,
+    };
+  }
+
+  const agentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  switch (agentId) {
+    case "codex":
+      return {
+        shouldExecute: true,
+        text: appendResumeTarget(`${agentCommand} resume`, sessionTitle),
+      };
+    case "claude":
+      return {
+        shouldExecute: true,
+        text: appendResumeTarget(`${agentCommand} -r`, sessionTitle),
+      };
+    case "gemini":
+      return {
+        shouldExecute: false,
+        text: `${agentCommand} -r `,
+      };
+    case "opencode":
+      return {
+        shouldExecute: false,
+        text: `${agentCommand} -s `,
+      };
     default:
       return undefined;
   }
@@ -131,11 +179,63 @@ function quoteForSingleShellArgument(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-function normalizeResumeAlias(sessionAlias: string | undefined): string | undefined {
-  const normalizedAlias = sessionAlias?.trim();
-  if (!normalizedAlias || isNumericSessionAlias(normalizedAlias)) {
-    return undefined;
+function appendResumeTarget(commandPrefix: string, sessionTitle: string | undefined): string {
+  const customTitle = getVisiblePrimaryTitle(sessionTitle?.trim() ?? "");
+  return customTitle ? `${commandPrefix} ${quoteForSingleShellArgument(customTitle)}` : commandPrefix;
+}
+
+function resolveAgentCommand(
+  agentLaunch: StoredSessionAgentLaunch | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+): string | undefined {
+  const command = agentLaunch?.command.trim();
+  if (command) {
+    return command;
   }
 
-  return normalizedAlias;
+  return getDefaultSidebarAgentByIcon(agentIconId)?.command;
+}
+
+function resolveBuiltInAgentId(
+  agentLaunch: StoredSessionAgentLaunch | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+): "codex" | "claude" | "gemini" | "opencode" | undefined {
+  const storedAgentId = normalizeStoredAgentId(agentLaunch?.agentId);
+  if (storedAgentId) {
+    return storedAgentId;
+  }
+
+  const sidebarAgent = getDefaultSidebarAgentByIcon(agentIconId);
+  if (
+    sidebarAgent?.agentId === "codex" ||
+    sidebarAgent?.agentId === "claude" ||
+    sidebarAgent?.agentId === "gemini" ||
+    sidebarAgent?.agentId === "opencode"
+  ) {
+    return sidebarAgent.agentId;
+  }
+
+  return undefined;
+}
+
+function normalizeStoredAgentId(
+  agentId: string | undefined,
+): "codex" | "claude" | "gemini" | "opencode" | undefined {
+  const normalizedAgentId = agentId?.trim().toLowerCase();
+  const sidebarAgent = getDefaultSidebarAgentById(normalizedAgentId);
+  if (
+    sidebarAgent?.agentId === "codex" ||
+    sidebarAgent?.agentId === "claude" ||
+    sidebarAgent?.agentId === "gemini" ||
+    sidebarAgent?.agentId === "opencode"
+  ) {
+    return sidebarAgent.agentId;
+  }
+
+  return undefined;
+}
+
+function isCustomStoredAgentLaunch(agentLaunch: StoredSessionAgentLaunch | undefined): boolean {
+  const normalizedAgentId = agentLaunch?.agentId.trim().toLowerCase();
+  return Boolean(normalizedAgentId && !normalizeStoredAgentId(normalizedAgentId));
 }

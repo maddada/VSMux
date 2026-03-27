@@ -330,6 +330,7 @@ function supportsResumeCommandCopy(session: SidebarSessionItem): boolean {
   return (
     session.agentIcon === "codex" ||
     session.agentIcon === "claude" ||
+    session.agentIcon === "gemini" ||
     session.agentIcon === "opencode"
   );
 }

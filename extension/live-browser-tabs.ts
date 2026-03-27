@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import {
   getBrowserTabInputKind,
   getBrowserTabUrl,
+  isBrowserLikeTab,
   normalizeUrl,
 } from "./browser-session-manager/helpers";
 
@@ -118,22 +119,32 @@ function getLiveBrowserTabMetadata(tab: vscode.Tab):
       viewType?: string;
     }
   | undefined {
+  const viewType = getTabViewType(tab.input);
   const url = normalizeSidebarBrowserUrl(getBrowserTabUrl(tab));
   if (url) {
     return {
       detail: url,
       identity: url,
       url,
+      viewType,
     };
   }
 
-  const input = tab.input;
-  if (input instanceof vscode.TabInputWebview && isBrowserWebviewViewType(input.viewType)) {
+  if (viewType && isBrowserWebviewViewType(viewType)) {
     return {
       detail: undefined,
-      identity: input.viewType,
+      identity: viewType,
       url: undefined,
-      viewType: input.viewType,
+      viewType,
+    };
+  }
+
+  if (isBrowserLikeTab(tab)) {
+    return {
+      detail: undefined,
+      identity: viewType ?? tab.label,
+      url: undefined,
+      viewType,
     };
   }
 
@@ -147,4 +158,13 @@ function isBrowserWebviewViewType(viewType: string): boolean {
     normalizedViewType.includes("browser") ||
     normalizedViewType.includes("preview")
   );
+}
+
+function getTabViewType(input: vscode.Tab["input"]): string | undefined {
+  if (!input || typeof input !== "object" || !("viewType" in input)) {
+    return undefined;
+  }
+
+  const viewType = (input as { viewType?: unknown }).viewType;
+  return typeof viewType === "string" && viewType.length > 0 ? viewType : undefined;
 }
