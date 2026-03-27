@@ -664,7 +664,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
           getTerminalDisplayName(existingProjection.terminal) ?? existingProjection.terminal.name,
       });
 
-      if (currentGroupIndex === undefined || activeTerminalTabLocation !== "editor") {
+      if (currentGroupIndex === undefined) {
         if (isCancelled()) {
           return undefined;
         }

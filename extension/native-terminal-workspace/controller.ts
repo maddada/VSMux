@@ -59,6 +59,7 @@ import {
 
 const SHORTCUT_LABEL_PLATFORM = process.platform === "darwin" ? "mac" : "default";
 const COMMAND_TERMINAL_EXIT_POLL_MS = 250;
+const EXPLICIT_FOCUS_T3_OBSERVED_FOCUS_GUARD_MS = 750;
 
 export { SESSIONS_VIEW_ID } from "./settings";
 
@@ -73,6 +74,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private hasApprovedUntrustedShells = vscode.workspace.isTrusted;
   private isVsMuxDisabled: boolean;
+  private lastExplicitFocusSessionId: string | undefined;
+  private lastExplicitFocusAt = 0;
   private pendingReconcileRequest: { version: number } | undefined;
   private reconcileRequestVersion = 0;
   private reconcileRunner: Promise<void> | undefined;
@@ -208,6 +211,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       sessionId,
       sessionKind: sessionRecord.kind,
     });
+    this.lastExplicitFocusSessionId = sessionId;
+    this.lastExplicitFocusAt = Date.now();
     await this.createSurfaceIfNeeded(sessionRecord);
     const acknowledgedAttention = await this.acknowledgeSessionAttentionIfNeeded(sessionId);
     const changed = await this.store.focusSession(sessionId);
@@ -741,12 +746,23 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private async handleObservedSessionFocus(sessionId: string): Promise<void> {
-    if (!this.store.getSession(sessionId)) {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord) {
       return;
     }
 
     if (this.suppressedObservedFocusDepth > 0) {
       logVSmuxDebug("controller.handleObservedSessionFocus.ignoredDuringReconcile", {
+        sessionId,
+        snapshot: this.describeActiveSnapshot(),
+      });
+      return;
+    }
+
+    if (this.shouldIgnoreObservedFocus(sessionRecord)) {
+      logVSmuxDebug("controller.handleObservedSessionFocus.ignoredAfterExplicitFocus", {
+        explicitFocusAgeMs: Date.now() - this.lastExplicitFocusAt,
+        lastExplicitFocusSessionId: this.lastExplicitFocusSessionId,
         sessionId,
         snapshot: this.describeActiveSnapshot(),
       });
@@ -777,6 +793,32 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       this.reconcileRunner = this.runReconcileLoop();
     }
     await this.reconcileRunner;
+  }
+
+  private shouldIgnoreObservedFocus(sessionRecord: SessionRecord): boolean {
+    if (sessionRecord.kind !== "t3") {
+      return false;
+    }
+
+    if (!this.lastExplicitFocusSessionId) {
+      return false;
+    }
+
+    if (this.lastExplicitFocusSessionId === sessionRecord.sessionId) {
+      return false;
+    }
+
+    const explicitFocusAgeMs = Date.now() - this.lastExplicitFocusAt;
+    if (explicitFocusAgeMs > EXPLICIT_FOCUS_T3_OBSERVED_FOCUS_GUARD_MS) {
+      return false;
+    }
+
+    const focusedSession = this.store.getFocusedSession();
+    if (!focusedSession || focusedSession.sessionId !== this.lastExplicitFocusSessionId) {
+      return false;
+    }
+
+    return true;
   }
 
   private async runReconcileLoop(): Promise<void> {
