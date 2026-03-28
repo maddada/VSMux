@@ -484,10 +484,15 @@ export function SessionGroupSection({
               className="group-empty-drop-target"
               data-drop-target={String(sortable.isDropTarget)}
             >
-              <div className="group-empty-state">"No sessions in this group yet."</div>
+              <div className="group-empty-state">No browsers</div>
             </div>
           ) : (
-            <></>
+            <div
+              className="group-empty-drop-target"
+              data-drop-target={String(sortable.isDropTarget)}
+            >
+              <div className="group-empty-state">No sessions</div>
+            </div>
           )}
         </div>
       </section>
