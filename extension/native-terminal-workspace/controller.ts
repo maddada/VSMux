@@ -113,6 +113,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private reconcileRequestVersion = 0;
   private reconcileRunner: Promise<void> | undefined;
   private suppressedObservedFocusDepth = 0;
+  private observedSidebarActiveGroupId: string | undefined;
+  private readonly observedSidebarFocusedSessionIdByGroupId = new Map<string, string>();
   private readonly sidebarAgentIconBySessionId = new Map<string, SidebarAgentIcon>();
   private browserEditorGroupIsMaximized = false;
   private readonly browserDetailBySessionId = new Map<string, string>();
@@ -263,6 +265,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     this.browserEditorGroupIsMaximized = false;
+    this.clearObservedSidebarFocusState();
     logVSmuxDebug("controller.focusSession", {
       sessionId,
       sessionKind: sessionRecord.kind,
@@ -671,6 +674,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   public async focusGroup(groupId: string): Promise<void> {
+    this.clearObservedSidebarFocusState();
     const changed = await this.store.focusGroup(groupId);
     if (changed) {
       await this.afterStateChange();
@@ -678,6 +682,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   public async focusGroupByIndex(groupIndex: number): Promise<void> {
+    this.clearObservedSidebarFocusState();
     const changed = await this.store.focusGroupByIndex(groupIndex);
     if (changed) {
       await this.afterStateChange();
@@ -791,6 +796,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private async afterStateChange(): Promise<void> {
+    this.clearObservedSidebarFocusState();
     this.syncSurfaceManagers();
     logVSmuxDebug("controller.afterStateChange", {
       activeGroupId: this.store.getSnapshot().activeGroupId,
@@ -864,7 +870,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private createSidebarMessage(
     type: SidebarHydrateMessage["type"] | SidebarSessionStateMessage["type"] = "sessionState",
   ): ExtensionToSidebarMessage {
-    const activeSnapshot = this.getActiveSnapshot();
+    const workspaceSnapshot = this.getPresentedWorkspaceSnapshot();
+    const activeSnapshot =
+      workspaceSnapshot.groups.find((group) => group.groupId === workspaceSnapshot.activeGroupId)
+        ?.snapshot ?? this.getEmptySnapshot();
     const browserTabs = this.refreshLiveBrowserTabs();
     return buildSidebarMessage({
       activeSnapshot,
@@ -912,7 +921,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       terminalHasLiveProjection: (sessionId) => this.backend.hasAttachedTerminal(sessionId),
       type,
       workspaceId: this.workspaceId,
-      workspaceSnapshot: this.store.getSnapshot(),
+      workspaceSnapshot,
     });
   }
 
@@ -1098,7 +1107,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       snapshot: this.describeActiveSnapshot(),
     });
     const acknowledgedAttention = await this.acknowledgeSessionAttentionIfNeeded(sessionId);
-    const changed = await this.store.focusSession(sessionId);
+    const changed = this.applyObservedSidebarFocus(sessionId);
     if (!changed) {
       if (acknowledgedAttention) {
         await this.refreshSidebar();
@@ -1107,7 +1116,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       return;
     }
 
-    await this.afterStateChange();
+    await this.refreshSidebar();
   }
 
   private async reconcileProjectedSessions(): Promise<void> {
@@ -1572,16 +1581,40 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private getActiveSnapshot(): SessionGridSnapshot {
-    return (
-      this.store.getActiveGroup()?.snapshot ?? {
-        focusedSessionId: undefined,
-        fullscreenRestoreVisibleCount: undefined,
-        sessions: [],
-        viewMode: "grid",
-        visibleCount: 1,
-        visibleSessionIds: [],
+    return this.store.getActiveGroup()?.snapshot ?? this.getEmptySnapshot();
+  }
+
+  private getPresentedWorkspaceSnapshot(): GroupedSessionWorkspaceSnapshot {
+    const snapshot = cloneWorkspaceSnapshot(this.store.getSnapshot());
+    if (
+      this.observedSidebarActiveGroupId &&
+      snapshot.groups.some((group) => group.groupId === this.observedSidebarActiveGroupId)
+    ) {
+      snapshot.activeGroupId = this.observedSidebarActiveGroupId;
+    }
+
+    for (const group of snapshot.groups) {
+      const observedFocusedSessionId = this.observedSidebarFocusedSessionIdByGroupId.get(group.groupId);
+      if (
+        observedFocusedSessionId &&
+        group.snapshot.sessions.some((session) => session.sessionId === observedFocusedSessionId)
+      ) {
+        group.snapshot.focusedSessionId = observedFocusedSessionId;
       }
-    );
+    }
+
+    return snapshot;
+  }
+
+  private getEmptySnapshot(): SessionGridSnapshot {
+    return {
+      focusedSessionId: undefined,
+      fullscreenRestoreVisibleCount: undefined,
+      sessions: [],
+      viewMode: "grid",
+      visibleCount: 1,
+      visibleSessionIds: [],
+    };
   }
 
   private getAllSessionRecords(): SessionRecord[] {
@@ -1654,6 +1687,30 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       sessionId: sessionRecord.sessionId,
       visible: this.t3Webviews.isSessionForegroundVisible(sessionRecord.sessionId),
     };
+  }
+
+  private clearObservedSidebarFocusState(): void {
+    this.observedSidebarActiveGroupId = undefined;
+    this.observedSidebarFocusedSessionIdByGroupId.clear();
+  }
+
+  private applyObservedSidebarFocus(sessionId: string): boolean {
+    const snapshot = this.store.getSnapshot();
+    const owningGroup = snapshot.groups.find((group) =>
+      group.snapshot.sessions.some((session) => session.sessionId === sessionId),
+    );
+    if (!owningGroup) {
+      return false;
+    }
+
+    const currentActiveGroupId = this.observedSidebarActiveGroupId ?? snapshot.activeGroupId;
+    const currentFocusedSessionId =
+      this.observedSidebarFocusedSessionIdByGroupId.get(owningGroup.groupId) ??
+      owningGroup.snapshot.focusedSessionId;
+
+    this.observedSidebarActiveGroupId = owningGroup.groupId;
+    this.observedSidebarFocusedSessionIdByGroupId.set(owningGroup.groupId, sessionId);
+    return currentActiveGroupId !== owningGroup.groupId || currentFocusedSessionId !== sessionId;
   }
 }
 
