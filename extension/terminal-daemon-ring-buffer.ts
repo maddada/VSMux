@@ -2,6 +2,7 @@ export class TerminalDaemonRingBuffer {
   private readonly buffer: Buffer;
   private filled = 0;
   private head = 0;
+  private total = 0;
 
   public constructor(private readonly capacity: number) {
     this.buffer = Buffer.alloc(capacity);
@@ -10,6 +11,7 @@ export class TerminalDaemonRingBuffer {
   public write(data: Uint8Array): void {
     const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
     const length = chunk.length;
+    this.total += length;
     if (length === 0) {
       return;
     }
@@ -47,5 +49,14 @@ export class TerminalDaemonRingBuffer {
     this.buffer.copy(result, 0, this.head, this.head + tailLength);
     this.buffer.copy(result, tailLength, 0, this.head);
     return result;
+  }
+
+  public clear(): void {
+    this.head = 0;
+    this.filled = 0;
+  }
+
+  public get bytesWritten(): number {
+    return this.total;
   }
 }

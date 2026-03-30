@@ -79,7 +79,7 @@ const infoFilePath = path.join(stateDir, INFO_FILE_NAME);
 
 const sessions = new Map<string, ManagedSession>();
 const controlClients = new Set<ControlClient>();
-const sessionSocketsBySessionKey = new Map<string, Set<WebSocket>>();
+const sessionSocketsBySessionKey = new Map<string, WebSocket>();
 
 let idleShutdownTimeoutMs: number | null = DEFAULT_IDLE_SHUTDOWN_TIMEOUT_MS;
 let idleShutdownTimer: NodeJS.Timeout | undefined;
@@ -243,7 +243,7 @@ async function handleCreateOrAttachRequest(
   }
 
   sessions.set(sessionKey, session);
-  const snapshot = await buildSnapshot(session, true);
+  const snapshot = await buildSnapshot(session, false);
   socket.send(JSON.stringify(okResponse(request.requestId, { session: snapshot })));
   broadcastControlSessionState(snapshot);
 }
@@ -326,14 +326,11 @@ function createSession(request: TerminalHostCreateOrAttachRequest): ManagedSessi
     cols: request.cols,
     cwd: request.cwd,
     encoding: null,
-    env: {
-      ...process.env,
-      ...createManagedTerminalEnvironment(
-        request.workspaceId,
-        request.sessionId,
-        request.sessionStateFilePath,
-      ),
-    },
+    env: createPtyEnvironment(
+      request.workspaceId,
+      request.sessionId,
+      request.sessionStateFilePath,
+    ),
     name: "xterm-256color",
     rows: request.rows,
   });
@@ -423,7 +420,8 @@ async function buildSnapshot(
     agentName: session.titleActivity?.agentName ?? persistedState.agentName,
     agentStatus: session.titleActivity?.activity ?? persistedState.agentStatus,
     history: includeHistory ? session.historyBuffer.snapshot().toString("utf8") : undefined,
-    isAttached: (sessionSocketsBySessionKey.get(session.sessionKey)?.size ?? 0) > 0,
+    isAttached:
+      sessionSocketsBySessionKey.get(session.sessionKey)?.readyState === WebSocket.OPEN,
     title: session.liveTitle ?? persistedState.title,
   };
   return session.snapshot;
@@ -453,22 +451,10 @@ function broadcastSessionMessage(
   message: Buffer | TerminalStateMessage,
 ): void {
   const payload = Buffer.isBuffer(message) ? message : JSON.stringify(message);
-  for (const socket of sessionSocketsBySessionKey.get(sessionKey) ?? []) {
+  const socket = sessionSocketsBySessionKey.get(sessionKey);
+  if (socket?.readyState === WebSocket.OPEN) {
     socket.send(payload);
   }
-}
-
-async function sendSessionState(
-  socket: WebSocket,
-  session: ManagedSession,
-  includeHistory: boolean,
-): Promise<void> {
-  const snapshot = await buildSnapshot(session, includeHistory);
-  const message: TerminalStateMessage = {
-    session: snapshot,
-    type: "terminalSessionState",
-  };
-  socket.send(JSON.stringify(message));
 }
 
 async function handleSessionMessage(sessionKey: string, rawMessage: string): Promise<void> {
@@ -626,10 +612,7 @@ function clearIdleShutdownTimer(): void {
 }
 
 function getConnectedClientCount(): number {
-  return (
-    controlClients.size +
-    [...sessionSocketsBySessionKey.values()].reduce((count, sockets) => count + sockets.size, 0)
-  );
+  return controlClients.size + sessionSocketsBySessionKey.size;
 }
 
 async function shutdown(): Promise<void> {
@@ -680,6 +663,23 @@ function normalizePtyOutputChunk(data: string | Buffer): Buffer {
   return Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
 }
 
+function createPtyEnvironment(
+  workspaceId: string,
+  sessionId: string,
+  sessionStateFilePath: string,
+): Record<string, string> {
+  const environment = {
+    ...process.env,
+    ...createManagedTerminalEnvironment(workspaceId, sessionId, sessionStateFilePath),
+  } as Record<string, string>;
+
+  if (!environment.LANG || !environment.LANG.includes("UTF-8")) {
+    environment.LANG = "en_US.UTF-8";
+  }
+
+  return environment;
+}
+
 async function writeJsonAtomically(filePath: string, value: DaemonInfo): Promise<void> {
   const tempFilePath = `${filePath}.tmp.${process.pid}`;
   await writeFile(tempFilePath, JSON.stringify(value, undefined, 2), "utf8");
@@ -701,7 +701,16 @@ async function attachSessionSocketWithReplay(
       resizeSession(session, initialCols, initialRows);
     }
 
-    await sendSessionState(socket, session, true);
+    const previousSocket = sessionSocketsBySessionKey.get(sessionKey);
+    if (previousSocket && previousSocket !== socket) {
+      sessionSocketsBySessionKey.delete(sessionKey);
+      previousSocket.close();
+    }
+
+    const replaySnapshot = session.historyBuffer.snapshot();
+    if (replaySnapshot.length > 0) {
+      socket.send(replaySnapshot);
+    }
     if (socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -712,11 +721,9 @@ async function attachSessionSocketWithReplay(
     }
 
     removePendingAttachQueue(session, pendingAttachQueue);
-    const sockets = sessionSocketsBySessionKey.get(sessionKey) ?? new Set<WebSocket>();
-    sockets.add(socket);
-    sessionSocketsBySessionKey.set(sessionKey, sockets);
+    sessionSocketsBySessionKey.set(sessionKey, socket);
 
-    bindSessionSocket(session, sessionKey, socket, sockets);
+    bindSessionSocket(session, sessionKey, socket);
     const snapshot = await buildSnapshot(session, false);
     broadcastControlSessionState(snapshot);
   } catch {
@@ -746,14 +753,12 @@ function bindSessionSocket(
   session: ManagedSession,
   sessionKey: string,
   socket: WebSocket,
-  sockets: Set<WebSocket>,
 ): void {
   socket.on("message", (buffer: Buffer) => {
     void handleSessionMessage(sessionKey, buffer.toString());
   });
   socket.on("close", () => {
-    sockets.delete(socket);
-    if (sockets.size === 0) {
+    if (sessionSocketsBySessionKey.get(sessionKey) === socket) {
       sessionSocketsBySessionKey.delete(sessionKey);
     }
     void buildSnapshot(session, false).then((snapshot) => {
@@ -763,8 +768,7 @@ function bindSessionSocket(
     scheduleIdleShutdownIfNeeded();
   });
   socket.on("error", () => {
-    sockets.delete(socket);
-    if (sockets.size === 0) {
+    if (sessionSocketsBySessionKey.get(sessionKey) === socket) {
       sessionSocketsBySessionKey.delete(sessionKey);
     }
     void buildSnapshot(session, false).then((snapshot) => {

@@ -47,6 +47,7 @@ import { ScratchPadModal } from "./scratch-pad-modal";
 import {
   getClientPoint,
   getSidebarDropData,
+  getSidebarSessionDropTargetFromEvent,
   getSidebarSessionDropTargetAtPoint,
   moveSessionIdsByDropTarget,
 } from "./sidebar-dnd";
@@ -488,6 +489,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     const resolvedSessionDropTarget = resolveSessionDropTargetFromPoint(
       event.nativeEvent,
       currentSessionIdsByGroup,
+      targetData,
     );
     if (resolvedSessionDropTarget === null) {
       return;
@@ -1027,13 +1029,19 @@ function getCompletionBellMenuLabel(hud: SidebarHudState): string {
 function resolveSessionDropTargetFromPoint(
   nativeEvent: Event | undefined,
   sessionIdsByGroup: SessionIdsByGroup,
+  targetData: ReturnType<typeof getSidebarDropData>,
 ) {
-  const point = getClientPoint(nativeEvent);
-  if (!point) {
-    return undefined;
-  }
+  const target =
+    (() => {
+      const point = getClientPoint(nativeEvent);
+      if (!point) {
+        return undefined;
+      }
 
-  const target = getSidebarSessionDropTargetAtPoint(document, point.x, point.y);
+      return getSidebarSessionDropTargetAtPoint(document, point.x, point.y);
+    })() ??
+    getSidebarSessionDropTargetFromEvent(nativeEvent) ??
+    getSidebarSessionDropTargetFromDropData(targetData, getClientPoint(nativeEvent)?.y);
   if (!target) {
     return null;
   }
@@ -1048,4 +1056,46 @@ function resolveSessionDropTargetFromPoint(
   }
 
   return target;
+}
+
+function getSidebarSessionDropTargetFromDropData(
+  targetData: ReturnType<typeof getSidebarDropData>,
+  clientY: number | undefined,
+) {
+  if (targetData?.kind === "session") {
+    const sessionElement = document.querySelector<HTMLElement>(
+      `[data-sidebar-session-id="${targetData.sessionId}"]`,
+    );
+    if (!sessionElement) {
+      return undefined;
+    }
+
+    const bounds = sessionElement.getBoundingClientRect();
+    const relativeY = clientY ?? bounds.top + bounds.height / 2;
+    return {
+      groupId: targetData.groupId,
+      kind: "session" as const,
+      position: relativeY > bounds.top + bounds.height / 2 ? ("after" as const) : ("before" as const),
+      sessionId: targetData.sessionId,
+    };
+  }
+
+  if (targetData?.kind === "group") {
+    const groupElement = document.querySelector<HTMLElement>(
+      `[data-sidebar-group-id="${targetData.groupId}"]`,
+    );
+    if (!groupElement) {
+      return undefined;
+    }
+
+    const bounds = groupElement.getBoundingClientRect();
+    const relativeY = clientY ?? bounds.top;
+    return {
+      groupId: targetData.groupId,
+      kind: "group" as const,
+      position: relativeY > bounds.top + bounds.height / 2 ? ("end" as const) : ("start" as const),
+    };
+  }
+
+  return undefined;
 }

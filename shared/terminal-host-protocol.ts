@@ -1,4 +1,4 @@
-export const TERMINAL_HOST_PROTOCOL_VERSION = 13;
+export const TERMINAL_HOST_PROTOCOL_VERSION = 14;
 
 export type TerminalSessionStatus = "starting" | "running" | "exited" | "error" | "disconnected";
 

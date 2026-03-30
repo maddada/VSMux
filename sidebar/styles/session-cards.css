@@ -59,6 +59,11 @@
   opacity: 0.2;
 }
 
+.session-frame[data-dragging="true"] .session-floating-agent-icon,
+.session-frame[data-dragging="true"] .session-floating-agent-tabler-icon {
+  opacity: 0;
+}
+
 .session-drag-overlay {
   cursor: grabbing;
   pointer-events: none;

@@ -1,5 +1,6 @@
 import { IconCopy, IconPencil, IconX } from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -99,9 +100,11 @@ export function SortableSessionCard({
     accept: "session",
     data: createSessionDragData(groupId, session.sessionId),
     disabled: isBrowserSession || contextMenuPosition !== undefined,
+    feedback: "none",
     group: groupId,
     id: session.sessionId,
     index,
+    plugins: [SortableKeyboardPlugin],
     sensors: sessionCardSensors,
     type: "session",
   });
@@ -231,6 +234,8 @@ export function SortableSessionCard({
       <div
         className="session-frame"
         data-activity={session.activity}
+        data-dragging={String(Boolean(sortable.isDragging))}
+        data-drop-target={String(Boolean(sortable.isDropTarget))}
         data-focused={String(session.isFocused)}
         data-running={String(session.isRunning)}
         data-visible={String(session.isVisible)}
@@ -245,6 +250,7 @@ export function SortableSessionCard({
           data-activity={session.activity}
           data-has-agent-icon={String(Boolean(session.agentIcon))}
           data-dragging={String(Boolean(sortable.isDragging))}
+          data-drop-target={String(Boolean(sortable.isDropTarget))}
           data-focused={String(session.isFocused)}
           data-running={String(session.isRunning)}
           data-sidebar-session-id={session.sessionId}

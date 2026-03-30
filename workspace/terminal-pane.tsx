@@ -15,12 +15,12 @@ import type {
   TerminalStateMessage,
 } from "../shared/terminal-host-protocol";
 import { getTerminalAppearanceOptions } from "./terminal-appearance";
-import { getTerminalHistoryReplay } from "./terminal-pane-history";
 import { logWorkspaceDebug } from "./workspace-debug";
 import { getTerminalTheme } from "./terminal-theme";
 import "./terminal-pane.css";
 
 const DATA_BUFFER_FLUSH_MS = 5;
+const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
 export type TerminalPaneProps = {
   autoFocusRequest?: WorkspacePanelAutoFocusRequest;
@@ -107,10 +107,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     let didDispose = false;
     let websocket: WebSocket | undefined;
-    let didApplyHistory = false;
     let dataBuffer: Uint8Array[] = [];
     let flushTimer: number | undefined;
     let pendingSocketMessages: string[] = [];
+    let suppressPasteEvent = false;
 
     const sendSocketMessage = (message: string) => {
       if (!websocket) {
@@ -126,6 +126,32 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       if (websocket.readyState === WebSocket.CONNECTING) {
         pendingSocketMessages.push(message);
       }
+    };
+
+    const copySelectionToClipboard = () => {
+      const selection = terminal.getSelection();
+      if (!selection) {
+        return false;
+      }
+
+      void navigator.clipboard.writeText(selection).catch(() => {});
+      return true;
+    };
+
+    const pasteClipboardText = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          sendSocketMessage(text);
+        }
+      } catch {
+        // Clipboard access can fail outside a user gesture.
+      }
+    };
+
+    const pasteFromShortcut = () => {
+      suppressPasteEvent = true;
+      void pasteClipboardText();
     };
 
     const connectWebsocket = () => {
@@ -228,30 +254,19 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     };
 
     const handleTerminalStateMessage = (message: TerminalStateMessage) => {
-      if (message.type !== "terminalSessionState") {
-        return;
-      }
-
-      const historyReplay = getTerminalHistoryReplay(message.session, didApplyHistory);
-      didApplyHistory = historyReplay.didApplyHistory;
-      if (historyReplay.history !== undefined) {
-        reportDebug("terminal.applyHistory", {
-          historyLength: historyReplay.history.length,
-          sessionId: pane.sessionId,
-        });
-        terminal.write(historyReplay.history);
-      }
+      void message;
     };
 
     if (connection.mock) {
       reportDebug("terminal.mockConnected", {
         sessionId: pane.sessionId,
       });
-      if (pane.snapshot?.history) {
-        handleTerminalStateMessage({
-          session: pane.snapshot,
-          type: "terminalSessionState",
+      if (pane.snapshot?.history !== undefined) {
+        reportDebug("terminal.applyHistory", {
+          historyLength: pane.snapshot.history.length,
+          sessionId: pane.sessionId,
         });
+        terminal.write(pane.snapshot.history);
       }
     }
 
@@ -260,6 +275,32 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         if (event.type === "keydown") {
           sendSocketMessage("\x1b[13;2u");
         }
+        return false;
+      }
+
+      const primaryModifier = IS_MAC ? event.metaKey : event.ctrlKey;
+      if (event.type === "keydown" && primaryModifier) {
+        const key = event.key.toLowerCase();
+        if (key === "c" && copySelectionToClipboard()) {
+          return false;
+        }
+        if (key === "v") {
+          pasteFromShortcut();
+          return false;
+        }
+        if (!IS_MAC && event.shiftKey) {
+          if (key === "c" && copySelectionToClipboard()) {
+            return false;
+          }
+          if (key === "v") {
+            pasteFromShortcut();
+            return false;
+          }
+        }
+      }
+
+      if (event.type === "keydown" && event.shiftKey && event.key === "Insert") {
+        pasteFromShortcut();
         return false;
       }
 
@@ -285,6 +326,38 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       };
       sendSocketMessage(JSON.stringify(resizeMessage));
     });
+
+    const handleCopy = (event: ClipboardEvent) => {
+      const selection = terminal.getSelection();
+      if (!selection) {
+        return;
+      }
+
+      event.clipboardData?.setData("text/plain", selection);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (suppressPasteEvent) {
+        suppressPasteEvent = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      const text = event.clipboardData?.getData("text/plain");
+      if (!text) {
+        return;
+      }
+
+      sendSocketMessage(text);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+
+    containerRef.current.addEventListener("copy", handleCopy, true);
+    containerRef.current.addEventListener("paste", handlePaste, true);
 
     let rafId = 0;
     const resizeObserver = new ResizeObserver((entries) => {
@@ -349,6 +422,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       window.removeEventListener("focus", onWindowFocus);
       resizeObserver.disconnect();
       themeObserver.disconnect();
+      containerRef.current?.removeEventListener("copy", handleCopy, true);
+      containerRef.current?.removeEventListener("paste", handlePaste, true);
       websocket?.close();
       terminal.dispose();
       lastMeasuredSizeRef.current = undefined;

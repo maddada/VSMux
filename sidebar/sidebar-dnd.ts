@@ -101,38 +101,20 @@ export function getSidebarSessionDropTargetAtPoint(
   y: number,
 ): SidebarSessionDropTarget | undefined {
   const element = documentLike.elementFromPoint(x, y);
-  if (!(element instanceof Element)) {
+  return element instanceof Element ? getSidebarSessionDropTargetFromElement(element, y) : undefined;
+}
+
+export function getSidebarSessionDropTargetFromEvent(
+  event: Event | null | undefined,
+): SidebarSessionDropTarget | undefined {
+  const point = getClientPoint(event);
+  const target = event?.target;
+  const element = target instanceof Element ? target : undefined;
+  if (!element) {
     return undefined;
   }
 
-  const sessionElement = element.closest<HTMLElement>(SIDEBAR_SESSION_SELECTOR);
-  if (sessionElement) {
-    const groupElement = sessionElement.closest<HTMLElement>(SIDEBAR_GROUP_SELECTOR);
-    const groupId = groupElement?.dataset.sidebarGroupId;
-    const sessionId = sessionElement.dataset.sidebarSessionId;
-    if (groupId && sessionId) {
-      const bounds = sessionElement.getBoundingClientRect();
-      return {
-        groupId,
-        kind: "session",
-        position: y > bounds.top + bounds.height / 2 ? "after" : "before",
-        sessionId,
-      };
-    }
-  }
-
-  const groupElement = element.closest<HTMLElement>(SIDEBAR_GROUP_SELECTOR);
-  const groupId = groupElement?.dataset.sidebarGroupId;
-  if (!groupId) {
-    return undefined;
-  }
-
-  const bounds = groupElement.getBoundingClientRect();
-  return {
-    groupId,
-    kind: "group",
-    position: y > bounds.top + bounds.height / 2 ? "end" : "start",
-  };
+  return getSidebarSessionDropTargetFromElement(element, point?.y);
 }
 
 export function moveSessionIdsByDropTarget(
@@ -223,4 +205,40 @@ function findSessionGroupId(
   return Object.entries(sessionIdsByGroup).find(([, sessionIds]) =>
     sessionIds.includes(sessionId),
   )?.[0];
+}
+
+function getSidebarSessionDropTargetFromElement(
+  element: Element,
+  clientY: number | undefined,
+): SidebarSessionDropTarget | undefined {
+  const sessionElement = element.closest<HTMLElement>(SIDEBAR_SESSION_SELECTOR);
+  if (sessionElement) {
+    const groupElement = sessionElement.closest<HTMLElement>(SIDEBAR_GROUP_SELECTOR);
+    const groupId = groupElement?.dataset.sidebarGroupId;
+    const sessionId = sessionElement.dataset.sidebarSessionId;
+    if (groupId && sessionId) {
+      const bounds = sessionElement.getBoundingClientRect();
+      const relativeY = clientY ?? bounds.top + bounds.height / 2;
+      return {
+        groupId,
+        kind: "session",
+        position: relativeY > bounds.top + bounds.height / 2 ? "after" : "before",
+        sessionId,
+      };
+    }
+  }
+
+  const groupElement = element.closest<HTMLElement>(SIDEBAR_GROUP_SELECTOR);
+  const groupId = groupElement?.dataset.sidebarGroupId;
+  if (!groupId) {
+    return undefined;
+  }
+
+  const bounds = groupElement.getBoundingClientRect();
+  const relativeY = clientY ?? bounds.top + bounds.height / 2;
+  return {
+    groupId,
+    kind: "group",
+    position: relativeY > bounds.top + bounds.height / 2 ? "end" : "start",
+  };
 }
