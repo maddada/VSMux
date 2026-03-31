@@ -6,11 +6,11 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 1.13.1
+## Latest Release: 2.0.0
 
-- More reliable sidebar drag and drop, especially around empty groups and invalid drop targets.
-- Better sidebar-to-workspace focus syncing and group selection behavior.
-- Cleaner session attention handling, including less noisy completion-sound timing.
+- Stronger sidebar interaction model with more reliable drag and drop and more consistent session-card state.
+- Better workspace terminal controls, including refresh and scroll-to-bottom actions.
+- More resilient session and daemon handling during fast UI changes and workspace updates.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

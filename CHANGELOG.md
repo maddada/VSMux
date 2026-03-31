@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented in this file.
 
+## 2.0.0 - 2026-03-31
+
+- VSmux 2.0 delivers a much stronger sidebar interaction model, with more reliable drag and drop, safer session moves across groups, and a new sidebar state layer that keeps session cards and focus behavior more consistent.
+- The workspace terminal experience is more capable now, including scroll-to-bottom and refresh controls, cleaner terminal updates, and better coordination between the workspace panel and the terminal host.
+- Session handling is more polished overall, with stronger daemon and terminal activity tracking, better drop behavior around groups, and more resilient session presentation during rapid UI changes.
+
 ## 1.13.1 - 2026-03-30
 
 - Sidebar drag and drop is more reliable now, especially when moving sessions into empty groups or rejecting drops outside valid group targets.
