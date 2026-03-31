@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented in this file.
 
+## 2.1.0 - 2026-03-31
+
+- Workspace terminals are more polished and more reliable now, with better visibility recovery, refresh behavior, and reconnect handling when panes are shown again or focus moves around.
+- Terminal presentation inside the workspace has been cleaned up, including updated terminal visuals and better title/state updates while sessions are running.
+- Sidebar interactions feel safer overall, with sturdier drag and drop behavior around sessions, agents, and commands so reordering and organization flows are less flaky.
+
 ## 2.0.0 - 2026-03-31
 
 - VSmux 2.0 delivers a much stronger sidebar interaction model, with more reliable drag and drop, safer session moves across groups, and a new sidebar state layer that keeps session cards and focus behavior more consistent.
