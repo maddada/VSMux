@@ -10,6 +10,7 @@ const AGENT_SECONDARY_LABELS: Record<SidebarAgentIcon, readonly string[]> = {
   browser: ["browser"],
   claude: ["claude", "claude code"],
   codex: ["codex", "codex cli", "openai codex"],
+  copilot: ["copilot", "github copilot"],
   gemini: ["gemini"],
   opencode: ["open code", "opencode"],
   t3: ["t3", "t3 code"],
@@ -41,63 +42,31 @@ export function SessionCardContent({
     terminalTitle ??
     session.activityLabel ??
     getSidebarAgentNameByIcon(session.agentIcon);
-  const titleTooltip = [headingText, secondaryText].filter(Boolean).join("\n");
   const showDebugSessionNumber = showDebugSessionNumbers && session.sessionNumber !== undefined;
-  const showMeta = showHotkeys || showDebugSessionNumber;
+  const debugSessionNumberTooltip = showDebugSessionNumber
+    ? `Session number: ${session.sessionNumber}`
+    : undefined;
+  const titleTooltip = [headingText, secondaryText, debugSessionNumberTooltip]
+    .filter(Boolean)
+    .join("\n");
+  const showMeta = showHotkeys;
 
   return (
     <>
-      {session.agentIcon === "browser" ? (
-        <IconWorld
-          aria-hidden="true"
-          className="session-agent-tabler-watermark"
-          data-agent-icon="browser"
-          size={20}
-          stroke={1.8}
-        />
-      ) : session.agentIcon ? (
-        <span
-          aria-hidden="true"
-          className="session-agent-watermark"
-          data-agent-icon={session.agentIcon}
-          style={
-            {
-              "--session-agent-logo": `url("${AGENT_LOGOS[session.agentIcon]}")`,
-            } as CSSProperties
-          }
-        />
-      ) : null}
       <div className="session-head">
         <OverflowTooltipText
           className="session-alias-heading"
           textRef={aliasHeadingRef}
           text={headingText}
           tooltip={titleTooltip}
-          tooltipWhen={secondaryText ? "always" : "overflow"}
+          tooltipWhen={secondaryText || debugSessionNumberTooltip ? "always" : "overflow"}
         />
         <div className="session-head-actions">
           <div className="session-meta" data-visible={String(showMeta)}>
-            {showDebugSessionNumber ? (
-              <span className="session-debug-number">{session.sessionNumber}</span>
-            ) : null}
             {showHotkeys ? (
               <span className="session-shortcut-label">{session.shortcutLabel}</span>
             ) : null}
           </div>
-          {onRename ? (
-            <button
-              aria-label="Rename session"
-              className="session-rename-button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onRename();
-              }}
-              type="button"
-            >
-              <IconPencil aria-hidden="true" size={14} stroke={1.8} />
-            </button>
-          ) : null}
           {showCloseButton && onClose ? (
             <button
               aria-label="Close session"
@@ -114,7 +83,60 @@ export function SessionCardContent({
           ) : null}
         </div>
       </div>
+      {onRename ? (
+        <button
+          aria-label="Rename session"
+          className="session-rename-button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onRename();
+          }}
+          type="button"
+        >
+          <IconPencil aria-hidden="true" size={14} stroke={1.8} />
+        </button>
+      ) : null}
     </>
+  );
+}
+
+type SessionAgentIconProps = {
+  agentIcon: SidebarSessionItem["agentIcon"];
+};
+
+type SessionAgentLogoStyle = CSSProperties & {
+  "--session-agent-logo": string;
+};
+
+export function SessionFloatingAgentIcon({ agentIcon }: SessionAgentIconProps) {
+  if (agentIcon === "browser") {
+    return (
+      <IconWorld
+        aria-hidden="true"
+        className="session-floating-agent-tabler-icon"
+        data-agent-icon="browser"
+        size={14}
+        stroke={1.8}
+      />
+    );
+  }
+
+  if (!agentIcon) {
+    return null;
+  }
+
+  const agentLogoStyle: SessionAgentLogoStyle = {
+    "--session-agent-logo": `url("${AGENT_LOGOS[agentIcon]}")`,
+  };
+
+  return (
+    <span
+      aria-hidden="true"
+      className="session-floating-agent-icon"
+      data-agent-icon={agentIcon}
+      style={agentLogoStyle}
+    />
   );
 }
 
@@ -157,7 +179,7 @@ function OverflowTooltipText({
   tooltipWhen = "overflow",
 }: OverflowTooltipTextProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const openTimeoutIdRef = useRef<number>();
+  const openTimeoutIdRef = useRef<number | undefined>(undefined);
 
   const clearOpenTimeout = () => {
     if (openTimeoutIdRef.current === undefined) {
@@ -219,6 +241,7 @@ function OverflowTooltipText({
         render={
           <div
             className="session-tooltip-trigger"
+            key={`${className}:${text}:${tooltip ?? ""}`}
             onBlur={closeTooltip}
             onFocus={openTooltip}
             onMouseEnter={openTooltip}

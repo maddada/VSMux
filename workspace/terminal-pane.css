@@ -1,0 +1,87 @@
+.terminal-pane-root {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.terminal-pane-root-hidden {
+  display: none;
+}
+
+.terminal-pane-canvas {
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-pane-canvas .xterm-viewport {
+  overflow-y: scroll;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: none;
+}
+
+.terminal-pane-canvas .xterm-viewport::-webkit-scrollbar {
+  background: transparent;
+  width: 0;
+}
+
+.terminal-pane-canvas .xterm-viewport::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.terminal-pane-canvas .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  background: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  right: 5px !important;
+  transition: opacity 120ms linear !important;
+  width: 5px !important;
+}
+
+.terminal-pane-root:hover .terminal-pane-canvas .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  opacity: 0.7 !important;
+  pointer-events: auto !important;
+}
+
+.terminal-pane-canvas .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  background: rgb(228, 228, 228) !important;
+  border-radius: 2px !important;
+  left: 0 !important;
+  width: 5px !important;
+}
+
+.terminal-pane-canvas .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover {
+  background: rgba(228, 238, 255, 0.48) !important;
+}
+
+.terminal-pane-scroll-to-bottom {
+  align-items: center;
+  backdrop-filter: blur(6px);
+  background: rgba(18, 20, 26, 0.82);
+  border: 1px solid rgba(208, 217, 255, 0.2);
+  border-radius: 999px;
+  bottom: 12px;
+  color: rgba(242, 246, 255, 0.96);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  height: 30px;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  padding: 0;
+  position: absolute;
+  right: 17px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.32);
+  transition: background 120ms ease, border-color 120ms ease;
+  width: 30px;
+  z-index: 20;
+}
+
+.terminal-pane-scroll-to-bottom:hover {
+  background: rgba(30, 35, 46, 0.92);
+  border-color: rgba(208, 217, 255, 0.34);
+}

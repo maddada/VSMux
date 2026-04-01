@@ -2,6 +2,30 @@
 
 All notable user-facing changes are documented in this file.
 
+## 2.1.0 - 2026-03-31
+
+- Workspace terminals are more polished and more reliable now, with better visibility recovery, refresh behavior, and reconnect handling when panes are shown again or focus moves around.
+- Terminal presentation inside the workspace has been cleaned up, including updated terminal visuals and better title/state updates while sessions are running.
+- Sidebar interactions feel safer overall, with sturdier drag and drop behavior around sessions, agents, and commands so reordering and organization flows are less flaky.
+
+## 2.0.0 - 2026-03-31
+
+- VSmux 2.0 delivers a much stronger sidebar interaction model, with more reliable drag and drop, safer session moves across groups, and a new sidebar state layer that keeps session cards and focus behavior more consistent.
+- The workspace terminal experience is more capable now, including scroll-to-bottom and refresh controls, cleaner terminal updates, and better coordination between the workspace panel and the terminal host.
+- Session handling is more polished overall, with stronger daemon and terminal activity tracking, better drop behavior around groups, and more resilient session presentation during rapid UI changes.
+
+## 1.13.1 - 2026-03-30
+
+- Sidebar drag and drop is more reliable now, especially when moving sessions into empty groups or rejecting drops outside valid group targets.
+- Workspace focus handoff is more polished, with better sidebar-to-workspace focus syncing and group selection behavior.
+- Session attention handling is a bit cleaner, including more deliberate completion-sound timing so transient state changes are less noisy.
+
+## 1.13.0 - 2026-03-30
+
+- VSmux now has a much more capable workspace experience, with a new terminal workspace panel, pane reordering, better terminal appearance controls, and a Ghostty-based terminal frontend.
+- The sidebar is much more powerful: it can track live browser tabs, keep session agent launches persistent, surface daemon sessions, and offers richer Git actions directly inside VSmux.
+- Session handling is more polished overall, with better browser grouping, terminal reattach behavior, focus management, activity detection, and optional terminal exit sounds.
+
 ## 1.12.1 - 2026-03-27
 
 - Fixed installation compatibility for Cursor builds based on VS Code 1.105.x, so VSmux should install again on Cursor 2.6.21 and similar versions.

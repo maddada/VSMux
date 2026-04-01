@@ -4,7 +4,6 @@ import type {
   ExtensionToSidebarMessage,
   SidebarToExtensionMessage,
 } from "../shared/session-grid-contract";
-import { logVSmuxDebug } from "./vsmux-debug-log";
 
 const EXTENSION_ID = "maddada.VSmux";
 
@@ -15,6 +14,7 @@ type SessionSidebarViewOptions = {
 
 export class SessionSidebarViewProvider implements vscode.Disposable, vscode.WebviewViewProvider {
   private readonly disposables: vscode.Disposable[] = [];
+  private messageQueue: Promise<void> = Promise.resolve();
   private view: vscode.WebviewView | undefined;
   private latestMessage: ExtensionToSidebarMessage | undefined;
 
@@ -30,7 +30,14 @@ export class SessionSidebarViewProvider implements vscode.Disposable, vscode.Web
 
   public async postMessage(message: ExtensionToSidebarMessage): Promise<void> {
     if (message.type === "hydrate" || message.type === "sessionState") {
-      this.latestMessage = message;
+      if (
+        !this.latestMessage ||
+        this.latestMessage.type !== "hydrate" &&
+          this.latestMessage.type !== "sessionState" ||
+        this.latestMessage.revision <= message.revision
+      ) {
+        this.latestMessage = message;
+      }
     }
 
     if (!this.view) {
@@ -73,17 +80,9 @@ export class SessionSidebarViewProvider implements vscode.Disposable, vscode.Web
           return;
         }
 
-        if (message.type === "sidebarDebugLog") {
-          logVSmuxDebug(`sidebar.webview.${message.event}`, message.details);
-          return;
-        }
-
-        if (message.type === "promptRenameSession") {
-          logVSmuxDebug("sidebar.webview.received.promptRenameSession", {
-            sessionId: message.sessionId,
-          });
-        }
-        void this.options.onMessage(message);
+        this.messageQueue = this.messageQueue
+          .catch(() => undefined)
+          .then(() => this.options.onMessage(message));
       }),
     );
 
@@ -174,25 +173,47 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
   switch (message.type) {
     case "ready":
       return true;
-    case "sidebarDebugLog":
-      return (
-        typeof message.event === "string" &&
-        message.event.length > 0 &&
-        (message.details === undefined || typeof message.details === "string")
-      );
     case "openSettings":
     case "toggleCompletionBell":
-    case "toggleVsMuxDisabled":
+    case "refreshDaemonSessions":
+    case "killTerminalDaemon":
     case "moveSidebarToOtherSide":
     case "createSession":
     case "openBrowser":
       return true;
+    case "killDaemonSession":
+      return (
+        typeof message.sessionId === "string" &&
+        message.sessionId.length > 0 &&
+        typeof message.workspaceId === "string" &&
+        message.workspaceId.length > 0
+      );
     case "toggleFullscreenSession":
       return true;
 
     case "runSidebarCommand":
     case "deleteSidebarCommand":
       return typeof message.commandId === "string" && message.commandId.length > 0;
+
+    case "runSidebarGitAction":
+    case "setSidebarGitPrimaryAction":
+      return (
+        typeof message.action === "string" &&
+        ["commit", "push", "pr"].includes(message.action)
+      );
+
+    case "refreshGitState":
+      return true;
+
+    case "confirmSidebarGitCommit":
+      return (
+        typeof message.requestId === "string" &&
+        message.requestId.length > 0 &&
+        typeof message.subject === "string"
+      );
+
+    case "cancelSidebarGitCommit":
+      return typeof message.requestId === "string" && message.requestId.length > 0;
 
     case "syncSidebarCommandOrder":
       return (
@@ -237,6 +258,9 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
     case "saveScratchPad":
       return typeof message.content === "string";
 
+    case "sidebarDebugLog":
+      return typeof message.event === "string" && message.event.length > 0;
+
     case "renameSession":
       return (
         typeof message.sessionId === "string" &&
@@ -252,7 +276,7 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
       );
 
     case "setVisibleCount":
-      return typeof message.visibleCount === "number" && [1, 2].includes(message.visibleCount);
+      return typeof message.visibleCount === "number" && [1, 2, 3, 4, 6, 9].includes(message.visibleCount);
 
     case "setViewMode":
       return (
@@ -274,6 +298,9 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
 
     case "createGroupFromSession":
       return typeof message.sessionId === "string" && message.sessionId.length > 0;
+
+    case "createGroup":
+      return true;
 
     case "syncSessionOrder":
       return (

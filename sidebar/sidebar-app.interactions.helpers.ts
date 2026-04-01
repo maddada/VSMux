@@ -3,9 +3,28 @@ import type { SidebarToExtensionMessage } from "../shared/session-grid-contract"
 import { getSidebarStoryMessages, resetSidebarStoryMessages } from "./sidebar-story-harness";
 
 export async function waitForReadyMessage() {
-  await waitFor(() => {
-    return expect(getSidebarStoryMessages().some((message) => message.type === "ready")).toBe(true);
-  });
+  await waitFor(
+    () => {
+      return expect(getSidebarStoryMessages().some((message) => message.type === "ready")).toBe(
+        true,
+      );
+    },
+    { timeout: 3_000 },
+  );
+
+  await waitFor(
+    () => {
+      const stack = document.body.querySelector(".stack");
+      const hasRenderedGroups = document.body.querySelector("[data-sidebar-group-id]");
+
+      expect(stack).toBeTruthy();
+      expect(stack).toHaveAttribute("data-dimmed", "false");
+      expect(hasRenderedGroups).toBeTruthy();
+    },
+    { timeout: 3_000 },
+  );
+
+  await nextFrame(window);
 }
 
 export async function expectMessage(expectedMessage: Partial<SidebarToExtensionMessage>) {
@@ -16,14 +35,34 @@ export async function expectMessage(expectedMessage: Partial<SidebarToExtensionM
   });
 }
 
-export async function dragAndDrop(source: HTMLElement, target: HTMLElement) {
-  const dragState = await dragToHover(source, target);
+export async function expectNoMessage(
+  expectedMessage: Partial<SidebarToExtensionMessage>,
+  delayMs = 50,
+) {
+  await delay(delayMs);
+  expect(
+    getSidebarStoryMessages().some((message) => isSubsetMatch(message, expectedMessage)),
+  ).toBe(false);
+}
+
+export async function dragAndDrop(
+  source: HTMLElement,
+  target: HTMLElement,
+  targetPosition: DragTargetPosition = "center",
+) {
+  const dragState = await dragToHover(source, target, targetPosition);
   await releaseDrag(target, dragState);
 }
 
-export async function dragToHover(source: HTMLElement, target: HTMLElement) {
+type DragTargetPosition = "after" | "before" | "center";
+
+export async function dragToHover(
+  source: HTMLElement,
+  target: HTMLElement,
+  targetPosition: DragTargetPosition = "center",
+) {
   const sourcePosition = getCenter(source);
-  const targetPosition = getCenter(target);
+  const targetCoordinates = getTargetPoint(target, targetPosition);
   const pointerData = {
     button: 0,
     buttons: 1,
@@ -49,12 +88,12 @@ export async function dragToHover(source: HTMLElement, target: HTMLElement) {
   await fireEvent.pointerMove(target, {
     ...pointerData,
     bubbles: true,
-    clientX: targetPosition.x,
-    clientY: targetPosition.y,
+    clientX: targetCoordinates.x,
+    clientY: targetCoordinates.y,
   });
   await nextFrame(source.ownerDocument.defaultView);
 
-  return { pointerData, targetPosition };
+  return { pointerData, targetPosition: targetCoordinates };
 }
 
 export async function releaseDrag(
@@ -91,13 +130,23 @@ export async function openContextMenu(element: HTMLElement) {
 
 export async function dragSessionToGroup(root: ParentNode, sessionId: string, groupId: string) {
   resetSidebarStoryMessages();
+  const targetSession = root.querySelector(
+    `[data-sidebar-group-id="${groupId}"] [data-sidebar-session-id]`,
+  );
   await dragAndDrop(
     await findRequiredElement(
       root,
       `[data-sidebar-session-id="${sessionId}"]`,
       `${sessionId} card`,
     ),
-    await findRequiredElement(root, `[data-sidebar-group-id="${groupId}"]`, `${groupId} section`),
+    targetSession instanceof HTMLElement
+      ? targetSession
+      : await findRequiredElement(
+          root,
+          `[data-sidebar-group-id="${groupId}"] .group-empty-state`,
+          `${groupId} empty state`,
+        ),
+    targetSession instanceof HTMLElement ? "before" : "center",
   );
   await expectMessage({
     groupId,
@@ -145,6 +194,29 @@ function getCenter(element: HTMLElement) {
   const bounds = element.getBoundingClientRect();
   return {
     x: bounds.left + bounds.width / 2,
+    y: bounds.top + bounds.height / 2,
+  };
+}
+
+function getTargetPoint(element: HTMLElement, position: DragTargetPosition) {
+  const bounds = element.getBoundingClientRect();
+  const x = bounds.left + bounds.width / 2;
+  if (position === "before") {
+    return {
+      x,
+      y: bounds.top + bounds.height * 0.25,
+    };
+  }
+
+  if (position === "after") {
+    return {
+      x,
+      y: bounds.top + bounds.height * 0.75,
+    };
+  }
+
+  return {
+    x,
     y: bounds.top + bounds.height / 2,
   };
 }

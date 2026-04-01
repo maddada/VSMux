@@ -13,7 +13,7 @@ const config: StorybookConfig = {
     name: "@storybook/react-vite",
     options: {},
   },
-  stories: ["../sidebar/**/*.stories.@(ts|tsx)"],
+  stories: ["../sidebar/**/*.stories.@(ts|tsx)", "../workspace/**/*.stories.@(ts|tsx)"],
   typescript: {
     check: false,
     reactDocgen: "react-docgen",

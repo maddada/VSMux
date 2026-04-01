@@ -20,6 +20,11 @@ const LEASES_DIR_NAME = "leases";
 const SUPERVISOR_STATE_FILE = "supervisor.json";
 const SUPERVISOR_LAUNCH_LOCK_FILE = "supervisor-launch.lock";
 
+type T3ModelSelection = {
+  model: string;
+  provider: "codex" | "claudeAgent";
+};
+
 type SupervisorState = {
   childPid?: number;
   command: string;
@@ -33,7 +38,7 @@ type SupervisorState = {
 type T3Snapshot = {
   projects: Array<{
     createdAt: string;
-    defaultModel: string | null;
+    defaultModelSelection: T3ModelSelection | null;
     deletedAt: string | null;
     id: string;
     title: string;
@@ -44,7 +49,7 @@ type T3Snapshot = {
     createdAt: string;
     deletedAt: string | null;
     id: string;
-    model: string;
+    modelSelection: T3ModelSelection;
     projectId: string;
     title: string;
     updatedAt: string;
@@ -116,7 +121,10 @@ export class T3RuntimeManager implements vscode.Disposable {
       commandId: randomUUID(),
       createdAt: new Date().toISOString(),
       interactionMode: "default",
-      model: project.defaultModel ?? DEFAULT_MODEL,
+      modelSelection: project.defaultModelSelection ?? {
+        model: DEFAULT_MODEL,
+        provider: "codex",
+      },
       projectId: project.id,
       runtimeMode: "full-access",
       threadId,
@@ -182,7 +190,10 @@ export class T3RuntimeManager implements vscode.Disposable {
     await this.dispatchCommand({
       commandId: randomUUID(),
       createdAt: now,
-      defaultModel: DEFAULT_MODEL,
+      defaultModelSelection: {
+        model: DEFAULT_MODEL,
+        provider: "codex",
+      },
       projectId,
       title,
       type: "project.create",
@@ -191,7 +202,10 @@ export class T3RuntimeManager implements vscode.Disposable {
 
     return {
       createdAt: now,
-      defaultModel: DEFAULT_MODEL,
+      defaultModelSelection: {
+        model: DEFAULT_MODEL,
+        provider: "codex",
+      },
       deletedAt: null,
       id: projectId,
       title,

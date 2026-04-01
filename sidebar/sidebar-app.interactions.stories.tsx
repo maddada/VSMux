@@ -7,6 +7,7 @@ import {
   dragSessionToGroup,
   dragToHover,
   expectMessage,
+  expectNoMessage,
   expectSessionMembership,
   findRequiredElement,
   openContextMenu,
@@ -54,20 +55,21 @@ export const ToolbarActions: Story = {
 
     await step("toggle sessions shown", async () => {
       resetSidebarStoryMessages();
-      await userEvent.click(canvas.getByRole("button", { name: "Toggle split mode for Group 4" }));
+      await userEvent.click(canvas.getByRole("button", { name: "Select split count for Group 4" }));
+      await userEvent.click(await body.findByRole("menuitem", { name: "Show 2 splits" }));
       await expectMessage({ type: "setVisibleCount", visibleCount: 2 });
     });
 
     await step("keep the split menu available on right click", async () => {
       resetSidebarStoryMessages();
-      const splitModeButton = canvas.getByRole("button", { name: "Toggle split mode for Group 4" });
+      const splitModeButton = canvas.getByRole("button", { name: "Select split count for Group 4" });
       await openContextMenu(splitModeButton);
-      await expect(body.queryByRole("menuitem", { name: "3" })).toBeNull();
-      await expect(body.queryByRole("menuitem", { name: "4" })).toBeNull();
-      await expect(body.queryByRole("menuitem", { name: "6" })).toBeNull();
-      await expect(body.queryByRole("menuitem", { name: "9" })).toBeNull();
-      await userEvent.click(await body.findByRole("menuitem", { name: "Show 2 splits" }));
-      await expectMessage({ type: "setVisibleCount", visibleCount: 2 });
+      await body.findByRole("menuitem", { name: "Show 3 splits" });
+      await body.findByRole("menuitem", { name: "Show 4 splits" });
+      await body.findByRole("menuitem", { name: "Show 6 splits" });
+      await body.findByRole("menuitem", { name: "Show 9 splits" });
+      await userEvent.click(await body.findByRole("menuitem", { name: "Show 4 splits" }));
+      await expectMessage({ type: "setVisibleCount", visibleCount: 4 });
     });
 
     await step("keep the layout selector hidden", async () => {
@@ -89,11 +91,13 @@ export const SessionCardActions: Story = {
   play: async ({ canvas, canvasElement, step, userEvent }) => {
     const storyDocument = canvasElement.ownerDocument;
     const body = within(storyDocument.body);
+    const findSessionCard = () => canvas.findByRole("button", { name: /Harbor Vale/i });
 
-    const sessionCard = await canvas.findByRole("button", { name: /Harbor Vale/i });
+    await waitForReadyMessage();
     resetSidebarStoryMessages();
 
     await step("focus a session from its card", async () => {
+      const sessionCard = await findSessionCard();
       await userEvent.click(sessionCard);
       await expectMessage({ sessionId: "session-3", type: "focusSession" });
     });
@@ -101,8 +105,14 @@ export const SessionCardActions: Story = {
     await step("rename a session from the hover button", async () => {
       resetSidebarStoryMessages();
 
+      const sessionCard = await findSessionCard();
       await userEvent.hover(sessionCard);
-      await userEvent.click(await canvas.findByRole("button", { name: "Rename session" }));
+      const sessionFrame = sessionCard.closest(".session-frame");
+      if (!(sessionFrame instanceof HTMLElement)) {
+        throw new Error("Expected hovered session card to be wrapped by .session-frame");
+      }
+
+      await userEvent.click(within(sessionFrame).getByRole("button", { name: "Rename session" }));
 
       await expectMessage({ sessionId: "session-3", type: "promptRenameSession" });
     });
@@ -110,6 +120,7 @@ export const SessionCardActions: Story = {
     await step("rename through the session context menu", async () => {
       resetSidebarStoryMessages();
 
+      const sessionCard = await findSessionCard();
       await openContextMenu(sessionCard);
       await userEvent.click(await body.findByRole("menuitem", { name: "Rename" }));
 
@@ -119,6 +130,7 @@ export const SessionCardActions: Story = {
     await step("copy a resume command through the session context menu", async () => {
       resetSidebarStoryMessages();
 
+      const sessionCard = await findSessionCard();
       await openContextMenu(sessionCard);
       await userEvent.click(await body.findByRole("menuitem", { name: "Copy resume" }));
 
@@ -128,6 +140,7 @@ export const SessionCardActions: Story = {
     await step("terminate through the session context menu", async () => {
       resetSidebarStoryMessages();
 
+      const sessionCard = await findSessionCard();
       await openContextMenu(sessionCard);
       await userEvent.click(await body.findByRole("menuitem", { name: "Terminate" }));
 
@@ -139,6 +152,7 @@ export const SessionCardActions: Story = {
 export const DragToReorderWithinGroup: Story = {
   play: async ({ canvas, canvasElement, step }) => {
     const storyRoot = canvasElement.ownerDocument.body;
+    await waitForReadyMessage();
     const firstSession = await findRequiredElement(
       storyRoot,
       '[data-sidebar-session-id="session-1"]',
@@ -176,7 +190,8 @@ export const DragToReorderWithinGroup: Story = {
     });
 
     await step("reorder sessions inside a group", async () => {
-      await dragAndDrop(firstSession, secondSession);
+      const dragState = await dragToHover(firstSession, secondSession, "after");
+      await releaseDrag(secondSession, dragState);
 
       await expectMessage({
         groupId: "group-1",
@@ -195,6 +210,7 @@ export const DragToReorderWithinGroup: Story = {
 export const DragToMoveAcrossGroups: Story = {
   play: async ({ canvasElement, step }) => {
     const storyRoot = canvasElement.ownerDocument.body;
+    await waitForReadyMessage();
     const sourceSession = await findRequiredElement(
       storyRoot,
       '[data-sidebar-session-id="session-3"]',
@@ -225,48 +241,13 @@ export const DragToMoveAcrossGroups: Story = {
 export const DragAcrossGroupsRepeatedly: Story = {
   play: async ({ canvasElement, step }) => {
     const storyRoot = canvasElement.ownerDocument.body;
+    await waitForReadyMessage();
 
     await step("move the same session back and forth across groups", async () => {
-      resetSidebarStoryMessages();
-      await dragAndDrop(
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-session-id="session-3"]',
-          "session-3 card",
-        ),
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-group-id="group-2"]',
-          "group-2 section",
-        ),
-      );
-      await expectMessage({
-        groupId: "group-2",
-        sessionId: "session-3",
-        targetIndex: 0,
-        type: "moveSessionToGroup",
-      });
+      await dragSessionToGroup(storyRoot, "session-3", "group-2");
       await expectSessionMembership(storyRoot, "group-2", ["session-3", "session-4", "session-5"]);
 
-      resetSidebarStoryMessages();
-      await dragAndDrop(
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-session-id="session-3"]',
-          "session-3 card",
-        ),
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-group-id="group-1"]',
-          "group-1 section",
-        ),
-      );
-      await expectMessage({
-        groupId: "group-1",
-        sessionId: "session-3",
-        targetIndex: 0,
-        type: "moveSessionToGroup",
-      });
+      await dragSessionToGroup(storyRoot, "session-3", "group-1");
       await expectSessionMembership(storyRoot, "group-1", ["session-3", "session-1", "session-2"]);
       await expectSessionMembership(storyRoot, "group-2", ["session-4", "session-5"]);
     });
@@ -281,6 +262,7 @@ export const DragAcrossThreeGroupsStress: Story = {
   },
   play: async ({ canvasElement, step }) => {
     const storyRoot = canvasElement.ownerDocument.body;
+    await waitForReadyMessage();
 
     await step("move sessions across three groups until groups empty and refill", async () => {
       await dragSessionToGroup(storyRoot, "session-2", "group-2");
@@ -306,6 +288,62 @@ export const DragAcrossThreeGroupsStress: Story = {
       await dragSessionToGroup(storyRoot, "session-2", "group-1");
       await expectSessionMembership(storyRoot, "group-1", ["session-2", "session-3", "session-5"]);
       await expectSessionMembership(storyRoot, "group-2", []);
+    });
+  },
+};
+
+export const DragIntoEmptyGroupAndRejectOutsideDrops: Story = {
+  args: {
+    fixture: "empty-groups",
+  },
+  play: async ({ canvasElement, step }) => {
+    const storyRoot = canvasElement.ownerDocument.body;
+    await waitForReadyMessage();
+
+    await step("move a session into an empty group", async () => {
+      resetSidebarStoryMessages();
+      await dragAndDrop(
+        await findRequiredElement(
+          storyRoot,
+          '[data-sidebar-session-id="session-1"]',
+          "session-1 card",
+        ),
+        await findRequiredElement(
+          storyRoot,
+          '[data-sidebar-group-id="group-2"] .group-empty-state',
+          "group-2 empty state",
+        ),
+      );
+
+      await expectMessage({
+        groupId: "group-2",
+        sessionId: "session-1",
+        targetIndex: 0,
+        type: "moveSessionToGroup",
+      });
+      await expectSessionMembership(storyRoot, "group-1", []);
+      await expectSessionMembership(storyRoot, "group-2", ["session-1"]);
+    });
+
+    await step("ignore drops outside the groups", async () => {
+      resetSidebarStoryMessages();
+      await dragAndDrop(
+        await findRequiredElement(
+          storyRoot,
+          '[data-sidebar-session-id="session-1"]',
+          "session-1 card",
+        ),
+        await findRequiredElement(
+          storyRoot,
+          'button[aria-label="Create a new group"]',
+          "new group button",
+        ),
+      );
+
+      await expectNoMessage({ type: "moveSessionToGroup" });
+      await expectNoMessage({ type: "syncSessionOrder" });
+      await expectSessionMembership(storyRoot, "group-1", []);
+      await expectSessionMembership(storyRoot, "group-2", ["session-1"]);
     });
   },
 };

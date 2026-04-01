@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { DragDropProvider } from "@dnd-kit/react";
-import { isSortable, useSortable } from "@dnd-kit/react/sortable";
-import { IconCode, IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
+import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
+import { IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -11,7 +11,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
+import { GitActionRow } from "./git-action-row";
+import { useSidebarStore } from "./sidebar-store";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import { CommandConfigModal, type CommandConfigDraft } from "./command-config-modal";
 import type { WebviewApi } from "./webview-api";
@@ -21,9 +24,7 @@ const CONTEXT_MENU_WIDTH_PX = 188;
 const CONTEXT_MENU_HEIGHT_PX = 110;
 
 type CommandsPanelProps = {
-  commands: SidebarCommandButton[];
   createRequestId: number;
-  isVsMuxDisabled: boolean;
   titlebarActions?: ReactNode;
   vscode: WebviewApi;
 };
@@ -63,25 +64,35 @@ function createCommandDragData(commandId: string): CommandDragData {
   };
 }
 
-function getCommandDragData(candidate: { data?: unknown } | null | undefined) {
-  const data = candidate?.data;
-  if (!data || typeof data !== "object" || !("kind" in data)) {
+function getCommandDragData(candidate: unknown): CommandDragData | undefined {
+  if (!hasData(candidate)) {
     return undefined;
   }
 
-  const parsedData = data as Partial<CommandDragData>;
-  return parsedData.kind === "sidebar-command" && typeof parsedData.commandId === "string"
-    ? (parsedData as CommandDragData)
+  const data = candidate.data;
+  if (!isObjectRecord(data) || !("kind" in data)) {
+    return undefined;
+  }
+
+  return data.kind === "sidebar-command" && typeof data.commandId === "string"
+    ? {
+        commandId: data.commandId,
+        kind: "sidebar-command",
+      }
     : undefined;
 }
 
 export function CommandsPanel({
-  commands,
   createRequestId,
-  isVsMuxDisabled,
   titlebarActions,
   vscode,
 }: CommandsPanelProps) {
+  const { commands, git } = useSidebarStore(
+    useShallow((state) => ({
+      commands: state.hud.commands,
+      git: state.hud.git,
+    })),
+  );
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
   const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
@@ -93,14 +104,14 @@ export function CommandsPanel({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
+      if (isNode(event.target) && menuRef.current?.contains(event.target)) {
         return;
       }
 
       setContextMenu(undefined);
     };
     const handleContextMenu = (event: MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
+      if (isNode(event.target) && menuRef.current?.contains(event.target)) {
         return;
       }
 
@@ -182,7 +193,9 @@ export function CommandsPanel({
   }, [createRequestId]);
 
   const orderedCommands = useMemo(() => {
-    const commandById = new Map(commands.map((command) => [command.commandId, command] as const));
+    const commandById = new Map<string, SidebarCommandButton>(
+      commands.map((command) => [command.commandId, command]),
+    );
     const orderedCommandIds = draftCommandIds
       ? mergeCommandIds(
           draftCommandIds,
@@ -195,24 +208,22 @@ export function CommandsPanel({
       .filter((command): command is SidebarCommandButton => command !== undefined);
   }, [commands, draftCommandIds]);
 
-  const handleDragEnd = (event: {
-    canceled?: boolean;
-    operation: {
-      source: unknown;
-      target: unknown;
-    };
-  }) => {
+  const handleDragEnd = ((event) => {
     if (event.canceled) {
       return;
     }
 
+    if (!isSortableOperation(event.operation)) {
+      return;
+    }
+
     const { source, target } = event.operation;
-    if (!isSortable(source) || !isSortable(target)) {
+    if (!source || !target) {
       return;
     }
 
     const sourceData = getCommandDragData(source);
-    const targetData = getCommandDragData(target as { data?: unknown });
+    const targetData = getCommandDragData(target);
     if (!sourceData || !targetData || sourceData.commandId === targetData.commandId) {
       return;
     }
@@ -233,7 +244,7 @@ export function CommandsPanel({
       commandIds: nextCommandIds,
       type: "syncSidebarCommandOrder",
     });
-  };
+  }) satisfies DragDropEventHandlers["onDragEnd"];
 
   return (
     <>
@@ -251,6 +262,7 @@ export function CommandsPanel({
           )}
         </div>
         <div className="card commands-panel">
+          <GitActionRow git={git} vscode={vscode} />
           <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
             <DragDropProvider onDragEnd={handleDragEnd}>
               <div className="commands-grid">
@@ -271,39 +283,6 @@ export function CommandsPanel({
                     onRun={() => runOrConfigureCommand(command)}
                   />
                 ))}
-                <Tooltip.Root>
-                  <Tooltip.Trigger
-                    render={
-                      <button
-                        aria-label="Code Mode: switch back to normal VS Code layout while keeping VSmux sessions available"
-                        className="command-button command-button-code-mode"
-                        data-configured="true"
-                        data-empty-space-blocking="true"
-                        data-selected={String(isVsMuxDisabled)}
-                        onClick={() => vscode.postMessage({ type: "toggleVsMuxDisabled" })}
-                        type="button"
-                      >
-                        <span aria-hidden="true" className="command-button-kind-badge">
-                          <IconCode
-                            aria-hidden="true"
-                            className="command-button-kind-icon"
-                            size={15}
-                            stroke={1.8}
-                          />
-                        </span>
-                        <span className="command-button-label code-mode-button">⏸︎</span>
-                      </button>
-                    }
-                  />
-                  <Tooltip.Portal>
-                    <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
-                      <Tooltip.Popup className="tooltip-popup">
-                        Switch back to normal VS Code layout while keeping VSmux sessions active in
-                        the background
-                      </Tooltip.Popup>
-                    </Tooltip.Positioner>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
               </div>
             </DragDropProvider>
           </Tooltip.Provider>
@@ -469,6 +448,18 @@ function moveCommandId(
 
   nextCommandIds.splice(index, 0, commandId);
   return nextCommandIds;
+}
+
+function hasData(candidate: unknown): candidate is { data?: unknown } {
+  return isObjectRecord(candidate) && "data" in candidate;
+}
+
+function isNode(value: EventTarget | null): value is Node {
+  return value instanceof Node;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function mergeCommandIds(

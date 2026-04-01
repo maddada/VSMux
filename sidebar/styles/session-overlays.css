@@ -50,7 +50,7 @@
 }
 
 .session-context-menu.sidebar-floating-menu {
-  min-width: 188px;
+  min-width: 160px;
   position: absolute;
   right: 0;
   top: calc(100% + 6px);

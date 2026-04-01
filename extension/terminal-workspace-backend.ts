@@ -4,12 +4,17 @@ import type { TerminalSessionSnapshot } from "../shared/terminal-host-protocol";
 
 export type TerminalWorkspaceBackendTitleChange = {
   sessionId: string;
-  title: string;
+  title?: string;
+};
+
+export type TerminalWorkspaceBackendPresentationChange = {
+  sessionId: string;
+  title?: string;
 };
 
 export type TerminalWorkspaceBackend = vscode.Disposable & {
-  readonly onDidActivateSession: vscode.Event<string>;
   readonly onDidChangeSessions: vscode.Event<void>;
+  readonly onDidChangeSessionPresentation: vscode.Event<TerminalWorkspaceBackendPresentationChange>;
   readonly onDidChangeSessionTitle: vscode.Event<TerminalWorkspaceBackendTitleChange>;
   hasAttachedTerminal: (sessionId: string) => boolean;
   getLastTerminalActivityAt: (sessionId: string) => number | undefined;
@@ -18,17 +23,6 @@ export type TerminalWorkspaceBackend = vscode.Disposable & {
   acknowledgeAttention: (sessionId: string) => Promise<boolean>;
   createOrAttachSession: (sessionRecord: SessionRecord) => Promise<TerminalSessionSnapshot>;
   focusSession: (sessionId: string) => Promise<boolean>;
-  getObservedGroupIndex: (sessionId: string) => number | undefined;
-  isSessionForegroundVisible: (sessionId: string) => boolean;
-  parkAllEditorTerminalsToPanel: () => Promise<void>;
-  clearObservedEditorGroupPlacement: () => void;
-  restoreAllManagedTerminalsToEditor: () => Promise<void>;
-  revealSessionInGroup: (
-    sessionRecord: SessionRecord,
-    targetGroupIndex: number,
-    isCancelled?: () => boolean,
-  ) => Promise<boolean>;
-  syncRunningTerminalTitles: () => Promise<void>;
   getSessionSnapshot: (sessionId: string) => TerminalSessionSnapshot | undefined;
   killSession: (sessionId: string) => Promise<void>;
   renameSession: (sessionRecord: SessionRecord) => Promise<void>;

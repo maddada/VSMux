@@ -6,11 +6,17 @@ import {
   normalizeUrl,
 } from "./browser-session-manager/helpers";
 import { T3_PANEL_TYPE } from "./t3-webview-manager/helpers";
+import { WORKSPACE_PANEL_TYPE } from "./workspace-panel";
 
 export const BROWSER_SIDEBAR_GROUP_ID = "browser-tabs";
 
 const BROWSER_SIDEBAR_SESSION_PREFIX = "browser-tab:";
 const SIMPLE_BROWSER_VIEW_TYPE = "simpleBrowser.view";
+const VSMUX_LABEL = "vsmux";
+const VSMUX_VIEW_TYPE_PREFIX = "vsmux.";
+const VSCODE_WELCOME_LABEL = "welcome";
+const WORKING_TREE_LABEL_FRAGMENT = "(Working Tree)";
+const INDEX_LABEL_FRAGMENT = '(Index)';
 
 export type LiveBrowserTabEntry = {
   detail?: string;
@@ -120,12 +126,25 @@ function getLiveBrowserTabMetadata(tab: vscode.Tab):
       viewType?: string;
     }
   | undefined {
-  const viewType = getTabViewType(tab.input);
-  if (viewType === T3_PANEL_TYPE) {
+  if (tab.label.includes(WORKING_TREE_LABEL_FRAGMENT) || tab.label.includes(INDEX_LABEL_FRAGMENT)) {
     return undefined;
   }
 
+  if (tab.label.trim().toLowerCase() === VSCODE_WELCOME_LABEL) {
+    return undefined;
+  }
+
+  if (isDiffTabInput(tab.input)) {
+    return undefined;
+  }
+
+  const viewType = getTabViewType(tab.input);
   const url = normalizeSidebarBrowserUrl(getBrowserTabUrl(tab));
+
+  if (isVSmuxOwnedTab(tab, viewType, url)) {
+    return undefined;
+  }
+
   if (url) {
     return {
       detail: url,
@@ -156,12 +175,39 @@ function getLiveBrowserTabMetadata(tab: vscode.Tab):
   return undefined;
 }
 
+function isVSmuxOwnedTab(
+  tab: vscode.Tab,
+  viewType: string | undefined,
+  url: string | undefined,
+): boolean {
+  const normalizedViewType = viewType?.toLowerCase();
+  if (viewType === T3_PANEL_TYPE || viewType === WORKSPACE_PANEL_TYPE) {
+    return true;
+  }
+
+  if (normalizedViewType?.startsWith(VSMUX_VIEW_TYPE_PREFIX)) {
+    return true;
+  }
+
+  if (tab.label.trim().toLowerCase() !== VSMUX_LABEL) {
+    return false;
+  }
+
+  return url === undefined || isVSmuxLocalAssetUrl(url);
+}
+
 function isBrowserWebviewViewType(viewType: string): boolean {
   const normalizedViewType = viewType.toLowerCase();
   return (
     normalizedViewType === SIMPLE_BROWSER_VIEW_TYPE.toLowerCase() ||
     normalizedViewType.includes("browser") ||
     normalizedViewType.includes("preview")
+  );
+}
+
+function isVSmuxLocalAssetUrl(url: string): boolean {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/(?:workspace|t3-embed)(?:\/|$)/i.test(
+    url,
   );
 }
 
@@ -172,4 +218,23 @@ function getTabViewType(input: vscode.Tab["input"]): string | undefined {
 
   const viewType = (input as { viewType?: unknown }).viewType;
   return typeof viewType === "string" && viewType.length > 0 ? viewType : undefined;
+}
+
+function isDiffTabInput(input: vscode.Tab["input"]): boolean {
+  const textDiffInputConstructor = getOptionalVscodeConstructor("TabInputTextDiff");
+  if (typeof textDiffInputConstructor === "function" && input instanceof textDiffInputConstructor) {
+    return true;
+  }
+
+  const notebookDiffInputConstructor = getOptionalVscodeConstructor("TabInputNotebookDiff");
+  return (
+    typeof notebookDiffInputConstructor === "function" &&
+    input instanceof notebookDiffInputConstructor
+  );
+}
+
+function getOptionalVscodeConstructor(name: string): Function | undefined {
+  const candidate =
+    name in (vscode as object) ? (vscode as unknown as Record<string, unknown>)[name] : undefined;
+  return typeof candidate === "function" ? candidate : undefined;
 }

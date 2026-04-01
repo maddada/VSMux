@@ -1,23 +1,236 @@
 .action-row {
   display: grid;
-  gap: 8px;
+  gap: calc(8px * var(--sidebar-density-scale));
 }
 
 .commands-section {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
 }
 
 .commands-panel {
   display: grid;
-  gap: 12px;
+  gap: calc(12px * var(--sidebar-density-scale));
+}
+
+.git-action-row {
+  container-type: inline-size;
+  position: relative;
+}
+
+.git-action-split-button {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+
+.git-action-main-button,
+.git-action-toggle-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-button-background) 14%, var(--app-card-active) 86%);
+  border-color: color-mix(in srgb, var(--app-button-background) 40%, var(--app-border));
+  color: color-mix(in srgb, var(--app-foreground) 92%, var(--app-muted) 8%);
+  display: inline-flex;
+  min-height: calc(38px * var(--sidebar-density-scale));
+  outline: 2px solid transparent;
+  outline-offset: -3px;
+}
+
+.git-action-main-button:hover,
+.git-action-main-button:focus-visible,
+.git-action-toggle-button:hover,
+.git-action-toggle-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 18%, var(--app-card-active) 82%);
+  border-color: color-mix(in srgb, var(--app-button-background) 48%, var(--app-border));
+  outline: none;
+}
+
+.git-action-main-button[data-disabled="true"],
+.git-action-toggle-button:disabled {
+  cursor: default;
+  opacity: 0.66;
+}
+
+.git-action-main-button {
+  border-radius: calc(12px * var(--sidebar-density-scale)) 0 0
+    calc(12px * var(--sidebar-density-scale));
+  gap: calc(8px * var(--sidebar-density-scale));
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 calc(12px * var(--sidebar-density-scale));
+  width: 100%;
+}
+
+.git-action-toggle-button {
+  border-left-width: 0;
+  border-radius: 0 calc(12px * var(--sidebar-density-scale))
+    calc(12px * var(--sidebar-density-scale)) 0;
+  justify-content: center;
+  padding: 0;
+}
+
+.git-action-main-icon-shell,
+.git-action-main-icon,
+.git-action-toggle-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.git-action-main-icon-spinning {
+  animation: agent-button-spin 0.9s linear infinite;
+}
+
+.git-action-main-label {
+  flex: 1 1 auto;
+  font-size: calc(11px * var(--sidebar-density-scale));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-action-diff-stat {
+  display: inline-flex;
+  flex: none;
+  font-size: calc(10px * var(--sidebar-density-scale));
+  font-weight: 700;
+  gap: calc(1px * var(--sidebar-density-scale));
+  margin-inline-end: calc(5px * var(--sidebar-density-scale));
+  margin-inline-start: auto;
+}
+
+.git-action-diff-stat-additions {
+  color: color-mix(in srgb, #26b36a 88%, var(--app-foreground) 12%);
+}
+
+.git-action-diff-stat-divider {
+  color: color-mix(in srgb, var(--app-muted) 84%, var(--app-foreground) 16%);
+}
+
+.git-action-diff-stat-deletions {
+  color: color-mix(in srgb, #e05656 88%, var(--app-foreground) 12%);
+}
+
+@container (max-width: 220px) {
+  .git-action-diff-stat {
+    align-items: flex-end;
+    display: inline-grid;
+    gap: 0;
+    grid-template-columns: 1fr;
+    line-height: 1.05;
+    justify-items: end;
+    margin-inline-start: auto;
+    text-align: end;
+  }
+
+  .git-action-diff-stat-divider {
+    display: none;
+  }
+}
+
+.git-action-menu {
+  background: color-mix(in srgb, var(--app-card) 96%, black 4%);
+  border: 1px solid color-mix(in srgb, var(--app-border) 94%, transparent);
+  border-radius: calc(12px * var(--sidebar-density-scale));
+  box-shadow: 0 16px 40px color-mix(in srgb, black 24%, transparent);
+  display: grid;
+  gap: calc(4px * var(--sidebar-density-scale));
+  padding: calc(6px * var(--sidebar-density-scale));
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(220px, 100%);
+  z-index: 12;
+}
+
+.git-action-menu-divider {
+  background: color-mix(in srgb, var(--app-border) 88%, transparent);
+  block-size: 1px;
+  inline-size: 100%;
+  margin: calc(2px * var(--sidebar-density-scale)) 0;
+}
+
+.git-action-menu-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: calc(10px * var(--sidebar-density-scale));
+  color: color-mix(in srgb, var(--app-foreground) 92%, var(--app-muted) 8%);
+  display: inline-flex;
+  gap: calc(8px * var(--sidebar-density-scale));
+  justify-content: flex-start;
+  min-height: calc(34px * var(--sidebar-density-scale));
+  padding: 0 calc(10px * var(--sidebar-density-scale));
+  text-align: left;
+  width: 100%;
+}
+
+.git-action-menu-item:hover,
+.git-action-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 14%, var(--app-card-active) 86%);
+  outline: none;
+}
+
+.git-action-menu-item[data-disabled="true"] {
+  cursor: default;
+  opacity: 0.56;
+}
+
+.git-action-menu-item-label {
+  flex: 1 1 auto;
+  font-size: calc(11px * var(--sidebar-density-scale));
+  font-weight: 700;
+  min-width: 0;
+}
+
+.git-action-menu-item-trailing-icon {
+  color: color-mix(in srgb, var(--app-muted) 84%, var(--app-foreground) 16%);
+  flex: none;
+}
+
+.git-action-menu-toggle-item {
+  gap: calc(10px * var(--sidebar-density-scale));
+}
+
+.git-action-menu-toggle-check {
+  align-items: center;
+  block-size: calc(16px * var(--sidebar-density-scale));
+  border: 1px solid color-mix(in srgb, var(--app-border) 88%, transparent);
+  border-radius: calc(5px * var(--sidebar-density-scale));
+  color: color-mix(in srgb, var(--app-button-background) 70%, var(--app-foreground) 30%);
+  display: inline-flex;
+  flex: none;
+  inline-size: calc(16px * var(--sidebar-density-scale));
+  justify-content: center;
+}
+
+.git-action-menu-toggle-check[data-selected="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 18%, var(--app-card-active) 82%);
+  border-color: color-mix(in srgb, var(--app-button-background) 48%, var(--app-border));
+}
+
+.git-action-menu-toggle-state {
+  color: color-mix(in srgb, var(--app-muted) 82%, var(--app-foreground) 18%);
+  flex: none;
+  font-size: calc(10px * var(--sidebar-density-scale));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+@container (max-width: 180px) {
+  .git-action-main-label {
+    display: none;
+  }
 }
 
 .agents-grid,
 .commands-grid {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  gap: calc(8px * var(--sidebar-density-scale));
+  grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
 }
 
 .agents-grid > *,
@@ -30,20 +243,20 @@
   align-items: center;
   background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
   border-color: color-mix(in srgb, var(--app-border) 92%, transparent);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--sidebar-density-scale));
   color: color-mix(in srgb, var(--app-foreground) 90%, var(--app-muted) 10%);
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: calc(10px * var(--sidebar-density-scale));
   font-weight: 700;
   gap: 0;
   justify-content: center;
   letter-spacing: 0.02em;
   max-width: 100%;
-  min-height: 36px;
+  min-height: calc(36px * var(--sidebar-density-scale));
   outline: 2px solid transparent;
   outline-offset: -3px;
-  padding: 0 12px;
+  padding: 0 calc(12px * var(--sidebar-density-scale));
   box-sizing: border-box;
 }
 
@@ -61,8 +274,18 @@
   width: 100%;
 }
 
+.agent-button:disabled {
+  cursor: default;
+}
+
 .agent-button[data-dragging="true"] {
   opacity: 0.6;
+}
+
+.agent-button[data-loading="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 18%, var(--app-card-active) 82%);
+  border-color: color-mix(in srgb, var(--app-button-background) 44%, var(--app-border));
+  opacity: 0.92;
 }
 
 .command-button {
@@ -73,26 +296,33 @@
 }
 
 .agent-button[data-icon-only="true"] {
-  min-width: 40px;
+  min-width: 30px;
   padding: 0;
 }
 
 .agent-button-icon-shell {
   align-items: center;
   display: inline-flex;
-  height: 18px;
+  height: calc(18px * var(--sidebar-density-scale));
   justify-content: center;
-  width: 18px;
+  width: calc(18px * var(--sidebar-density-scale));
 }
 
 .agent-button-icon {
   display: block;
-  height: 18px;
+  height: calc(18px * var(--sidebar-density-scale));
   object-fit: contain;
-  width: 18px;
+  width: calc(18px * var(--sidebar-density-scale));
 }
 
 .agent-button-fallback-icon {
+  display: block;
+  height: 18px;
+  width: 18px;
+}
+
+.agent-button-loading-icon {
+  animation: agent-button-spin 0.9s linear infinite;
   display: block;
   height: 18px;
   width: 18px;
@@ -124,6 +354,16 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="browser"] 
   width: 18px;
 }
 
+@keyframes agent-button-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .command-button[data-configured="true"] {
   background: color-mix(in srgb, var(--app-button-background) 16%, var(--app-card-active) 84%);
   border-color: color-mix(in srgb, var(--app-button-background) 40%, var(--app-border));
@@ -138,20 +378,6 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="browser"] 
   opacity: 0.6;
 }
 
-.command-button-code-mode {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--app-button-background) 34%, var(--app-border));
-}
-
-.command-button-code-mode[data-selected="true"] {
-  background: color-mix(in srgb, var(--app-button-background) 16%, var(--app-card-active) 84%);
-  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
-  outline-color: color-mix(in srgb, var(--app-button-background) 92%, #ffffff 8%);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 88%, transparent),
-    0 10px 18px color-mix(in srgb, var(--app-button-background) 10%, transparent);
-}
-
 .command-button-add {
   min-width: 36px;
   padding: 0;
@@ -164,10 +390,6 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="browser"] 
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-
-  &.code-mode-button {
-    font-size: 12px;
-  }
 }
 
 .command-button-kind-badge {

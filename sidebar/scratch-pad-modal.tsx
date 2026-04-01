@@ -1,15 +1,16 @@
 import { IconX } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
+import { useSidebarStore } from "./sidebar-store";
 
 export type ScratchPadModalProps = {
-  content: string;
   isOpen: boolean;
   onClose: () => void;
   onSave: (content: string) => void;
 };
 
-export function ScratchPadModal({ content, isOpen, onClose, onSave }: ScratchPadModalProps) {
+export function ScratchPadModal({ isOpen, onClose, onSave }: ScratchPadModalProps) {
+  const content = useSidebarStore((state) => state.scratchPadContent);
   const [draftContent, setDraftContent] = useState(content);
   const lastSavedContentRef = useRef(content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

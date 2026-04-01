@@ -1,7 +1,7 @@
 {
   "name": "VSmux",
   "displayName": "VSmux - T3code & Agent CLIs Manager",
-  "version": "1.12.1",
+  "version": "2.1.0",
   "private": true,
   "description": "VSmux - T3code & Agent CLIs Manager",
   "categories": [
@@ -17,17 +17,20 @@
   "files": [
     "media/**",
     "forks/t3code-embed/dist/**",
+    "out/workspace/**",
     "out/**"
   ],
   "main": "./out/extension/extension.js",
   "scripts": {
-    "vscode:prepublish": "vp run sidebar:build && vp run debug-panel:build && tsc -p ./tsconfig.extension.json",
+    "vscode:prepublish": "vp run sidebar:build && vp run debug-panel:build && vp run workspace:build && tsc -p ./tsconfig.extension.json && node ./scripts/vendor-runtime-deps.mjs",
     "sidebar:build": "vp build --config vite.sidebar.config.ts",
     "debug-panel:build": "vp build --config vite.debug-panel.config.ts",
+    "workspace:build": "vp build --config vite.workspace.config.ts",
     "storybook": "vp exec storybook dev -p 6006 --no-open",
+    "storybook:live": "pnpm exec tsc -p ./tsconfig.extension.json && node ./scripts/storybook-live.mjs",
     "storybook:build": "vp exec storybook build",
     "storybook:test": "node ./scripts/storybook-test.mjs",
-    "compile": "vp run sidebar:build && vp run debug-panel:build && tsc -p ./tsconfig.extension.json",
+    "compile": "vp run sidebar:build && vp run debug-panel:build && vp run workspace:build && tsc -p ./tsconfig.extension.json && node ./scripts/vendor-runtime-deps.mjs",
     "watch": "tsc -w -p ./tsconfig.extension.json",
     "t3:embed:build": "node ./scripts/build-t3-embed.mjs",
     "lint": "vp lint",
@@ -44,9 +47,17 @@
     "@dnd-kit/dom": "0.3.2",
     "@dnd-kit/helpers": "0.3.2",
     "@dnd-kit/react": "0.3.2",
+    "@lydell/node-pty": "1.2.0-beta.3",
     "@tabler/icons-react": "^3.40.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "ghostty-web": "^0.4.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "ws": "^8.20.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@storybook/react-vite": "^10.3.0",
@@ -55,6 +66,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.105.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "@vscode/vsce": "^3.7.1",
     "storybook": "^10.3.0",
@@ -170,14 +182,14 @@
         {
           "id": "VSmuxSessions",
           "title": "VSmux",
-          "icon": "media/VSmux.svg"
+          "icon": "media/icon.svg"
         }
       ],
       "secondarySidebar": [
         {
           "id": "VSmuxSessionsSecondary",
           "title": "VSmux",
-          "icon": "media/VSmux.svg"
+          "icon": "media/icon.svg"
         }
       ]
     },
@@ -252,6 +264,72 @@
           "maximum": 200,
           "default": 100,
           "description": "Zoom percentage used by the VSmux agent manager sidebar UI. 100 is default size, 95 or 90 zoom out, and values above 100 zoom in."
+        },
+        "VSmux.terminalFontFamily": {
+          "title": "Terminal Font Family",
+          "type": "string",
+          "default": "\"MesloLGL Nerd Font Mono\", Menlo, Monaco, \"Courier New\", monospace",
+          "description": "Font family used by VSmux Ghostty terminals in the workspace webview."
+        },
+        "VSmux.terminalFontSize": {
+          "title": "Terminal Font Size",
+          "type": "number",
+          "minimum": 8,
+          "maximum": 32,
+          "default": 12,
+          "description": "Font size used by VSmux Ghostty terminals."
+        },
+        "VSmux.terminalLineHeight": {
+          "title": "Terminal Line Height",
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 2,
+          "default": 1,
+          "description": "Line height multiplier used by VSmux Ghostty terminals."
+        },
+        "VSmux.terminalLetterSpacing": {
+          "title": "Terminal Letter Spacing",
+          "type": "number",
+          "minimum": -2,
+          "maximum": 8,
+          "default": 0,
+          "description": "Letter spacing used by VSmux Ghostty terminals."
+        },
+        "VSmux.terminalCursorStyle": {
+          "title": "Terminal Cursor Style",
+          "type": "string",
+          "default": "bar",
+          "enum": [
+            "bar",
+            "block",
+            "underline"
+          ],
+          "enumItemLabels": [
+            "Line",
+            "Block",
+            "Underline"
+          ],
+          "description": "Cursor style used by VSmux Ghostty terminals."
+        },
+        "VSmux.terminalCursorBlink": {
+          "title": "Terminal Cursor Blink",
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the VSmux terminal cursor blinks."
+        },
+        "VSmux.workspacePaneGap": {
+          "title": "Workspace Pane Gap",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 48,
+          "default": 12,
+          "description": "Uniform gap in pixels used both between visible panes and around the outer edge of the VSmux workspace."
+        },
+        "VSmux.workspaceActivePaneBorderColor": {
+          "title": "Workspace Active Pane Border Color",
+          "type": "string",
+          "default": "rgba(90, 134, 255, 0.95)",
+          "description": "CSS color used for the border around the currently active pane in the VSmux workspace."
         },
         "VSmux.debuggingMode": {
           "title": "Debugging Mode",
@@ -359,6 +437,38 @@
             }
           },
           "description": "User-level agent definitions shown in the VSmux sidebar. Built-in agents can be customized or hidden, and extra custom variants can reuse the same agent type icons."
+        },
+        "VSmux.gitTextGenerationProvider": {
+          "title": "Git Text Generation Provider",
+          "type": "string",
+          "scope": "application",
+          "default": "codex",
+          "enum": [
+            "codex",
+            "claude",
+            "custom"
+          ],
+          "enumItemLabels": [
+            "Codex",
+            "Claude",
+            "Custom"
+          ],
+          "description": "Provider used to generate Git commit messages and PR text. Codex uses codex -m gpt-5.4-mini with high reasoning effort and Claude uses claude --model haiku --effort high."
+        },
+        "VSmux.gitTextGenerationCustomCommand": {
+          "title": "Git Text Generation Custom Command",
+          "type": "string",
+          "scope": "application",
+          "default": "",
+          "description": "Shell command template used when VSmux.gitTextGenerationProvider is custom. Use {prompt} for the full prompt and {outputFile} for the absolute output file path. Placeholders are shell-quoted automatically."
+        },
+        "VSmux.gitTextGenerationAgentId": {
+          "title": "Git Text Generation Agent Id",
+          "type": "string",
+          "scope": "application",
+          "default": "codex",
+          "description": "Deprecated. Use VSmux.gitTextGenerationProvider and VSmux.gitTextGenerationCustomCommand instead.",
+          "deprecationMessage": "Use VSmux.gitTextGenerationProvider and VSmux.gitTextGenerationCustomCommand instead."
         },
         "VSmux.agentOrder": {
           "title": "Agent Order",
@@ -494,7 +604,8 @@
   },
   "activationEvents": [
     "onStartupFinished",
-    "onView:VSmux.sessions"
+    "onView:VSmux.sessions",
+    "onWebviewPanel:vsmux.workspace"
   ],
   "icon": "media/VSmux-marketplace-icon.png",
   "engines": {

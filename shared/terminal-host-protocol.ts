@@ -1,4 +1,4 @@
-export const TERMINAL_HOST_PROTOCOL_VERSION = 5;
+export const TERMINAL_HOST_PROTOCOL_VERSION = 14;
 
 export type TerminalSessionStatus = "starting" | "running" | "exited" | "error" | "disconnected";
 
@@ -13,12 +13,14 @@ export type TerminalSessionSnapshot = {
   cwd: string;
   exitCode?: number;
   history?: string;
+  isAttached: boolean;
   restoreState: TerminalSessionRestoreState;
   rows: number;
   sessionId: string;
   shell: string;
   startedAt: string;
   status: TerminalSessionStatus;
+  title?: string;
   workspaceId: string;
   endedAt?: string;
   errorMessage?: string;
@@ -40,17 +42,20 @@ export type TerminalHostCreateOrAttachRequest = {
   cols: number;
   cwd: string;
   rows: number;
+  sessionStateFilePath: string;
   shell: string;
 };
 
 export type TerminalHostWriteRequest = {
   type: "write";
+  workspaceId: string;
   sessionId: string;
   data: string;
 };
 
 export type TerminalHostResizeRequest = {
   type: "resize";
+  workspaceId: string;
   sessionId: string;
   cols: number;
   rows: number;
@@ -58,17 +63,20 @@ export type TerminalHostResizeRequest = {
 
 export type TerminalHostKillRequest = {
   type: "kill";
+  workspaceId: string;
   sessionId: string;
 };
 
 export type TerminalHostAcknowledgeAttentionRequest = {
   type: "acknowledgeAttention";
+  workspaceId: string;
   sessionId: string;
 };
 
 export type TerminalHostListSessionsRequest = {
   type: "listSessions";
   requestId: string;
+  workspaceId?: string;
 };
 
 export type TerminalHostConfigureRequest = {

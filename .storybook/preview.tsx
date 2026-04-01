@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Preview } from "@storybook/react-vite";
 import "../sidebar/styles.css";
+import "../workspace/styles.css";
 
 const vscodePreviewVariables: CSSProperties = {
   "--vscode-font-family": '-apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", sans-serif',

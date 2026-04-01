@@ -76,7 +76,9 @@
 .session-head-actions {
   align-items: center;
   display: inline-flex;
-  gap: 6px;
+  gap: calc(6px * var(--sidebar-density-scale));
+  grid-column: 2;
+  justify-self: end;
   min-width: 0;
   position: relative;
   z-index: 1;
@@ -84,7 +86,7 @@
 
 .session-meta {
   color: var(--app-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--sidebar-density-scale));
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -94,22 +96,15 @@
 .session-meta {
   align-items: center;
   display: inline-flex;
-  gap: 6px;
+  gap: calc(6px * var(--sidebar-density-scale));
   flex: none;
   justify-self: end;
-  font-size: 9px;
+  font-size: calc(9px * var(--sidebar-density-scale));
   letter-spacing: 0.04em;
   line-height: 1;
   text-align: right;
   opacity: 1;
   transition: opacity 120ms ease;
-}
-
-.session-debug-number {
-  color: color-mix(in srgb, var(--app-foreground) 88%, var(--app-muted) 12%);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 .session-shortcut-label {
@@ -125,23 +120,14 @@
   opacity: 1;
 }
 
-.session:hover .session-agent-watermark,
-.session:focus-visible .session-agent-watermark,
-.session:focus-within .session-agent-watermark,
-.session:hover .session-agent-tabler-watermark,
-.session:focus-visible .session-agent-tabler-watermark,
-.session:focus-within .session-agent-tabler-watermark {
-  opacity: 0;
-}
-
 .session-summary {
   display: block;
   min-width: 0;
 }
 
 .close-button {
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--sidebar-density-scale));
+  height: calc(18px * var(--sidebar-density-scale));
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -164,19 +150,22 @@
 }
 
 .session-rename-button {
-  width: 18px;
-  height: 18px;
-  margin-right: -2px;
+  width: calc(18px * var(--sidebar-density-scale));
+  height: calc(18px * var(--sidebar-density-scale));
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   color: var(--app-muted);
-  flex: none;
   line-height: 1;
   opacity: 0;
   pointer-events: none;
+  position: absolute;
+  right: calc(10px * var(--sidebar-density-scale));
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 2;
   transition:
     opacity 120ms ease,
     color 120ms ease,
@@ -201,5 +190,5 @@
 
 .empty {
   color: var(--app-muted);
-  padding: 12px 2px 2px;
+  padding: calc(12px * var(--sidebar-density-scale)) 2px 2px;
 }

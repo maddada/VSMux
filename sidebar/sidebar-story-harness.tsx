@@ -16,6 +16,7 @@ export type SidebarStoryHarnessProps = {
 };
 
 const sidebarStoryMessages: SidebarToExtensionMessage[] = [];
+const STORYBOOK_DRAG_SETTLE_DELAY_MS = 900;
 
 export function getSidebarStoryMessages() {
   return [...sidebarStoryMessages];
@@ -37,11 +38,11 @@ export function SidebarStoryHarness({ message }: SidebarStoryHarnessProps) {
         return;
       }
 
-      window.setTimeout(() => {
+      scheduleStoryWorkspaceUpdate(() => {
         startTransition(() => {
           setWorkspace(nextWorkspace);
         });
-      }, 0);
+      });
     },
   }).current;
 
@@ -71,4 +72,19 @@ export function SidebarStoryHarness({ message }: SidebarStoryHarnessProps) {
       <SidebarApp vscode={vscode} />
     </div>
   );
+}
+
+function scheduleStoryWorkspaceUpdate(callback: () => void) {
+  window.setTimeout(() => {
+    if (typeof window.requestAnimationFrame !== "function") {
+      callback();
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        callback();
+      });
+    });
+  }, STORYBOOK_DRAG_SETTLE_DELAY_MS);
 }

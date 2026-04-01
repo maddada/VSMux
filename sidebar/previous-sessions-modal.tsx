@@ -1,28 +1,25 @@
 import { IconX } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
-import type { SidebarPreviousSessionItem } from "../shared/session-grid-contract";
 import { filterPreviousSessions, groupPreviousSessionsByDay } from "./previous-session-search";
 import { SessionHistoryCard } from "./session-history-card";
+import { useSidebarStore } from "./sidebar-store";
 import type { WebviewApi } from "./webview-api";
 
 export type PreviousSessionsModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  previousSessions: SidebarPreviousSessionItem[];
-  showDebugSessionNumbers: boolean;
-  showHotkeys: boolean;
   vscode: WebviewApi;
 };
 
 export function PreviousSessionsModal({
   isOpen,
   onClose,
-  previousSessions,
-  showDebugSessionNumbers,
-  showHotkeys,
   vscode,
 }: PreviousSessionsModalProps) {
+  const previousSessions = useSidebarStore((state) => state.previousSessions);
+  const showDebugSessionNumbers = useSidebarStore((state) => state.hud.debuggingMode);
+  const showHotkeys = useSidebarStore((state) => state.hud.showHotkeysOnSessionCards);
   const [searchQuery, setSearchQuery] = useState("");
   const filteredSessions = useMemo(
     () => filterPreviousSessions(previousSessions, searchQuery),
@@ -31,10 +28,6 @@ export function PreviousSessionsModal({
   const groupedSessions = useMemo(
     () => groupPreviousSessionsByDay(filteredSessions),
     [filteredSessions],
-  );
-  const generatedNameCount = useMemo(
-    () => previousSessions.filter((session) => session.isGeneratedName).length,
-    [previousSessions],
   );
 
   useEffect(() => {
@@ -101,22 +94,6 @@ export function PreviousSessionsModal({
             type="text"
             value={searchQuery}
           />
-          <button
-            className="previous-sessions-clear-button"
-            disabled={generatedNameCount === 0}
-            onClick={() => {
-              if (generatedNameCount === 0) {
-                return;
-              }
-
-              vscode.postMessage({
-                type: "clearGeneratedPreviousSessions",
-              });
-            }}
-            type="button"
-          >
-            Clear Auto Names{generatedNameCount > 0 ? ` (${generatedNameCount})` : ""}
-          </button>
         </div>
         <div className="previous-sessions-modal-body">
           {groupedSessions.length > 0 ? (

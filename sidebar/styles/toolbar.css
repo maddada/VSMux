@@ -1,17 +1,17 @@
 .toolbar-row {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
 }
 
 .toolbar-section {
   display: grid;
-  gap: 6px;
+  gap: calc(6px * var(--sidebar-density-scale));
   width: 100%;
 }
 
 .control-label {
   color: var(--app-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--sidebar-density-scale));
   letter-spacing: 0.04em;
 }
 
@@ -22,7 +22,7 @@
 
 .button-group {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--sidebar-density-scale));
   flex-wrap: wrap;
 }
 
@@ -115,5 +115,5 @@
 
 .primary,
 .secondary {
-  padding: 7px 10px;
+  padding: calc(7px * var(--sidebar-density-scale)) calc(10px * var(--sidebar-density-scale));
 }

@@ -6,11 +6,11 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 1.12.1
+## Latest Release: 2.1.0
 
-- Fixed installation compatibility for Cursor builds based on VS Code 1.105.x.
-- VSmux should install again on Cursor 2.6.21 and similar versions.
-- Full `1.12.0` feature changes are listed in the changelog below.
+- More polished workspace terminal behavior, especially when panes become visible again, refresh, or reconnect.
+- Cleaner terminal presentation in the workspace, with updated visuals and better title/state updates.
+- Safer sidebar organization flows with sturdier drag and drop for sessions, agents, and commands.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

@@ -18,6 +18,7 @@ import {
 import { readManagedTerminalIdentityFromProcessId } from "./native-terminal-process-identity";
 import type {
   TerminalWorkspaceBackend,
+  TerminalWorkspaceBackendPresentationChange,
   TerminalWorkspaceBackendTitleChange,
 } from "./terminal-workspace-backend";
 import {
@@ -82,6 +83,8 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   private agentShellIntegration: AgentShellIntegration | undefined;
   private readonly activateSessionEmitter = new vscode.EventEmitter<string>();
   private readonly changeSessionsEmitter = new vscode.EventEmitter<void>();
+  private readonly changeSessionPresentationEmitter =
+    new vscode.EventEmitter<TerminalWorkspaceBackendPresentationChange>();
   private readonly changeSessionTitleEmitter =
     new vscode.EventEmitter<TerminalWorkspaceBackendTitleChange>();
   private readonly disposables: vscode.Disposable[] = [];
@@ -99,6 +102,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   public readonly onDidActivateSession = this.activateSessionEmitter.event;
   public readonly onDidChangeSessions = this.changeSessionsEmitter.event;
+  public readonly onDidChangeSessionPresentation = this.changeSessionPresentationEmitter.event;
   public readonly onDidChangeSessionTitle = this.changeSessionTitleEmitter.event;
 
   public constructor(private readonly options: NativeTerminalWorkspaceBackendOptions) {}
@@ -189,6 +193,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
     this.activateSessionEmitter.dispose();
     this.changeSessionsEmitter.dispose();
+    this.changeSessionPresentationEmitter.dispose();
     this.changeSessionTitleEmitter.dispose();
   }
 
@@ -240,6 +245,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       ...snapshot,
       agentName: persistedState?.agentName ?? snapshot.agentName,
       agentStatus: persistedState?.agentStatus ?? "idle",
+      isAttached: this.hasAttachedTerminal(sessionId),
     } satisfies TerminalSessionSnapshot;
     this.sessions.set(sessionId, nextSnapshot);
 
@@ -992,6 +998,10 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     terminal.show(false);
     await this.waitForActiveTerminal(terminal);
     await vscode.commands.executeCommand(TERMINAL_RENAME_COMMAND, { name: desiredName });
+    this.changeSessionPresentationEmitter.fire({
+      sessionId,
+      title: desiredName,
+    });
     this.changeSessionTitleEmitter.fire({
       sessionId,
       title: desiredName,
@@ -1361,16 +1371,23 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   private async refreshSessionSnapshots(): Promise<void> {
     let didChangeSessions = false;
+    const presentationChanges: TerminalWorkspaceBackendPresentationChange[] = [];
     const titleChanges: TerminalWorkspaceBackendTitleChange[] = [];
 
     for (const sessionId of this.sessionRecordBySessionId.keys()) {
       const result = await this.refreshSessionSnapshot(sessionId);
       didChangeSessions ||= result.didChangeSnapshot;
+      if (result.presentationChange) {
+        presentationChanges.push(result.presentationChange);
+      }
       if (result.titleChange) {
         titleChanges.push(result.titleChange);
       }
     }
 
+    for (const presentationChange of presentationChanges) {
+      this.changeSessionPresentationEmitter.fire(presentationChange);
+    }
     for (const titleChange of titleChanges) {
       this.changeSessionTitleEmitter.fire(titleChange);
     }
@@ -1383,11 +1400,13 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   private async refreshSessionSnapshot(sessionId: string): Promise<{
     didChangeSnapshot: boolean;
+    presentationChange?: TerminalWorkspaceBackendPresentationChange;
     titleChange?: TerminalWorkspaceBackendTitleChange;
   }> {
     const projection = this.projections.get(sessionId);
     const persistedState = await this.readPersistedSessionState(sessionId);
     const previousSnapshot = this.sessions.get(sessionId);
+    const previousTitle = this.sessionTitleBySessionId.get(sessionId);
     let nextSnapshot: TerminalSessionSnapshot;
 
     if (!projection || projection.terminal.exitStatus) {
@@ -1396,6 +1415,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
           createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
         agentName: persistedState.agentName,
         agentStatus: persistedState.agentStatus,
+        isAttached: false,
         restoreState: "live",
         status: projection?.terminal.exitStatus ? "exited" : "disconnected",
       };
@@ -1405,6 +1425,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
           createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId)),
         agentName: persistedState.agentName,
         agentStatus: persistedState.agentStatus,
+        isAttached: this.hasAttachedTerminal(sessionId),
         restoreState: "live",
         startedAt: this.sessions.get(sessionId)?.startedAt ?? new Date().toISOString(),
         status: "running",
@@ -1414,18 +1435,31 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     this.sessions.set(sessionId, nextSnapshot);
 
-    const previousTitle = this.sessionTitleBySessionId.get(sessionId);
-    const nextTitle = persistedState.title;
+    const nextTitle = normalizeTitle(persistedState.title);
     if (!nextTitle) {
       this.sessionTitleBySessionId.delete(sessionId);
       return {
         didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
+        presentationChange:
+          haveSameTerminalSessionPresentation(previousSnapshot, previousTitle, nextSnapshot, nextTitle)
+            ? undefined
+            : {
+                sessionId,
+                title: nextTitle,
+              },
       };
     }
 
     this.sessionTitleBySessionId.set(sessionId, nextTitle);
     return {
       didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
+      presentationChange:
+        haveSameTerminalSessionPresentation(previousSnapshot, previousTitle, nextSnapshot, nextTitle)
+          ? undefined
+          : {
+              sessionId,
+              title: nextTitle,
+            },
       titleChange:
         nextTitle !== previousTitle
           ? {
@@ -1624,13 +1658,12 @@ function haveSameTerminalSessionSnapshot(
   right: TerminalSessionSnapshot,
 ): boolean {
   return (
-    left?.agentName === right.agentName &&
-    left?.agentStatus === right.agentStatus &&
     left?.cols === right.cols &&
     left?.cwd === right.cwd &&
     left?.endedAt === right.endedAt &&
     left?.errorMessage === right.errorMessage &&
     left?.exitCode === right.exitCode &&
+    left?.isAttached === right.isAttached &&
     left?.restoreState === right.restoreState &&
     left?.rows === right.rows &&
     left?.sessionId === right.sessionId &&
@@ -1639,4 +1672,21 @@ function haveSameTerminalSessionSnapshot(
     left?.status === right.status &&
     left?.workspaceId === right.workspaceId
   );
+}
+
+function haveSameTerminalSessionPresentation(
+  leftSnapshot: TerminalSessionSnapshot | undefined,
+  leftTitle: string | undefined,
+  rightSnapshot: TerminalSessionSnapshot | undefined,
+  rightTitle: string | undefined,
+): boolean {
+  return (
+    leftSnapshot?.agentName === rightSnapshot?.agentName &&
+    leftSnapshot?.agentStatus === rightSnapshot?.agentStatus &&
+    leftTitle === rightTitle
+  );
+}
+
+function normalizeTitle(title: string | undefined): string | undefined {
+  return title?.trim() || undefined;
 }

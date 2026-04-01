@@ -1,4 +1,5 @@
 import {
+  clampVisibleSessionCount,
   DEFAULT_MAIN_GROUP_ID,
   DEFAULT_MAIN_GROUP_TITLE,
   MAX_GROUP_COUNT,
@@ -9,17 +10,19 @@ import {
   getOrderedSessions,
   getSessionNumberFromSessionId,
   getSlotPosition,
-  type CreateSessionRecordOptions,
   type GroupedSessionWorkspaceSnapshot,
   type SessionGroupRecord,
   type SessionRecord,
+  type T3SessionMetadata,
   type TerminalViewMode,
   type VisibleSessionCount,
+  type CreateSessionRecordOptions,
 } from "./session-grid-contract";
 import {
   claimNextSessionDisplayId,
   normalizeWorkspaceSessionDisplayIds,
 } from "./grouped-session-workspace-state-helpers";
+import { reindexSessionsInOrder } from "./session-grid-state-helpers";
 
 type WorkspaceMutationResult = {
   changed: boolean;
@@ -39,9 +42,9 @@ export function normalizeSimpleGroupedSessionWorkspaceSnapshot(
   snapshot: GroupedSessionWorkspaceSnapshot | undefined,
 ): GroupedSessionWorkspaceSnapshot {
   const baseSnapshot = snapshot ?? createDefaultGroupedSessionWorkspaceSnapshot();
-  const preparedGroups = baseSnapshot.groups
-    .map((group, index) => prepareGroupForDisplayIdNormalization(group, index))
-    .filter((group) => group.snapshot.sessions.length > 0 || group.groupId === DEFAULT_MAIN_GROUP_ID);
+  const preparedGroups = baseSnapshot.groups.map((group, index) =>
+    prepareGroupForDisplayIdNormalization(group, index),
+  );
   const groups =
     preparedGroups.length > 0
       ? preparedGroups
@@ -314,6 +317,23 @@ export function setSessionTitleInSimpleWorkspace(
   }));
 }
 
+export function setT3SessionMetadataInSimpleWorkspace(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+  sessionId: string,
+  t3: T3SessionMetadata,
+): WorkspaceMutationResult {
+  return updateSession(snapshot, sessionId, (session) => {
+    if (session.kind !== "t3") {
+      return session;
+    }
+
+    return {
+      ...session,
+      t3,
+    };
+  });
+}
+
 export function setVisibleCountInSimpleWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   visibleCount: VisibleSessionCount,
@@ -343,14 +363,16 @@ export function toggleFullscreenSessionInSimpleWorkspace(
 
   const currentVisibleCount = clampSupportedVisibleCount(activeGroup.snapshot.visibleCount);
   const restoreVisibleCount =
-    activeGroup.snapshot.fullscreenRestoreVisibleCount === 2 ? 2 : undefined;
-  if (currentVisibleCount === 1 && restoreVisibleCount === 2) {
+    activeGroup.snapshot.fullscreenRestoreVisibleCount === undefined
+      ? undefined
+      : clampSupportedVisibleCount(activeGroup.snapshot.fullscreenRestoreVisibleCount);
+  if (currentVisibleCount === 1 && restoreVisibleCount !== undefined) {
     return updateGroup(snapshot, activeGroup.groupId, (group) => ({
       ...group,
       snapshot: normalizeGroupSnapshot({
         ...group.snapshot,
         fullscreenRestoreVisibleCount: undefined,
-        visibleCount: 2,
+        visibleCount: restoreVisibleCount,
       }),
     }));
   }
@@ -359,7 +381,10 @@ export function toggleFullscreenSessionInSimpleWorkspace(
     ...group,
     snapshot: normalizeGroupSnapshot({
       ...group.snapshot,
-      fullscreenRestoreVisibleCount: group.snapshot.visibleCount > 1 ? 2 : undefined,
+      fullscreenRestoreVisibleCount:
+        group.snapshot.visibleCount > 1
+          ? clampSupportedVisibleCount(group.snapshot.visibleCount)
+          : undefined,
       visibleCount: 1,
     }),
   }));
@@ -402,12 +427,13 @@ export function syncSessionOrderInSimpleWorkspace(
       orderedSessions.push(session);
     }
   }
+  const reindexedSessions = reindexSessionsInOrder(orderedSessions);
 
   const nextSnapshot = updateGroup(snapshot, groupId, (targetGroup) => ({
     ...targetGroup,
     snapshot: normalizeGroupSnapshot({
       ...targetGroup.snapshot,
-      sessions: orderedSessions,
+      sessions: reindexedSessions,
     }),
   }));
 
@@ -560,6 +586,33 @@ export function createGroupFromSessionInSimpleWorkspace(
   };
 }
 
+export function createGroupInSimpleWorkspace(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+): CreateGroupResult {
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  if (normalizedSnapshot.groups.length >= MAX_GROUP_COUNT) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const nextGroupNumber = Math.max(
+    normalizedSnapshot.nextGroupNumber,
+    getNextGroupNumber(normalizedSnapshot.groups),
+  );
+  const nextGroupId = `group-${nextGroupNumber}`;
+  const nextSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot({
+    ...normalizedSnapshot,
+    activeGroupId: nextGroupId,
+    groups: [...normalizedSnapshot.groups, createEmptyGroup(nextGroupId, `Group ${nextGroupNumber}`)],
+    nextGroupNumber: nextGroupNumber + 1,
+  });
+
+  return {
+    changed: !areSnapshotsEqual(normalizedSnapshot, nextSnapshot),
+    groupId: nextGroupId,
+    snapshot: nextSnapshot,
+  };
+}
+
 function normalizeGroup(group: SessionGroupRecord, index: number): SessionGroupRecord {
   return {
     groupId: group.groupId?.trim() || `group-${index + 1}`,
@@ -613,7 +666,9 @@ function normalizeGroupSnapshot(snapshot: SessionGroupRecord["snapshot"]): Sessi
   return {
     focusedSessionId,
     fullscreenRestoreVisibleCount:
-      visibleCount === 1 && snapshot.fullscreenRestoreVisibleCount === 2 ? 2 : undefined,
+      visibleCount === 1 && snapshot.fullscreenRestoreVisibleCount !== undefined
+        ? clampSupportedVisibleCount(snapshot.fullscreenRestoreVisibleCount)
+        : undefined,
     sessions,
     viewMode: snapshot.viewMode ?? "grid",
     visibleCount,
@@ -655,7 +710,7 @@ function getNormalizedVisibleIds(
   }
 
   for (const session of sessions) {
-    if (visibleSessionIds.length >= 2) {
+    if (visibleSessionIds.length >= visibleCount) {
       break;
     }
     if (!visibleSessionIds.includes(session.sessionId)) {
@@ -663,12 +718,12 @@ function getNormalizedVisibleIds(
     }
   }
 
-  if (visibleSessionIds.length <= 2) {
+  if (visibleSessionIds.length <= visibleCount) {
     return visibleSessionIds;
   }
 
   const passiveVisibleIds = visibleSessionIds.filter((sessionId) => sessionId !== focusedSessionId);
-  return passiveVisibleIds.slice(0, 1).concat(focusedSessionId);
+  return passiveVisibleIds.slice(0, Math.max(0, visibleCount - 1)).concat(focusedSessionId);
 }
 
 function getNextVisibleIdsForFocusedSession(
@@ -705,18 +760,17 @@ function getNextVisibleIdsForFocusedSession(
     );
   }
 
-  const passiveVisibleId =
-    currentVisibleSessionIds.find(
-      (sessionId) =>
-        sessionId !== nextFocusedSessionId && sessionId !== currentFocusedSessionId,
-    ) ??
-    currentVisibleSessionIds.find((sessionId) => sessionId !== nextFocusedSessionId) ??
-    currentFocusedSessionId;
+  const passiveVisibleIds = currentVisibleSessionIds.filter(
+    (sessionId) =>
+      sessionId !== nextFocusedSessionId && sessionId !== currentFocusedSessionId,
+  );
   return getNormalizedVisibleIds(
     sessions,
     visibleCount,
     nextFocusedSessionId,
-    passiveVisibleId ? [passiveVisibleId, nextFocusedSessionId] : [nextFocusedSessionId],
+    passiveVisibleIds
+      .slice(0, Math.max(0, visibleCount - 1))
+      .concat(nextFocusedSessionId),
   );
 }
 
@@ -782,7 +836,7 @@ function createEmptyGroup(groupId: string, title: string): SessionGroupRecord {
 }
 
 function clampSupportedVisibleCount(value: number | undefined): VisibleSessionCount {
-  return value === 2 ? 2 : 1;
+  return clampVisibleSessionCount(value ?? 1);
 }
 
 function getNextGroupNumber(groups: readonly SessionGroupRecord[]): number {

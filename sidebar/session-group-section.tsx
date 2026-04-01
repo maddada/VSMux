@@ -1,22 +1,22 @@
-import { IconLayoutColumns, IconPencil, IconPlus, IconSquare, IconX } from "@tabler/icons-react";
+import { IconPencil, IconPlus, IconX } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
+import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
   startTransition,
   useEffect,
-  useRef,
   useState,
+  useRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import type {
-  SidebarSessionGroup,
-  SidebarSessionItem,
   VisibleSessionCount,
 } from "../shared/session-grid-contract";
 import { ConfirmationModal } from "./confirmation-modal";
-import { createGroupDropData } from "./sidebar-dnd";
+import { createGroupDropData, type SidebarSessionDropTarget } from "./sidebar-dnd";
+import { useSidebarStore } from "./sidebar-store";
 import { SortableSessionCard } from "./sortable-session-card";
 import type { WebviewApi } from "./webview-api";
 
@@ -24,9 +24,6 @@ const CONTEXT_MENU_HEIGHT_PX = 90;
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 164;
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
-const SIDEBAR_VISIBLE_COUNT_OPTIONS: VisibleSessionCount[] = COUNT_OPTIONS.filter(
-  (visibleCount) => visibleCount <= 2,
-);
 const GROUP_CONTROL_MENU_MARGIN_PX = 12;
 
 type ContextMenuPosition = {
@@ -36,24 +33,14 @@ type ContextMenuPosition = {
 
 type GroupControlMenu = "visible-count";
 
-type GroupVisibleCountIconProps = {
-  visibleCount: VisibleSessionCount;
-};
-
-type SplitSelectionMenuIconProps = {
-  visibleCount: VisibleSessionCount;
-};
-
 export type SessionGroupSectionProps = {
   autoEdit: boolean;
   canClose: boolean;
-  group: SidebarSessionGroup;
+  groupId: string;
   index: number;
   onAutoEditHandled: () => void;
-  orderedSessions: SidebarSessionItem[];
-  showDebugSessionNumbers: boolean;
-  showCloseButton: boolean;
-  showHotkeys: boolean;
+  onFocusRequested?: (groupId: string, sessionId: string) => void;
+  sessionDragIndicator?: SidebarSessionDropTarget;
   vscode: WebviewApi;
 };
 
@@ -88,56 +75,48 @@ function getControlMenuPosition(button: HTMLButtonElement | null): ContextMenuPo
   };
 }
 
-function GroupVisibleCountIcon({ visibleCount }: GroupVisibleCountIconProps) {
-  if (visibleCount === 1) {
-    return <IconSquare aria-hidden="true" className="group-meta-icon" size={14} />;
-  }
-
-  return <IconLayoutColumns aria-hidden="true" className="group-meta-icon" size={14} />;
-}
-
-function SplitSelectionMenuIcon({ visibleCount }: SplitSelectionMenuIconProps) {
-  if (visibleCount === 1) {
-    return <IconSquare aria-hidden="true" className="session-context-menu-icon" size={14} />;
-  }
-
-  return <IconLayoutColumns aria-hidden="true" className="session-context-menu-icon" size={14} />;
-}
-
 function getVisibleCountMenuLabel(visibleCount: VisibleSessionCount): string {
-  return visibleCount === 1 ? "Show 1 split" : "Show 2 splits";
+  return visibleCount === 1 ? "Show 1 split" : `Show ${String(visibleCount)} splits`;
 }
 
 export function SessionGroupSection({
   autoEdit,
   canClose,
-  group,
+  groupId,
   index,
   onAutoEditHandled,
-  orderedSessions,
-  showDebugSessionNumbers,
-  showCloseButton,
-  showHotkeys,
+  onFocusRequested,
+  sessionDragIndicator,
   vscode,
 }: SessionGroupSectionProps) {
+  const group = useSidebarStore((state) => state.groupsById[groupId]);
+  const orderedSessionIds = useSidebarStore((state) => state.sessionIdsByGroup[groupId] ?? []);
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
-  const [draftTitle, setDraftTitle] = useState(group.title);
+  const [draftTitle, setDraftTitle] = useState(group?.title ?? "");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [openControlMenu, setOpenControlMenu] = useState<GroupControlMenu>();
   const menuRef = useRef<HTMLDivElement>(null);
   const controlMenuRef = useRef<HTMLDivElement>(null);
   const visibleCountButtonRef = useRef<HTMLButtonElement>(null);
-  const isBrowserGroup = group.kind === "browser";
+  const isBrowserGroup = group?.kind === "browser";
+  const isSessionDropTargetGroup = sessionDragIndicator?.groupId === groupId;
   const sortable = useSortable({
     accept: ["group", "session"],
     collisionPriority: CollisionPriority.Low,
-    data: createGroupDropData(group.groupId),
+    data: createGroupDropData(groupId),
     disabled: isBrowserGroup,
-    id: group.groupId,
+    id: groupId,
     index,
+    plugins: [SortableKeyboardPlugin],
     type: "group",
   });
+
+  if (!group) {
+    return null;
+  }
+
+  const isGroupDropTarget = sortable.isDropTarget || isSessionDropTargetGroup;
 
   useEffect(() => {
     if (isEditing) {
@@ -324,17 +303,13 @@ export function SessionGroupSection({
     });
   };
 
-  const toggleVisibleCount = () => {
-    setVisibleCount(group.layoutVisibleCount === 1 ? 2 : 1);
-  };
-
   const requestCloseGroup = () => {
     if (!canClose) {
       return;
     }
 
     setContextMenuPosition(undefined);
-    if (orderedSessions.length <= 1) {
+    if (orderedSessionIds.length <= 1) {
       vscode.postMessage({
         groupId: group.groupId,
         type: "closeGroup",
@@ -367,7 +342,7 @@ export function SessionGroupSection({
         className="group"
         data-active={String(group.isActive)}
         data-dragging={String(Boolean(sortable.isDragging))}
-        data-drop-target={String(sortable.isDropTarget)}
+        data-drop-target={String(isGroupDropTarget)}
         data-sidebar-group-id={group.groupId}
         onClick={() => {
           if (!isBrowserGroup) {
@@ -414,11 +389,13 @@ export function SessionGroupSection({
                       <button
                         aria-expanded={openControlMenu === "visible-count"}
                         aria-haspopup="menu"
-                        aria-label={`Toggle split mode for ${group.title}`}
+                        aria-label={`Select split count for ${group.title}`}
                         className="group-add-button group-control-button"
                         data-open={String(openControlMenu === "visible-count")}
                         onClick={() => {
-                          toggleVisibleCount();
+                          setOpenControlMenu((previous) =>
+                            previous === "visible-count" ? undefined : "visible-count",
+                          );
                         }}
                         onContextMenu={(event) => {
                           event.preventDefault();
@@ -428,10 +405,12 @@ export function SessionGroupSection({
                           );
                         }}
                         ref={visibleCountButtonRef}
-                        title={`Toggle split mode for ${group.title}`}
+                        title={`Select split count for ${group.title}`}
                         type="button"
                       >
-                        <GroupVisibleCountIcon visibleCount={group.layoutVisibleCount} />
+                        <span className="group-control-count-value">
+                          {String(group.layoutVisibleCount)}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -465,31 +444,39 @@ export function SessionGroupSection({
             )}
           </div>
         </div>
-        <div className="group-sessions" data-drop-target={String(sortable.isDropTarget)}>
-          {orderedSessions.length > 0 ? (
-            orderedSessions.map((session, sessionIndex) => (
+        <div
+          className="group-sessions"
+          data-drop-target={String(isGroupDropTarget)}
+        >
+          {orderedSessionIds.length > 0 ? (
+            orderedSessionIds.map((sessionId, sessionIndex) => (
               <SortableSessionCard
+                dropPosition={
+                  sessionDragIndicator?.kind === "session" &&
+                  sessionDragIndicator.groupId === group.groupId &&
+                  sessionDragIndicator.sessionId === sessionId
+                    ? sessionDragIndicator.position
+                    : undefined
+                }
                 groupId={group.groupId}
                 index={sessionIndex}
-                key={session.sessionId}
-                session={session}
-                showDebugSessionNumbers={showDebugSessionNumbers}
-                showCloseButton={showCloseButton}
-                showHotkeys={showHotkeys}
+                key={sessionId}
+                onFocusRequested={onFocusRequested}
+                sessionId={sessionId}
                 vscode={vscode}
               />
             ))
           ) : isBrowserGroup ? (
             <div
               className="group-empty-drop-target"
-              data-drop-target={String(sortable.isDropTarget)}
+              data-drop-target={String(isGroupDropTarget)}
             >
               <div className="group-empty-state">No browsers</div>
             </div>
           ) : (
             <div
               className="group-empty-drop-target"
-              data-drop-target={String(sortable.isDropTarget)}
+              data-drop-target={String(isGroupDropTarget)}
             >
               <div className="group-empty-state">No sessions</div>
             </div>
@@ -548,7 +535,7 @@ export function SessionGroupSection({
               role="menu"
               style={getPortalMenuStyle(visibleCountButtonRef.current)}
             >
-              {SIDEBAR_VISIBLE_COUNT_OPTIONS.map((visibleCount) => (
+              {COUNT_OPTIONS.map((visibleCount) => (
                 <button
                   aria-pressed={group.layoutVisibleCount === visibleCount}
                   aria-label={getVisibleCountMenuLabel(visibleCount)}
@@ -560,7 +547,7 @@ export function SessionGroupSection({
                   title={getVisibleCountMenuLabel(visibleCount)}
                   type="button"
                 >
-                  <SplitSelectionMenuIcon visibleCount={visibleCount} />
+                  <span className="group-control-count-option-value">{String(visibleCount)}</span>
                 </button>
               ))}
             </div>,
@@ -570,7 +557,7 @@ export function SessionGroupSection({
       {!isBrowserGroup ? (
         <ConfirmationModal
           confirmLabel="Terminate Group"
-          description={`This will terminate all ${orderedSessions.length} session${orderedSessions.length === 1 ? "" : "s"} in ${group.title}.`}
+          description={`This will terminate all ${orderedSessionIds.length} session${orderedSessionIds.length === 1 ? "" : "s"} in ${group.title}.`}
           isOpen={isConfirmOpen}
           onCancel={() => setIsConfirmOpen(false)}
           onConfirm={() => {

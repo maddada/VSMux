@@ -74,7 +74,7 @@ export function isTerminalTabForeground(
 
 export function isTerminalTabActive(
   sessionTitle: string | undefined,
-  terminal: vscode.Terminal,
+  terminal: TerminalLike,
 ): boolean {
   if (vscode.window.activeTerminal !== terminal || !sessionTitle) {
     return false;

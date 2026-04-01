@@ -26,8 +26,19 @@ export const DEBUGGING_MODE_SETTING = "debuggingMode";
 export const COMPLETION_SOUND_SETTING = "completionSound";
 export const DEFAULT_BROWSER_LAUNCH_URL_SETTING = "defaultBrowserLaunchUrl";
 export const AGENTS_SETTING = "agents";
+export const GIT_TEXT_GENERATION_PROVIDER_SETTING = "gitTextGenerationProvider";
+export const GIT_TEXT_GENERATION_CUSTOM_COMMAND_SETTING = "gitTextGenerationCustomCommand";
+export const GIT_TEXT_GENERATION_AGENT_ID_SETTING = "gitTextGenerationAgentId";
+export const GIT_SKIP_SUGGESTED_COMMIT_CONFIRMATION_SETTING = "gitSkipSuggestedCommitConfirmation";
+export const TERMINAL_FONT_FAMILY_SETTING = "terminalFontFamily";
+export const TERMINAL_FONT_SIZE_SETTING = "terminalFontSize";
+export const TERMINAL_LINE_HEIGHT_SETTING = "terminalLineHeight";
+export const TERMINAL_LETTER_SPACING_SETTING = "terminalLetterSpacing";
+export const TERMINAL_CURSOR_STYLE_SETTING = "terminalCursorStyle";
+export const TERMINAL_CURSOR_BLINK_SETTING = "terminalCursorBlink";
+export const WORKSPACE_PANE_GAP_SETTING = "workspacePaneGap";
+export const WORKSPACE_ACTIVE_PANE_BORDER_COLOR_SETTING = "workspaceActivePaneBorderColor";
 export const COMPLETION_BELL_ENABLED_KEY = "VSmux.completionBellEnabled";
-export const DISABLE_VS_MUX_MODE_KEY = "VSmux.disableVsMuxMode";
 export const SCRATCH_PAD_CONTENT_KEY = "VSmux.sidebarScratchPadContent";
 export const NATIVE_TERMINAL_DEBUG_STATE_KEY = "VSmux.nativeTerminalDebugState";
 export const SIDEBAR_WELCOME_DISMISSED_KEY = "VSmux.sidebarWelcomeDismissed";
@@ -74,6 +85,22 @@ export function getCompletionSoundConfigurationKey(): string {
 
 export function getAgentsConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${AGENTS_SETTING}`;
+}
+
+export function getGitTextGenerationProviderConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${GIT_TEXT_GENERATION_PROVIDER_SETTING}`;
+}
+
+export function getGitTextGenerationCustomCommandConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${GIT_TEXT_GENERATION_CUSTOM_COMMAND_SETTING}`;
+}
+
+export function getGitTextGenerationAgentIdConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${GIT_TEXT_GENERATION_AGENT_ID_SETTING}`;
+}
+
+export function getGitSkipSuggestedCommitConfirmationConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${GIT_SKIP_SUGGESTED_COMMIT_CONFIRMATION_SETTING}`;
 }
 
 export function getDefaultBrowserLaunchUrlConfigurationKey(): string {
@@ -157,4 +184,87 @@ export function getDefaultBrowserLaunchUrl(): string {
     DEFAULT_BROWSER_LAUNCH_URL;
 
   return value.trim() || DEFAULT_BROWSER_LAUNCH_URL;
+}
+
+export function getGitSkipSuggestedCommitConfirmation(): boolean {
+  return (
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<boolean>(GIT_SKIP_SUGGESTED_COMMIT_CONFIRMATION_SETTING, false) ?? false
+  );
+}
+
+export function getTerminalFontFamily(): string {
+  const defaultFontFamily = '"MesloLGL Nerd Font Mono", Menlo, Monaco, "Courier New", monospace';
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<string>(TERMINAL_FONT_FAMILY_SETTING, defaultFontFamily) ?? defaultFontFamily;
+
+  return value.trim() || defaultFontFamily;
+}
+
+export function getTerminalFontSize(): number {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(TERMINAL_FONT_SIZE_SETTING, 12) ?? 12;
+  return clampNumber(value, 8, 32, 12);
+}
+
+export function getTerminalLineHeight(): number {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(TERMINAL_LINE_HEIGHT_SETTING, 1) ?? 1;
+  return clampNumber(value, 0.8, 2, 1);
+}
+
+export function getTerminalLetterSpacing(): number {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(TERMINAL_LETTER_SPACING_SETTING, 0) ?? 0;
+  return clampNumber(value, -2, 8, 0);
+}
+
+export function getTerminalCursorStyle(): "bar" | "block" | "underline" {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<string>(TERMINAL_CURSOR_STYLE_SETTING, "bar") ?? "bar";
+  return value === "block" || value === "underline" ? value : "bar";
+}
+
+export function getTerminalCursorBlink(): boolean {
+  return (
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<boolean>(TERMINAL_CURSOR_BLINK_SETTING, true) ?? true
+  );
+}
+
+export function getWorkspacePaneGap(): number {
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<number>(WORKSPACE_PANE_GAP_SETTING, 12) ?? 12;
+  return clampNumber(value, 0, 48, 12);
+}
+
+export function getWorkspaceActivePaneBorderColor(): string {
+  const defaultColor = "rgba(90, 134, 255, 0.95)";
+  const value =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<string>(WORKSPACE_ACTIVE_PANE_BORDER_COLOR_SETTING, defaultColor) ?? defaultColor;
+  return value.trim() || defaultColor;
+}
+
+function clampNumber(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, value));
 }

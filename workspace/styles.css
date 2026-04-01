@@ -1,0 +1,243 @@
+@font-face {
+  font-family: "MesloLGL Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/MesloLGLNerdFontMono-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "MesloLGL Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  src: url("./fonts/MesloLGLNerdFontMono-Bold.ttf") format("truetype");
+}
+
+:root {
+  color-scheme: dark;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --workspace-terminal-font: "MesloLGL Nerd Font Mono", Menlo, Monaco, "Courier New", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0 !important;
+}
+
+body {
+  /* background:
+    radial-gradient(circle at top left, rgba(70, 105, 166, 0.24), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(28, 129, 111, 0.2), transparent 30%),
+    #0a0f16; */
+  color: #d8e1ee;
+}
+
+.workspace-shell {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--workspace-pane-gap, 12px);
+  grid-auto-rows: minmax(0, 1fr);
+  height: 100%;
+  padding: var(--workspace-pane-gap, 12px);
+}
+
+.workspace-shell-empty {
+  grid-auto-rows: auto;
+  place-items: center;
+}
+
+.workspace-empty-state {
+  border: 1px dashed rgba(117, 145, 194, 0.45);
+  border-radius: 18px;
+  color: #9cb0cf;
+  font-size: 15px;
+  justify-self: center;
+  align-self: center;
+  max-width: 220px;
+  padding: 18px 22px;
+  text-align: center;
+}
+
+.terminal.xterm,
+.xterm-screen {
+  height: 100% !important;
+}
+
+.workspace-pane {
+  background: rgba(0, 0, 0, 0.94);
+  border: 1px solid transparent;
+  border-radius: 0px;
+  /* box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24); */
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-pane-hidden {
+  display: none;
+}
+
+.workspace-pane-focused {
+  border-color: var(--workspace-active-pane-border-color, rgba(90, 134, 255, 0.95));
+  box-shadow:
+    0 0 0 1px var(--workspace-active-pane-border-color, rgba(90, 134, 255, 0.95)),
+    0 18px 32px rgba(0, 0, 0, 0.28);
+}
+
+.workspace-pane-dragging {
+  opacity: 0.66;
+}
+
+.workspace-pane-drop-target {
+  box-shadow:
+    inset 0 0 0 1px var(--workspace-active-pane-border-color, rgba(90, 134, 255, 0.95)),
+    0 18px 32px rgba(0, 0, 0, 0.28);
+}
+
+.workspace-pane-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(88, 111, 149, 0.24);
+  display: flex;
+  color: #e1e1e1;
+  font-weight: 400;
+  justify-content: space-between;
+  min-height: 20px;
+  padding: 6px 10px;
+}
+
+.workspace-pane-header-draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.workspace-pane-header-draggable:active {
+  cursor: grabbing;
+}
+
+.workspace-pane-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.workspace-pane-header-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.workspace-pane-close-control {
+  align-items: center;
+  display: inline-flex;
+  position: relative;
+}
+
+.workspace-pane-refresh-button {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: rgba(225, 225, 225, 0.72);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+  width: 20px;
+}
+
+.workspace-pane-refresh-button:hover,
+.workspace-pane-refresh-button:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  outline: none;
+}
+
+.workspace-pane-refresh-button:active {
+  transform: rotate(18deg);
+}
+
+.workspace-pane-close-button {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: rgba(225, 225, 225, 0.72);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+  width: 20px;
+}
+
+.workspace-pane-close-button:hover,
+.workspace-pane-close-button:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  outline: none;
+}
+
+.workspace-pane-close-button-confirming {
+  background: rgba(255, 117, 117, 0.14);
+  border-color: rgba(255, 117, 117, 0.32);
+  color: #ffd9d9;
+}
+
+.workspace-pane-close-tooltip {
+  background: rgba(13, 18, 26, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  color: #f4f7fb;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  padding: 6px 8px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.workspace-pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+.t3-pane-root {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.t3-pane-frame {
+  border: 0;
+  height: 100%;
+  width: 100%;
+}

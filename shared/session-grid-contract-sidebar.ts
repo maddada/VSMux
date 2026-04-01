@@ -1,6 +1,7 @@
 import type { CompletionSoundSetting } from "./completion-sound";
 import type { SidebarAgentButton, SidebarAgentIcon } from "./sidebar-agents";
 import type { SidebarActionType, SidebarCommandButton } from "./sidebar-commands";
+import type { SidebarGitAction, SidebarGitState } from "./sidebar-git";
 import type {
   SessionGridSnapshot,
   TerminalViewMode,
@@ -54,8 +55,9 @@ export type SidebarHudState = {
   completionSoundLabel: string;
   debuggingMode: boolean;
   focusedSessionTitle?: string;
+  git: SidebarGitState;
   isFocusModeActive: boolean;
-  isVsMuxDisabled: boolean;
+  pendingAgentIds: string[];
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
   theme:
@@ -79,6 +81,7 @@ export type SidebarHudState = {
 export type SidebarHydrateMessage = {
   groups: SidebarSessionGroup[];
   previousSessions: SidebarPreviousSessionItem[];
+  revision: number;
   scratchPadContent: string;
   type: "hydrate";
   hud: SidebarHudState;
@@ -87,9 +90,15 @@ export type SidebarHydrateMessage = {
 export type SidebarSessionStateMessage = {
   groups: SidebarSessionGroup[];
   previousSessions: SidebarPreviousSessionItem[];
+  revision: number;
   scratchPadContent: string;
   type: "sessionState";
   hud: SidebarHudState;
+};
+
+export type SidebarSessionPresentationChangedMessage = {
+  session: SidebarSessionItem;
+  type: "sessionPresentationChanged";
 };
 
 export type SidebarPlayCompletionSoundMessage = {
@@ -97,19 +106,59 @@ export type SidebarPlayCompletionSoundMessage = {
   type: "playCompletionSound";
 };
 
+export type SidebarDaemonInfo = {
+  pid: number;
+  port: number;
+  protocolVersion: number;
+  startedAt: string;
+};
+
+export type SidebarDaemonSessionItem = {
+  agentName?: string;
+  agentStatus: "idle" | "working" | "attention";
+  cols: number;
+  cwd: string;
+  endedAt?: string;
+  errorMessage?: string;
+  exitCode?: number;
+  isCurrentWorkspace: boolean;
+  restoreState: "live" | "replayed";
+  rows: number;
+  sessionId: string;
+  shell: string;
+  startedAt: string;
+  status: "starting" | "running" | "exited" | "error" | "disconnected";
+  title?: string;
+  workspaceId: string;
+};
+
+export type SidebarDaemonSessionsStateMessage = {
+  daemon?: SidebarDaemonInfo;
+  errorMessage?: string;
+  sessions: SidebarDaemonSessionItem[];
+  type: "daemonSessionsState";
+};
+
+export type SidebarPromptGitCommitMessage = {
+  action: SidebarGitAction;
+  confirmLabel: string;
+  description: string;
+  requestId: string;
+  suggestedSubject: string;
+  type: "promptGitCommit";
+};
+
 export type ExtensionToSidebarMessage =
   | SidebarHydrateMessage
   | SidebarSessionStateMessage
-  | SidebarPlayCompletionSoundMessage;
+  | SidebarSessionPresentationChangedMessage
+  | SidebarPlayCompletionSoundMessage
+  | SidebarDaemonSessionsStateMessage
+  | SidebarPromptGitCommitMessage;
 
 export type SidebarToExtensionMessage =
   | {
       type: "ready";
-    }
-  | {
-      type: "sidebarDebugLog";
-      event: string;
-      details?: string;
     }
   | {
       type: "openSettings";
@@ -118,7 +167,15 @@ export type SidebarToExtensionMessage =
       type: "toggleCompletionBell";
     }
   | {
-      type: "toggleVsMuxDisabled";
+      type: "refreshDaemonSessions";
+    }
+  | {
+      type: "killTerminalDaemon";
+    }
+  | {
+      type: "killDaemonSession";
+      sessionId: string;
+      workspaceId: string;
     }
   | {
       type: "moveSidebarToOtherSide";
@@ -196,8 +253,16 @@ export type SidebarToExtensionMessage =
       targetIndex?: number;
     }
   | {
+      type: "sidebarDebugLog";
+      event: string;
+      details?: unknown;
+    }
+  | {
       type: "createGroupFromSession";
       sessionId: string;
+    }
+  | {
+      type: "createGroup";
     }
   | {
       type: "setVisibleCount";
@@ -219,6 +284,30 @@ export type SidebarToExtensionMessage =
   | {
       type: "runSidebarCommand";
       commandId: string;
+    }
+  | {
+      action: SidebarGitAction;
+      type: "runSidebarGitAction";
+    }
+  | {
+      action: SidebarGitAction;
+      type: "setSidebarGitPrimaryAction";
+    }
+  | {
+      type: "refreshGitState";
+    }
+  | {
+      enabled: boolean;
+      type: "setSidebarGitCommitConfirmationEnabled";
+    }
+  | {
+      requestId: string;
+      subject: string;
+      type: "confirmSidebarGitCommit";
+    }
+  | {
+      requestId: string;
+      type: "cancelSidebarGitCommit";
     }
   | {
       type: "saveSidebarCommand";

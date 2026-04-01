@@ -7,13 +7,16 @@ import {
   type GroupedSessionWorkspaceSnapshot,
 } from "./session-grid-contract";
 import {
+  createGroupInSimpleWorkspace,
   createGroupFromSessionInSimpleWorkspace,
   createSessionInSimpleWorkspace,
   focusGroupInSimpleWorkspace,
   focusSessionInSimpleWorkspace,
   moveSessionToGroupInSimpleWorkspace,
   normalizeSimpleGroupedSessionWorkspaceSnapshot,
+  setT3SessionMetadataInSimpleWorkspace,
   setVisibleCountInSimpleWorkspace,
+  syncSessionOrderInSimpleWorkspace,
 } from "./simple-grouped-session-workspace-state";
 
 describe("normalizeSimpleGroupedSessionWorkspaceSnapshot", () => {
@@ -214,6 +217,51 @@ describe("moveSessionToGroupInSimpleWorkspace", () => {
   });
 });
 
+describe("syncSessionOrderInSimpleWorkspace", () => {
+  test("should reorder sessions within the same group", () => {
+    const result = syncSessionOrderInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [
+                createSessionRecord(1, 0),
+                createSessionRecord(2, 1),
+                createSessionRecord(3, 2),
+              ],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(0), sessionIdForDisplay(1)],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 3,
+        nextSessionNumber: 4,
+      }),
+      DEFAULT_MAIN_GROUP_ID,
+      [sessionIdForDisplay(1), sessionIdForDisplay(0), sessionIdForDisplay(2)],
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+      sessionIdForDisplay(1),
+      sessionIdForDisplay(0),
+      sessionIdForDisplay(2),
+    ]);
+    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.slotIndex)).toEqual([
+      0,
+      1,
+      2,
+    ]);
+  });
+});
+
 describe("createSessionInSimpleWorkspace", () => {
   test("should keep split mode and surface the new session when adding a session", () => {
     let snapshot = createDefaultGroupedSessionWorkspaceSnapshot();
@@ -260,6 +308,62 @@ describe("createSessionInSimpleWorkspace", () => {
     expect(result.session?.displayId).toBe("01");
     expect(result.session?.alias).toBe("01");
     expect(result.session?.sessionId).toBe(sessionIdForDisplay("01"));
+  });
+});
+
+describe("setT3SessionMetadataInSimpleWorkspace", () => {
+  test("should update the stored T3 metadata without changing the session identity", () => {
+    const placeholderSession = createSessionRecord(1, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "pending-project",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "pending-thread",
+        workspaceRoot: "/tmp/project",
+      },
+      title: "T3 Code",
+    });
+    const snapshot = createWorkspaceSnapshot({
+      activeGroupId: DEFAULT_MAIN_GROUP_ID,
+      groups: [
+        {
+          groupId: DEFAULT_MAIN_GROUP_ID,
+          snapshot: {
+            focusedSessionId: placeholderSession.sessionId,
+            fullscreenRestoreVisibleCount: undefined,
+            sessions: [placeholderSession],
+            viewMode: "grid",
+            visibleCount: 1,
+            visibleSessionIds: [placeholderSession.sessionId],
+          },
+          title: "Main",
+        },
+      ],
+      nextGroupNumber: 2,
+      nextSessionDisplayId: 1,
+      nextSessionNumber: 2,
+    });
+    const normalizedSessionId = snapshot.groups[0]?.snapshot.sessions[0]?.sessionId;
+
+    const result = setT3SessionMetadataInSimpleWorkspace(snapshot, normalizedSessionId ?? "", {
+      projectId: "project-123",
+      serverOrigin: "http://127.0.0.1:3773",
+      threadId: "thread-456",
+      workspaceRoot: "/tmp/project",
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.groups[0]?.snapshot.sessions[0]).toEqual(
+      expect.objectContaining({
+        sessionId: normalizedSessionId,
+        t3: {
+          projectId: "project-123",
+          serverOrigin: "http://127.0.0.1:3773",
+          threadId: "thread-456",
+          workspaceRoot: "/tmp/project",
+        },
+      }),
+    );
   });
 });
 
@@ -341,6 +445,44 @@ describe("createGroupFromSessionInSimpleWorkspace", () => {
       sessionIdForDisplay("04"),
     ]);
     expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay("04")]);
+  });
+});
+
+describe("createGroupInSimpleWorkspace", () => {
+  test("should append an empty active group", () => {
+    const result = createGroupInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(0)],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 1,
+        nextSessionNumber: 2,
+      }),
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.groupId).toBe("group-2");
+    expect(result.snapshot.activeGroupId).toBe("group-2");
+    expect(result.snapshot.groups).toHaveLength(2);
+    expect(result.snapshot.groups[1]).toMatchObject({
+      groupId: "group-2",
+      title: "Group 2",
+    });
+    expect(result.snapshot.groups[1]?.snapshot.sessions).toEqual([]);
+    expect(result.snapshot.nextGroupNumber).toBe(3);
   });
 });
 

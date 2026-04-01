@@ -5,22 +5,27 @@ import type {
 import type { TerminalViewMode } from "../../shared/session-grid-contract";
 import type { SidebarActionType } from "../../shared/sidebar-commands";
 import type { SidebarAgentIcon } from "../../shared/sidebar-agents";
-import { logVSmuxDebug } from "../vsmux-debug-log";
+import type { SidebarGitAction } from "../../shared/sidebar-git";
 
 export type SidebarMessageHandlers = {
   clearStartupSidebarRefreshes: () => void;
   clearGeneratedPreviousSessions: () => Promise<void>;
   closeGroup: (groupId: string) => Promise<void>;
   closeSession: (sessionId: string) => Promise<void>;
+  confirmSidebarGitCommit: (requestId: string, subject: string) => Promise<void>;
   copyResumeCommand: (sessionId: string) => Promise<void>;
+  cancelSidebarGitCommit: (requestId: string) => Promise<void>;
+  createGroup: () => Promise<void>;
   createGroupFromSession: (sessionId: string) => Promise<void>;
   createSession: () => Promise<void>;
   createSessionInGroup: (groupId: string) => Promise<void>;
   deletePreviousSession: (historyId: string) => Promise<void>;
+  killDaemonSession: (workspaceId: string, sessionId: string) => Promise<void>;
+  killTerminalDaemon: () => Promise<void>;
   deleteSidebarAgent: (agentId: string) => Promise<void>;
   deleteSidebarCommand: (commandId: string) => Promise<void>;
-  focusGroup: (groupId: string) => Promise<void>;
-  focusSession: (sessionId: string, source?: "sidebar") => Promise<void>;
+  focusGroup: (groupId: string, source?: "sidebar") => Promise<void>;
+  focusSession: (sessionId: string, source?: "sidebar" | "workspace") => Promise<void>;
   moveSessionToGroup: (sessionId: string, groupId: string, targetIndex?: number) => Promise<void>;
   moveSidebarToOtherSide: () => Promise<void>;
   openBrowser: () => Promise<void>;
@@ -29,10 +34,14 @@ export type SidebarMessageHandlers = {
   refreshSidebarHydrate: () => Promise<void>;
   renameGroup: (groupId: string, title: string) => Promise<void>;
   renameSession: (sessionId: string, title: string) => Promise<void>;
+  refreshGitState: () => Promise<void>;
+  refreshDaemonSessions: () => Promise<void>;
   restartSession: (sessionId: string) => Promise<void>;
   restorePreviousSession: (historyId: string) => Promise<void>;
   runSidebarAgent: (agentId: string) => Promise<void>;
   runSidebarCommand: (commandId: string) => Promise<void>;
+  runSidebarGitAction: (action: SidebarGitAction) => Promise<void>;
+  setSidebarGitCommitConfirmationEnabled: (enabled: boolean) => Promise<void>;
   saveScratchPad: (content: string) => Promise<void>;
   saveSidebarAgent: (
     agentId: string | undefined,
@@ -49,6 +58,7 @@ export type SidebarMessageHandlers = {
     url?: string,
   ) => Promise<void>;
   syncSidebarAgentOrder: (agentIds: readonly string[]) => Promise<void>;
+  setSidebarGitPrimaryAction: (action: SidebarGitAction) => Promise<void>;
   setViewMode: (viewMode: TerminalViewMode) => Promise<void>;
   setVisibleCount: (visibleCount: VisibleSessionCount) => Promise<void>;
   syncGroupOrder: (groupIds: readonly string[]) => Promise<void>;
@@ -56,7 +66,6 @@ export type SidebarMessageHandlers = {
   syncSidebarCommandOrder: (commandIds: readonly string[]) => Promise<void>;
   toggleCompletionBell: () => Promise<void>;
   toggleFullscreenSession: () => Promise<void>;
-  toggleVsMuxDisabled: () => Promise<void>;
 };
 
 export async function dispatchSidebarMessage(
@@ -81,7 +90,7 @@ export async function dispatchSidebarMessage(
       await handlers.createSessionInGroup(message.groupId);
       return;
     case "focusGroup":
-      await handlers.focusGroup(message.groupId);
+      await handlers.focusGroup(message.groupId, "sidebar");
       return;
     case "toggleFullscreenSession":
       await handlers.toggleFullscreenSession();
@@ -92,8 +101,14 @@ export async function dispatchSidebarMessage(
     case "toggleCompletionBell":
       await handlers.toggleCompletionBell();
       return;
-    case "toggleVsMuxDisabled":
-      await handlers.toggleVsMuxDisabled();
+    case "refreshDaemonSessions":
+      await handlers.refreshDaemonSessions();
+      return;
+    case "killTerminalDaemon":
+      await handlers.killTerminalDaemon();
+      return;
+    case "killDaemonSession":
+      await handlers.killDaemonSession(message.workspaceId, message.sessionId);
       return;
     case "moveSidebarToOtherSide":
       await handlers.moveSidebarToOtherSide();
@@ -103,6 +118,24 @@ export async function dispatchSidebarMessage(
       return;
     case "runSidebarCommand":
       await handlers.runSidebarCommand(message.commandId);
+      return;
+    case "runSidebarGitAction":
+      await handlers.runSidebarGitAction(message.action);
+      return;
+    case "setSidebarGitPrimaryAction":
+      await handlers.setSidebarGitPrimaryAction(message.action);
+      return;
+    case "refreshGitState":
+      await handlers.refreshGitState();
+      return;
+    case "setSidebarGitCommitConfirmationEnabled":
+      await handlers.setSidebarGitCommitConfirmationEnabled(message.enabled);
+      return;
+    case "confirmSidebarGitCommit":
+      await handlers.confirmSidebarGitCommit(message.requestId, message.subject);
+      return;
+    case "cancelSidebarGitCommit":
+      await handlers.cancelSidebarGitCommit(message.requestId);
       return;
     case "saveSidebarAgent":
       await handlers.saveSidebarAgent(message.agentId, message.name, message.command, message.icon);
@@ -136,9 +169,6 @@ export async function dispatchSidebarMessage(
       return;
     case "promptRenameSession":
       if (message.sessionId) {
-        logVSmuxDebug("sidebar.dispatch.promptRenameSession", {
-          sessionId: message.sessionId,
-        });
         await handlers.promptRenameSession(message.sessionId);
       }
       return;
@@ -179,6 +209,9 @@ export async function dispatchSidebarMessage(
       return;
     case "saveScratchPad":
       await handlers.saveScratchPad(message.content);
+      return;
+    case "createGroup":
+      await handlers.createGroup();
       return;
     case "moveSessionToGroup":
       await handlers.moveSessionToGroup(message.sessionId, message.groupId, message.targetIndex);

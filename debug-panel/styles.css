@@ -18,9 +18,9 @@
 
 body {
   margin: 0;
-  background:
+  /* background:
     radial-gradient(circle at top right, rgba(77, 142, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, #09101b 0%, #0b1220 100%);
+    linear-gradient(180deg, #09101b 0%, #0b1220 100%); */
   color: var(--text);
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }

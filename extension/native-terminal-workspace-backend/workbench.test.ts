@@ -1,32 +1,5 @@
 import { beforeEach, describe, expect, test } from "vite-plus/test";
-import { vi } from "vitest";
-
-vi.mock("vscode", () => ({
-  TabInputTerminal: class MockTabInputTerminal {},
-  ViewColumn: {
-    Nine: 9,
-    One: 1,
-  },
-  window: {
-    activeTerminal: undefined,
-    tabGroups: {
-      activeTabGroup: undefined,
-      all: [],
-    },
-  },
-}));
-
-import * as vscode from "vscode";
-import {
-  findTerminalTabIndex,
-  findTerminalGroupIndex,
-  getActiveEditorTerminalTabLabel,
-  getActivePanelTerminalTabLabel,
-  getActiveTerminalTabLocation,
-  getTerminalDisplayName,
-  isTerminalTabActive,
-  resolveTerminalRestoreTarget,
-} from "./workbench";
+import { vi } from "vite-plus/test";
 
 type MockTab = {
   input: unknown;
@@ -41,14 +14,52 @@ type MockTabGroup = {
 };
 
 type MockTerminal = {
-  creationOptions?: {
+  creationOptions: {
     name?: string;
   };
-  exitStatus?: {
-    code?: number;
-  };
-  name?: string;
+  exitStatus: {
+    code: number | undefined;
+    reason: number;
+  } | undefined;
+  name: string;
 };
+
+type MockWindow = {
+  activeTerminal: MockTerminal | undefined;
+  tabGroups: {
+    activeTabGroup: MockTabGroup | undefined;
+    all: MockTabGroup[];
+  };
+};
+
+const mockWindow: MockWindow = {
+  activeTerminal: undefined,
+  tabGroups: {
+    activeTabGroup: undefined,
+    all: [],
+  },
+};
+
+vi.mock("vscode", () => ({
+  TabInputTerminal: class MockTabInputTerminal {},
+  ViewColumn: {
+    Nine: 9,
+    One: 1,
+  },
+  window: mockWindow,
+}));
+
+import * as vscode from "vscode";
+import {
+  findTerminalTabIndex,
+  findTerminalGroupIndex,
+  getActiveEditorTerminalTabLabel,
+  getActivePanelTerminalTabLabel,
+  getActiveTerminalTabLocation,
+  getTerminalDisplayName,
+  isTerminalTabActive,
+  resolveTerminalRestoreTarget,
+} from "./workbench";
 
 describe("native terminal workbench helpers", () => {
   beforeEach(() => {
@@ -88,7 +99,7 @@ describe("native terminal workbench helpers", () => {
     ]);
 
     expect(getActiveTerminalTabLocation()).toBe("editor");
-    expect(isTerminalTabActive("editor", activeTerminal as unknown as vscode.Terminal)).toBe(true);
+    expect(isTerminalTabActive("editor", activeTerminal)).toBe(true);
   });
 
   test("should classify an active terminal tab in the panel", () => {
@@ -119,7 +130,7 @@ describe("native terminal workbench helpers", () => {
     };
 
     expect(getActiveTerminalTabLocation()).toBe("other");
-    expect(isTerminalTabActive("notes", activeTerminal as unknown as vscode.Terminal)).toBe(false);
+    expect(isTerminalTabActive("notes", activeTerminal)).toBe(false);
   });
 
   test("should require the exact terminal tab label for active-tab detection", () => {
@@ -129,7 +140,7 @@ describe("native terminal workbench helpers", () => {
       { isActive: true, label: "other" },
     ]);
 
-    expect(isTerminalTabActive("editor", activeTerminal as unknown as vscode.Terminal)).toBe(false);
+    expect(isTerminalTabActive("editor", activeTerminal)).toBe(false);
   });
 
   test("should find the terminal tab index inside an editor group", () => {
@@ -168,6 +179,7 @@ describe("native terminal workbench helpers", () => {
     const exitedTerminal = createTerminal("panel", {
       exitStatus: {
         code: 0,
+        reason: 0,
       },
     });
 
@@ -180,6 +192,8 @@ describe("native terminal workbench helpers", () => {
         creationOptions: {
           name: "created-name",
         },
+        exitStatus: undefined,
+        name: "",
       }),
     ).toBe("created-name");
   });
@@ -207,23 +221,18 @@ function createTerminal(name: string, overrides: Partial<MockTerminal> = {}): Mo
     creationOptions: {
       name,
     },
+    exitStatus: undefined,
     name,
     ...overrides,
   };
 }
 
 function getMockWindow(): {
-  activeTerminal: unknown;
+  activeTerminal: MockTerminal | undefined;
   tabGroups: {
     activeTabGroup: MockTabGroup | undefined;
     all: MockTabGroup[];
   };
 } {
-  return vscode.window as unknown as {
-    activeTerminal: unknown;
-    tabGroups: {
-      activeTabGroup: MockTabGroup | undefined;
-      all: MockTabGroup[];
-    };
-  };
+  return mockWindow;
 }

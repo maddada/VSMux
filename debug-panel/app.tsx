@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
-  ExtensionToNativeTerminalDebugMessage,
+  NativeTerminalDebugHydrateMessage,
   NativeTerminalDebugPanelState,
 } from "../shared/native-terminal-debug-contract";
+import { createDefaultSidebarGitState } from "../shared/sidebar-git";
 import {
   Field,
   formatTimestamp,
@@ -53,8 +54,10 @@ const EMPTY_STATE: NativeTerminalDebugPanelState = {
       completionSoundLabel: "Ping",
       debuggingMode: false,
       focusedSessionTitle: undefined,
+      git: createDefaultSidebarGitState(),
       highlightedVisibleCount: 1,
       isFocusModeActive: false,
+      pendingAgentIds: [],
       showCloseButtonOnSessionCards: false,
       showHotkeysOnSessionCards: false,
       theme: "dark-blue",
@@ -80,8 +83,8 @@ export function DebugPanelApp({ clearUrl, stateUrl, vscode }: DebugPanelAppProps
             return;
           }
 
-          const message = (await response.json()) as Partial<ExtensionToNativeTerminalDebugMessage>;
-          if (disposed || message.type !== "hydrate" || !message.state) {
+          const message = await response.json();
+          if (disposed || !isNativeTerminalDebugHydrateMessage(message)) {
             return;
           }
 
@@ -102,24 +105,30 @@ export function DebugPanelApp({ clearUrl, stateUrl, vscode }: DebugPanelAppProps
       };
     }
 
-    const handleMessage = (event: MessageEvent<ExtensionToNativeTerminalDebugMessage>) => {
-      if (event.data?.type !== "hydrate") {
+    const handleMessage = (event: MessageEvent<unknown>) => {
+      if (!isNativeTerminalDebugHydrateMessage(event.data)) {
         return;
       }
 
       setState(event.data.state);
     };
 
-    window.addEventListener("message", handleMessage as EventListener);
+    const handleWindowMessage = (event: Event) => {
+      if (event instanceof MessageEvent) {
+        handleMessage(event);
+      }
+    };
+
+    window.addEventListener("message", handleWindowMessage);
     vscode.postMessage({ type: "ready" });
     return () => {
-      window.removeEventListener("message", handleMessage as EventListener);
+      window.removeEventListener("message", handleWindowMessage);
     };
   }, [stateUrl, vscode]);
 
   const visibleSessionSet = useMemo(
     () =>
-      new Set(
+      new Set<string>(
         state.sidebar.groups.flatMap((group) =>
           group.sessions.filter((session) => session.isVisible).map((session) => session.sessionId),
         ),
@@ -275,7 +284,7 @@ export function DebugPanelApp({ clearUrl, stateUrl, vscode }: DebugPanelAppProps
                 >
                   <div className="history-meta">
                     <StatusPill
-                      label={entry.event}
+                      label={entry.event ?? "update"}
                       tone={
                         entry.event === "fallback"
                           ? "warn"
@@ -385,4 +394,19 @@ export function DebugPanelApp({ clearUrl, stateUrl, vscode }: DebugPanelAppProps
       </section>
     </div>
   );
+}
+
+function isNativeTerminalDebugHydrateMessage(
+  value: unknown,
+): value is NativeTerminalDebugHydrateMessage {
+  return (
+    isObjectRecord(value) &&
+    value.type === "hydrate" &&
+    "state" in value &&
+    isObjectRecord(value.state)
+  );
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

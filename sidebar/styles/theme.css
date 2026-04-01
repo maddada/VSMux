@@ -1,5 +1,6 @@
 :root {
   color-scheme: light dark;
+  --sidebar-density-scale: 0.9;
   --app-background: #0c1117;
   --app-foreground: #dce6f8;
   --app-muted: #90a0b8;
@@ -240,7 +241,7 @@ body,
 }
 
 body {
-  padding: 12px;
+  padding: calc(12px * var(--sidebar-density-scale));
   zoom: var(--vsmux-agent-manager-zoom, 100%);
   font-family: var(
     --vscode-font-family,
@@ -250,7 +251,7 @@ body {
     "Segoe UI",
     sans-serif
   );
-  font-size: var(--vscode-font-size, 13px);
+  font-size: calc(var(--vscode-font-size, 13px) * var(--sidebar-density-scale));
   font-weight: var(--vscode-font-weight, 400);
   line-height: 1.4;
   color: var(--app-foreground);
@@ -282,7 +283,7 @@ button:disabled {
 
 .stack {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
   height: 100%;
   min-height: 100%;
   align-content: start;
@@ -304,20 +305,20 @@ button:disabled {
 
 .card {
   border: 1px solid var(--app-border);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--sidebar-density-scale));
   background: var(--app-card);
-  padding: 12px;
+  padding: calc(12px * var(--sidebar-density-scale));
 }
 
 .hud {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
 }
 
 .eyebrow {
   color: var(--app-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--sidebar-density-scale));
   letter-spacing: 0.08em;
-  margin-bottom: 10px;
+  margin-bottom: calc(10px * var(--sidebar-density-scale));
   text-transform: uppercase;
 }

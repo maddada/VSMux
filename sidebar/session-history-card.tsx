@@ -1,7 +1,8 @@
 import { IconTrash } from "@tabler/icons-react";
 import { useRef } from "react";
 import type { SidebarPreviousSessionItem } from "../shared/session-grid-contract";
-import { SessionCardContent } from "./session-card-content";
+import { SessionCardContent, SessionFloatingAgentIcon } from "./session-card-content";
+import { getSessionHistoryCardTitle } from "./session-history-card-title";
 
 export type SessionHistoryCardProps = {
   onDelete: () => void;
@@ -19,6 +20,15 @@ export function SessionHistoryCard({
   showHotkeys,
 }: SessionHistoryCardProps) {
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
+  const displayTitle = getSessionHistoryCardTitle(session);
+  const displaySession =
+    session.primaryTitle?.trim() || !session.terminalTitle?.trim()
+      ? session
+      : {
+          ...session,
+          primaryTitle: session.terminalTitle,
+          terminalTitle: undefined,
+        };
 
   return (
     <div
@@ -29,10 +39,11 @@ export function SessionHistoryCard({
       data-restorable={String(session.isRestorable)}
       data-visible="false"
     >
+      <SessionFloatingAgentIcon agentIcon={session.agentIcon} />
       <article
         aria-disabled={!session.isRestorable}
         aria-pressed="false"
-        aria-label={session.isRestorable ? `Restore ${session.alias}` : session.alias}
+        aria-label={session.isRestorable ? `Restore ${displayTitle}` : displayTitle}
         className="session session-history-card"
         data-activity={session.activity}
         data-has-agent-icon={String(Boolean(session.agentIcon))}
@@ -76,7 +87,7 @@ export function SessionHistoryCard({
         tabIndex={session.isRestorable ? 0 : -1}
       >
         <button
-          aria-label={`Delete ${session.alias} from previous sessions`}
+          aria-label={`Delete ${displayTitle} from previous sessions`}
           className="previous-session-delete-button"
           onClick={(event) => {
             event.preventDefault();
@@ -89,7 +100,7 @@ export function SessionHistoryCard({
         </button>
         <SessionCardContent
           aliasHeadingRef={aliasHeadingRef}
-          session={session}
+          session={displaySession}
           showDebugSessionNumbers={showDebugSessionNumbers}
           showCloseButton={false}
           showHotkeys={showHotkeys}

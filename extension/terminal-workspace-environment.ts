@@ -56,12 +56,14 @@ export function createDisconnectedSessionSnapshot(
     cols: DEFAULT_TERMINAL_COLS,
     cwd: getDefaultWorkspaceCwd(),
     history: "",
+    isAttached: false,
     restoreState: "replayed",
     rows: DEFAULT_TERMINAL_ROWS,
     sessionId,
     shell: getDefaultShell(),
     startedAt: new Date(0).toISOString(),
     status,
+    title: undefined,
     workspaceId,
   };
 }

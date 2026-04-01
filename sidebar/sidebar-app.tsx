@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { move } from "@dnd-kit/helpers";
-import { DragDropProvider, DragOverlay, type DragDropEventHandlers } from "@dnd-kit/react";
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
 import {
   IconBell,
   IconBellOff,
@@ -12,75 +12,44 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import {
-  startTransition,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { createDefaultSidebarAgentButtons } from "../shared/sidebar-agents";
-import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
+import { useShallow } from "zustand/react/shallow";
 import {
   MAX_GROUP_COUNT,
   type ExtensionToSidebarMessage,
-  type SidebarHydrateMessage,
-  type SidebarHudState,
-  type SidebarPreviousSessionItem,
-  type SidebarSessionGroup,
-  type SidebarSessionItem,
-  type SidebarSessionStateMessage,
-  type SidebarTheme,
 } from "../shared/session-grid-contract";
 import { playCompletionSound } from "./completion-sound-player";
 import { AgentsPanel } from "./agents-panel";
 import { CommandsPanel } from "./commands-panel";
-import { CreateGroupDropTarget } from "./create-group-drop-target";
+import { DaemonSessionsModal } from "./daemon-sessions-modal";
+import { GitCommitModal } from "./git-commit-modal";
 import { PreviousSessionsModal } from "./previous-sessions-modal";
 import { ScratchPadModal } from "./scratch-pad-modal";
-import { SessionCardContent } from "./session-card-content";
-import { getSidebarDropData } from "./sidebar-dnd";
+import { resetSidebarStore, useSidebarStore } from "./sidebar-store";
+import {
+  getClientPoint,
+  getSidebarDropData,
+  type SidebarSessionDropTarget,
+  getSidebarSessionDropTargetFromEvent,
+  getSidebarSessionDropTargetAtPoint,
+  moveSessionIdsByDropTarget,
+} from "./sidebar-dnd";
 import { SessionGroupSection } from "./session-group-section";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import type { WebviewApi } from "./webview-api";
 
 export type SidebarAppProps = {
+  messageSource?: Pick<Window, "addEventListener" | "removeEventListener">;
   vscode: WebviewApi;
 };
 
-type SidebarState = {
-  groups: SidebarSessionGroup[];
-  hud: SidebarHudState;
-  previousSessions: SidebarPreviousSessionItem[];
-  scratchPadContent: string;
-};
-
 type SessionIdsByGroup = Record<string, string[]>;
-
-const INITIAL_STATE: SidebarState = {
-  groups: [],
-  hud: {
-    agentManagerZoomPercent: 100,
-    agents: createDefaultSidebarAgentButtons(),
-    commands: createDefaultSidebarCommandButtons(),
-    completionBellEnabled: false,
-    completionSound: "ping",
-    completionSoundLabel: "Ping",
-    debuggingMode: false,
-    focusedSessionTitle: undefined,
-    highlightedVisibleCount: 1,
-    isFocusModeActive: false,
-    isVsMuxDisabled: false,
-    showCloseButtonOnSessionCards: false,
-    showHotkeysOnSessionCards: false,
-    theme: getInitialSidebarTheme(),
-    viewMode: "grid",
-    visibleCount: 1,
-    visibleSlotLabels: [],
-  },
-  previousSessions: [],
-  scratchPadContent: "",
-};
 
 const SIDEBAR_EMPTY_SPACE_BLOCKER_SELECTOR = [
   "button",
@@ -109,97 +78,60 @@ const sensors = [
 
 const SIDEBAR_STARTUP_INTERACTION_BLOCK_MS = 1500;
 
-function getInitialSidebarTheme(): SidebarTheme {
-  return document.body.classList.contains("vscode-light") ||
-    document.body.classList.contains("vscode-high-contrast-light")
-    ? "light-blue"
-    : "dark-blue";
-}
-
-export function SidebarApp({ vscode }: SidebarAppProps) {
-  const [serverState, setServerState] = useState<SidebarState>(INITIAL_STATE);
+export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) {
   const [isStartupInteractionBlocked, setIsStartupInteractionBlocked] = useState(true);
   const [autoEditingGroupId, setAutoEditingGroupId] = useState<string>();
-  const [groupIds, setGroupIds] = useState<string[]>([]);
-  const [sessionIdsByGroup, setSessionIdsByGroup] = useState<SessionIdsByGroup>({});
-  const [draggedSessionId, setDraggedSessionId] = useState<string>();
-  const [dragOverlayWidth, setDragOverlayWidth] = useState<number>();
   const [agentCreateRequestId, setAgentCreateRequestId] = useState(0);
   const [commandCreateRequestId, setCommandCreateRequestId] = useState(0);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
+  const [isDaemonSessionsOpen, setIsDaemonSessionsOpen] = useState(false);
   const [isPreviousSessionsOpen, setIsPreviousSessionsOpen] = useState(false);
   const [isScratchPadOpen, setIsScratchPadOpen] = useState(false);
+  const [sessionDragIndicator, setSessionDragIndicator] = useState<SidebarSessionDropTarget>();
   const pendingCreateGroupRef = useRef(false);
+  const didResetStoreRef = useRef(false);
   const overflowControlsRef = useRef<HTMLDivElement>(null);
   const sessionGroupsPanelRef = useRef<HTMLElement>(null);
-  const draggedSessionIdRef = useRef<string>();
   const groupIdsRef = useRef<string[]>([]);
   const sessionIdsByGroupRef = useRef<SessionIdsByGroup>({});
-  const sessionDragSnapshotRef = useRef<SessionIdsByGroup>();
-  const deferredSidebarMessageRef = useRef<SidebarHydrateMessage | SidebarSessionStateMessage>();
 
-  const logSidebarDebug = (event: string, details: Record<string, unknown>) => {
-    if (!serverState.hud.debuggingMode) {
-      return;
-    }
+  if (!didResetStoreRef.current) {
+    resetSidebarStore();
+    didResetStoreRef.current = true;
+  }
 
-    vscode.postMessage({
-      details: safeSerializeSidebarDebugDetails(details),
-      event,
-      type: "sidebarDebugLog",
-    });
-  };
+  const applyLocalFocus = useSidebarStore((state) => state.applyLocalFocus);
+  const applySessionPresentationMessage = useSidebarStore(
+    (state) => state.applySessionPresentationMessage,
+  );
+  const applySidebarMessage = useSidebarStore((state) => state.applySidebarMessage);
+  const setDaemonSessionsState = useSidebarStore((state) => state.setDaemonSessionsState);
+  const setGitCommitDraft = useSidebarStore((state) => state.setGitCommitDraft);
+  const {
+    agentManagerZoomPercent,
+    browserGroupIds,
+    completionBellEnabled,
+    debuggingMode,
+    groupOrder,
+    structureRevision,
+    theme,
+    workspaceGroupIds,
+  } = useSidebarStore(
+    useShallow((state) => ({
+      agentManagerZoomPercent: state.hud.agentManagerZoomPercent,
+      browserGroupIds: state.browserGroupIds,
+      completionBellEnabled: state.hud.completionBellEnabled,
+      debuggingMode: state.hud.debuggingMode,
+      groupOrder: state.groupOrder,
+      structureRevision: state.revision,
+      theme: state.hud.theme,
+      workspaceGroupIds: state.workspaceGroupIds,
+    })),
+  );
+  const gitCommitDraft = useSidebarStore((state) => state.gitCommitDraft);
+  const authoritativeSessionIdsByGroup = useSidebarStore((state) => state.sessionIdsByGroup);
 
-  const applySidebarMessage = (message: SidebarHydrateMessage | SidebarSessionStateMessage) => {
-    logSidebarDebug("state.messageApplied", {
-      draggedSessionId: draggedSessionIdRef.current,
-      messageType: message.type,
-      nextGroups: summarizeSidebarGroups(message.groups),
-      optimisticGroupIds: [...groupIdsRef.current],
-      optimisticSessionIdsByGroup: summarizeSessionIdsByGroup(sessionIdsByGroupRef.current),
-      pendingCreateGroup: pendingCreateGroupRef.current,
-      previousGroups: summarizeSidebarGroups(serverState.groups),
-    });
-
-    startTransition(() => {
-      setServerState((previous) => {
-        if (pendingCreateGroupRef.current) {
-          const nextGroupId = findCreatedGroupId(previous.groups, message.groups);
-          if (nextGroupId) {
-            setAutoEditingGroupId(nextGroupId);
-            pendingCreateGroupRef.current = false;
-          }
-        }
-
-        return {
-          groups: message.groups,
-          hud: message.hud,
-          previousSessions: message.previousSessions ?? [],
-          scratchPadContent: message.scratchPadContent ?? "",
-        };
-      });
-      const workspaceGroups = getWorkspaceSidebarGroups(message.groups);
-      setGroupIds(workspaceGroups.map((group) => group.groupId));
-      setSessionIdsByGroup(createSessionIdsByGroup(workspaceGroups));
-    });
-  };
-
-  const flushDeferredSidebarMessage = () => {
-    if (draggedSessionIdRef.current) {
-      return;
-    }
-
-    const nextMessage = deferredSidebarMessageRef.current;
-    if (!nextMessage) {
-      return;
-    }
-
-    deferredSidebarMessageRef.current = undefined;
-    applySidebarMessage(nextMessage);
-  };
-
-  const isSidebarInteractionBlocked =
-    serverState.hud.isVsMuxDisabled || isStartupInteractionBlocked;
+  const isSidebarInteractionBlocked = isStartupInteractionBlocked;
 
   const requestNewSession = () => {
     if (isSidebarInteractionBlocked) {
@@ -218,46 +150,59 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
     requestNewSession();
   };
 
+  const handleWindowMessage = useEffectEvent((event: MessageEvent<ExtensionToSidebarMessage>) => {
+    if (!event.data) {
+      return;
+    }
+
+    if (event.data.type === "playCompletionSound") {
+      void playCompletionSound(event.data.sound);
+      return;
+    }
+
+    if (event.data.type === "sessionPresentationChanged") {
+      applySessionPresentationMessage(event.data);
+      return;
+    }
+
+    if (event.data.type === "daemonSessionsState") {
+      setDaemonSessionsState(event.data);
+      return;
+    }
+
+    if (event.data.type === "promptGitCommit") {
+      setGitCommitDraft(event.data);
+      return;
+    }
+
+    if (event.data.type !== "hydrate" && event.data.type !== "sessionState") {
+      return;
+    }
+
+    if (pendingCreateGroupRef.current) {
+      const nextGroupId = findCreatedGroupId(groupOrder, event.data.groups.map((group) => group.groupId));
+      if (nextGroupId) {
+        setAutoEditingGroupId(nextGroupId);
+        pendingCreateGroupRef.current = false;
+      }
+    }
+
+    applySidebarMessage(event.data);
+  });
+
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<ExtensionToSidebarMessage>) => {
-      if (!event.data) {
-        return;
+    const handleMessage = (event: Event) => {
+      if (event instanceof MessageEvent) {
+        handleWindowMessage(event);
       }
-
-      if (event.data.type === "playCompletionSound") {
-        void playCompletionSound(event.data.sound);
-        return;
-      }
-
-      if (event.data.type !== "hydrate" && event.data.type !== "sessionState") {
-        return;
-      }
-
-      if (draggedSessionIdRef.current) {
-        logSidebarDebug("state.messageDeferred", {
-          draggedSessionId: draggedSessionIdRef.current,
-          messageType: event.data.type,
-          nextGroups: summarizeSidebarGroups(event.data.groups),
-          optimisticSessionIdsByGroup: summarizeSessionIdsByGroup(sessionIdsByGroupRef.current),
-        });
-        deferredSidebarMessageRef.current = event.data;
-        return;
-      }
-
-      applySidebarMessage(event.data);
     };
 
-    window.addEventListener("message", handleMessage);
+    messageSource.addEventListener("message", handleMessage);
 
     return () => {
-      window.removeEventListener("message", handleMessage);
+      messageSource.removeEventListener("message", handleMessage);
     };
-  }, []);
-
-  useEffect(() => {
-    draggedSessionIdRef.current = draggedSessionId;
-    flushDeferredSidebarMessage();
-  }, [draggedSessionId]);
+  }, [handleWindowMessage, messageSource]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -270,35 +215,24 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
   }, []);
 
   useEffect(() => {
-    groupIdsRef.current = groupIds;
-  }, [groupIds]);
-
-  useEffect(() => {
-    sessionIdsByGroupRef.current = sessionIdsByGroup;
-  }, [sessionIdsByGroup]);
-
-  useEffect(() => {
     vscode.postMessage({ type: "ready" });
   }, [vscode]);
 
   useEffect(() => {
-    document.body.dataset.sidebarTheme = serverState.hud.theme;
+    document.body.dataset.sidebarTheme = theme;
 
     return () => {
       delete document.body.dataset.sidebarTheme;
     };
-  }, [serverState.hud.theme]);
+  }, [theme]);
 
   useEffect(() => {
-    document.body.style.setProperty(
-      "--vsmux-agent-manager-zoom",
-      `${serverState.hud.agentManagerZoomPercent}%`,
-    );
+    document.body.style.setProperty("--vsmux-agent-manager-zoom", `${agentManagerZoomPercent}%`);
 
     return () => {
       document.body.style.removeProperty("--vsmux-agent-manager-zoom");
     };
-  }, [serverState.hud.agentManagerZoomPercent]);
+  }, [agentManagerZoomPercent]);
 
   useEffect(() => {
     if (!sessionGroupsPanelRef.current) {
@@ -341,91 +275,120 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
     };
   }, [isOverflowMenuOpen]);
 
-  const orderedGroups = useMemo(() => {
-    const workspaceGroups = getWorkspaceSidebarGroups(serverState.groups);
-    const groupById = new Map(workspaceGroups.map((group) => [group.groupId, group] as const));
-    const sessionById = new Map(
-      workspaceGroups.flatMap((group) =>
-        group.sessions.map((session) => [session.sessionId, session] as const),
-      ),
-    );
+  const effectiveGroupIds = workspaceGroupIds;
 
-    return groupIds
-      .map((groupId) => groupById.get(groupId))
-      .filter((group): group is SidebarSessionGroup => group !== undefined)
-      .map((group) => ({
-        ...group,
-        orderedSessions: applySessionOrder(sessionById, sessionIdsByGroup[group.groupId]),
-      }));
-  }, [groupIds, serverState.groups, sessionIdsByGroup]);
-
-  const fixedGroups = useMemo(
-    () => serverState.groups.filter((group) => group.kind === "browser"),
-    [serverState.groups],
+  const effectiveSessionIdsByGroup = useMemo(
+    () => createWorkspaceSessionIdsByGroup(workspaceGroupIds, authoritativeSessionIdsByGroup),
+    [authoritativeSessionIdsByGroup, workspaceGroupIds],
   );
 
-  const draggedSession = useMemo(() => {
-    if (!draggedSessionId) {
-      return undefined;
+  useEffect(() => {
+    groupIdsRef.current = effectiveGroupIds;
+  }, [effectiveGroupIds]);
+
+  useEffect(() => {
+    sessionIdsByGroupRef.current = effectiveSessionIdsByGroup;
+  }, [effectiveSessionIdsByGroup]);
+
+  const postSidebarDebugLog = useEffectEvent((event: string, details: unknown) => {
+    if (!debuggingMode) {
+      return;
     }
 
-    return orderedGroups
-      .flatMap((group) => group.orderedSessions)
-      .find((session) => session.sessionId === draggedSessionId);
-  }, [draggedSessionId, orderedGroups]);
+    vscode.postMessage({
+      details,
+      event,
+      type: "sidebarDebugLog",
+    });
+  });
+
+  const updateSessionDragIndicator = useEffectEvent(
+    (
+      nativeEvent: Event | undefined,
+      source: { data?: unknown } | null | undefined,
+      target: { data?: unknown } | null | undefined,
+    ) => {
+      const sourceData = getSidebarDropData(source);
+      if (sourceData?.kind !== "session") {
+        setSessionDragIndicator(undefined);
+        return;
+      }
+
+      const targetData = getSidebarDropData(target);
+      const resolvedDropTarget = resolveSessionDropTargetFromPoint(
+        nativeEvent,
+        sessionIdsByGroupRef.current,
+        targetData,
+        sourceData,
+      );
+      const nextIndicator = resolvedDropTarget ?? undefined;
+
+      setSessionDragIndicator((previous) =>
+        haveSameSessionDropTarget(previous, nextIndicator) ? previous : nextIndicator,
+      );
+    },
+  );
 
   const handleDragStart = ((event) => {
-    const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
+    const nativeEvent = getDragNativeEvent(event);
+    const sourceData = getSidebarDropData(event.operation.source);
+    postSidebarDebugLog("session.dragStart", {
+      nativeEventType: nativeEvent?.type,
+      point: getClientPoint(nativeEvent),
+      sourceData,
+      targetData: getSidebarDropData(event.operation.target),
+    });
     if (sourceData?.kind !== "session") {
+      setSessionDragIndicator(undefined);
       return;
     }
 
-    const sourceElement = (event.operation.source as { element?: Element | undefined }).element;
-    if (sourceElement instanceof HTMLElement) {
-      setDragOverlayWidth(sourceElement.getBoundingClientRect().width);
-    }
-
-    sessionDragSnapshotRef.current = cloneSessionIdsByGroup(sessionIdsByGroupRef.current);
-    logSidebarDebug("dragStart.session", {
-      groupId: sourceData.groupId,
-      sessionId: sourceData.sessionId,
-      sessionIdsByGroup: summarizeSessionIdsByGroup(sessionIdsByGroupRef.current),
-      snapshot: summarizeSessionIdsByGroup(sessionDragSnapshotRef.current),
-    });
-    setDraggedSessionId(sourceData.sessionId);
+    setSessionDragIndicator(undefined);
   }) satisfies DragDropEventHandlers["onDragStart"];
 
+  const handleDragMove = ((event) => {
+    updateSessionDragIndicator(
+      getDragNativeEvent(event),
+      event.operation.source,
+      event.operation.target,
+    );
+  }) satisfies DragDropEventHandlers["onDragMove"];
+
   const handleDragOver = ((event) => {
-    if (event.canceled) {
-      return;
-    }
-
-    const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
-    const targetData = getSidebarDropData(event.operation.target as { data?: unknown });
-    if (sourceData?.kind !== "session" || !targetData || targetData.kind === "create-group") {
-      return;
-    }
-
-    const nextSessionIdsByGroup = move(sessionIdsByGroupRef.current, event);
-    if (haveSameSessionIdsByGroup(sessionIdsByGroupRef.current, nextSessionIdsByGroup)) {
-      return;
-    }
-
-    logSidebarDebug("dragOver.session", {
-      nextSessionIdsByGroup: summarizeSessionIdsByGroup(nextSessionIdsByGroup),
-      previousSessionIdsByGroup: summarizeSessionIdsByGroup(sessionIdsByGroupRef.current),
-      source: sourceData,
-      target: targetData,
-    });
-    setSessionIdsByGroup(nextSessionIdsByGroup);
+    updateSessionDragIndicator(
+      getDragNativeEvent(event),
+      event.operation.source,
+      event.operation.target,
+    );
   }) satisfies DragDropEventHandlers["onDragOver"];
 
   const handleDragEnd = ((event) => {
-    setDraggedSessionId(undefined);
-    setDragOverlayWidth(undefined);
+    setSessionDragIndicator(undefined);
+    const currentGroupIds = groupIdsRef.current;
+    const currentSessionIdsByGroup = sessionIdsByGroupRef.current;
+    const authoritativeGroupIds = workspaceGroupIds;
+    const previousSessionIdsByGroup = effectiveSessionIdsByGroup;
 
-    const sourceData = getSidebarDropData(event.operation.source as { data?: unknown });
-    const targetData = getSidebarDropData(event.operation.target as { data?: unknown });
+    const nativeEvent = getDragNativeEvent(event);
+    const sourceData = getSidebarDropData(event.operation.source);
+    const targetData = getSidebarDropData(event.operation.target);
+    const resolvedSessionDropTarget =
+      sourceData?.kind === "session"
+        ? resolveSessionDropTargetFromPoint(
+            nativeEvent,
+            currentSessionIdsByGroup,
+            targetData,
+            sourceData,
+          )
+        : undefined;
+    postSidebarDebugLog("session.dragEnd", {
+      canceled: event.canceled,
+      nativeEventType: nativeEvent?.type,
+      point: getClientPoint(nativeEvent),
+      resolvedSessionDropTarget,
+      sourceData,
+      targetData,
+    });
     if (!sourceData) {
       return;
     }
@@ -435,14 +398,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
         return;
       }
 
-      const nextGroupIds = move(groupIdsRef.current, event);
-      if (haveSameSessionOrder(groupIdsRef.current, nextGroupIds)) {
+      const nextGroupIds = move(currentGroupIds, event);
+      if (haveSameSessionOrder(authoritativeGroupIds, nextGroupIds)) {
         return;
       }
 
-      startTransition(() => {
-        setGroupIds(nextGroupIds);
-      });
       vscode.postMessage({
         groupIds: nextGroupIds,
         type: "syncGroupOrder",
@@ -454,106 +414,38 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       return;
     }
 
-    const snapshot = sessionDragSnapshotRef.current;
-    const restoreSnapshot = () => {
-      if (!snapshot) {
-        return;
-      }
-
-      startTransition(() => {
-        setSessionIdsByGroup(snapshot);
-      });
-    };
-
     if (event.canceled) {
-      logSidebarDebug("dragEnd.sessionCanceled", {
-        snapshot: summarizeSessionIdsByGroup(snapshot),
-        source: sourceData,
-        target: targetData,
-      });
-      restoreSnapshot();
-      sessionDragSnapshotRef.current = undefined;
       return;
     }
 
-    if (targetData?.kind === "create-group") {
-      logSidebarDebug("dragEnd.sessionCreateGroup", {
-        snapshot: summarizeSessionIdsByGroup(snapshot),
-        source: sourceData,
-      });
-      restoreSnapshot();
-      sessionDragSnapshotRef.current = undefined;
-      pendingCreateGroupRef.current = true;
-      vscode.postMessage({
-        sessionId: sourceData.sessionId,
-        type: "createGroupFromSession",
-      });
+    if (resolvedSessionDropTarget === null) {
       return;
     }
 
-    if (!targetData) {
-      logSidebarDebug("dragEnd.sessionNoTarget", {
-        snapshot: summarizeSessionIdsByGroup(snapshot),
-        source: sourceData,
-      });
-      restoreSnapshot();
-      sessionDragSnapshotRef.current = undefined;
+    if (!targetData && resolvedSessionDropTarget === undefined) {
       return;
     }
 
-    const nextSessionIdsByGroup = move(sessionIdsByGroupRef.current, event);
-    logSidebarDebug("dragEnd.sessionComputed", {
-      currentSessionIdsByGroup: summarizeSessionIdsByGroup(sessionIdsByGroupRef.current),
-      nextSessionIdsByGroup: summarizeSessionIdsByGroup(nextSessionIdsByGroup),
-      snapshot: summarizeSessionIdsByGroup(snapshot),
-      source: sourceData,
-      target: targetData,
-    });
-    if (!haveSameSessionIdsByGroup(sessionIdsByGroupRef.current, nextSessionIdsByGroup)) {
-      startTransition(() => {
-        setSessionIdsByGroup(nextSessionIdsByGroup);
-      });
-    }
-
-    sessionDragSnapshotRef.current = undefined;
-
-    const previousSessionIdsByGroup = snapshot ?? sessionIdsByGroupRef.current;
+    const nextSessionIdsByGroup =
+      resolvedSessionDropTarget !== undefined
+        ? moveSessionIdsByDropTarget(
+            currentSessionIdsByGroup,
+            sourceData.sessionId,
+            resolvedSessionDropTarget,
+          )
+        : move(currentSessionIdsByGroup, event);
     const previousGroupId = findSessionGroupId(previousSessionIdsByGroup, sourceData.sessionId);
     const nextGroupId = findSessionGroupId(nextSessionIdsByGroup, sourceData.sessionId);
     if (!previousGroupId || !nextGroupId) {
-      logSidebarDebug("dragEnd.sessionMissingGroupResolution", {
-        nextGroupId,
-        nextSessionIdsByGroup: summarizeSessionIdsByGroup(nextSessionIdsByGroup),
-        previousGroupId,
-        previousSessionIdsByGroup: summarizeSessionIdsByGroup(previousSessionIdsByGroup),
-        source: sourceData,
-      });
-      restoreSnapshot();
       return;
     }
 
     if (previousGroupId !== nextGroupId) {
       const targetIndex = nextSessionIdsByGroup[nextGroupId]?.indexOf(sourceData.sessionId);
       if (targetIndex == null || targetIndex < 0) {
-        logSidebarDebug("dragEnd.sessionMissingTargetIndex", {
-          nextGroupId,
-          nextSessionIdsByGroup: summarizeSessionIdsByGroup(nextSessionIdsByGroup),
-          previousGroupId,
-          source: sourceData,
-        });
-        restoreSnapshot();
         return;
       }
 
-      logSidebarDebug("dragEnd.sessionMoveToGroup", {
-        nextGroupId,
-        nextSessionIdsByGroup: summarizeSessionIdsByGroup(nextSessionIdsByGroup),
-        previousGroupId,
-        previousSessionIdsByGroup: summarizeSessionIdsByGroup(previousSessionIdsByGroup),
-        sessionId: sourceData.sessionId,
-        target: targetData,
-        targetIndex,
-      });
       vscode.postMessage({
         groupId: nextGroupId,
         sessionId: sourceData.sessionId,
@@ -569,13 +461,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       return;
     }
 
-    logSidebarDebug("dragEnd.sessionReorderWithinGroup", {
-      groupId: nextGroupId,
-      nextSessionIds: [...nextSessionIds],
-      previousSessionIds: [...previousSessionIds],
-      sessionId: sourceData.sessionId,
-      target: targetData,
-    });
     vscode.postMessage({
       groupId: nextGroupId,
       sessionIds: nextSessionIds,
@@ -588,13 +473,11 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
       <div
         className="stack"
         data-dimmed={String(isStartupInteractionBlocked)}
-        data-sidebar-theme={serverState.hud.theme}
+        data-sidebar-theme={theme}
         onDoubleClick={handleSidebarDoubleClick}
       >
         <CommandsPanel
-          commands={serverState.hud.commands}
           createRequestId={commandCreateRequestId}
-          isVsMuxDisabled={serverState.hud.isVsMuxDisabled}
           titlebarActions={
             <div
               className="sidebar-titlebar-controls"
@@ -649,12 +532,31 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                     className="session-context-menu-item"
                     onClick={() => {
                       setIsOverflowMenuOpen(false);
+                      setIsPreviousSessionsOpen(false);
+                      setIsScratchPadOpen(false);
+                      setIsDaemonSessionsOpen(true);
+                      vscode.postMessage({ type: "refreshDaemonSessions" });
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <IconHistory
+                      aria-hidden="true"
+                      className="session-context-menu-icon"
+                      size={14}
+                    />
+                    Running
+                  </button>
+                  <button
+                    className="session-context-menu-item"
+                    onClick={() => {
+                      setIsOverflowMenuOpen(false);
                       vscode.postMessage({ type: "toggleCompletionBell" });
                     }}
                     role="menuitem"
                     type="button"
                   >
-                    {serverState.hud.completionBellEnabled ? (
+                    {completionBellEnabled ? (
                       <IconBellOff
                         aria-hidden="true"
                         className="session-context-menu-icon"
@@ -667,7 +569,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                         size={14}
                       />
                     )}
-                    {getCompletionBellMenuLabel(serverState.hud)}
+                    {getCompletionBellMenuLabel(completionBellEnabled)}
                   </button>
                   <button
                     className="session-context-menu-item"
@@ -684,7 +586,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                       size={14}
                       stroke={1.8}
                     />
-                    Move to Other Side
+                    Change Sidebar
                   </button>
                   <button
                     className="session-context-menu-item"
@@ -710,7 +612,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
           vscode={vscode}
         />
         <AgentsPanel
-          agents={serverState.hud.agents}
           createRequestId={agentCreateRequestId}
           titlebarActions={
             <Tooltip.Root>
@@ -724,6 +625,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                     data-empty-space-blocking="true"
                     data-selected={String(isScratchPadOpen)}
                     onClick={() => {
+                      setIsDaemonSessionsOpen(false);
                       setIsPreviousSessionsOpen(false);
                       setIsScratchPadOpen((previous) => !previous);
                     }}
@@ -745,8 +647,6 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
         <section
           className="session-groups-panel"
           ref={sessionGroupsPanelRef}
-          aria-disabled={serverState.hud.isVsMuxDisabled}
-          data-dimmed={String(serverState.hud.isVsMuxDisabled)}
         >
           <div className="section-titlebar" data-empty-space-blocking="true">
             <div aria-hidden="true" className="section-titlebar-line" />
@@ -760,6 +660,7 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
                 className="floating-toolbar-button section-titlebar-action-button"
                 isSelected={isPreviousSessionsOpen}
                 onClick={() => {
+                  setIsDaemonSessionsOpen(false);
                   setIsScratchPadOpen(false);
                   setIsPreviousSessionsOpen((previous) => !previous);
                 }}
@@ -769,81 +670,61 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
               </ToolbarIconButton>
             </div>
           </div>
-          {fixedGroups.length > 0 ? (
+          {browserGroupIds.length > 0 ? (
             <div className="group-list">
-              {fixedGroups.map((group) => (
+              {browserGroupIds.map((groupId) => (
                 <SessionGroupSection
                   autoEdit={false}
                   canClose={false}
-                  group={group}
+                  groupId={groupId}
                   index={-1}
-                  key={group.groupId}
+                  key={groupId}
                   onAutoEditHandled={() => undefined}
-                  orderedSessions={group.sessions}
-                  showDebugSessionNumbers={serverState.hud.debuggingMode}
-                  showCloseButton={serverState.hud.showCloseButtonOnSessionCards}
-                  showHotkeys={serverState.hud.showHotkeysOnSessionCards}
                   vscode={vscode}
                 />
               ))}
             </div>
           ) : null}
           <DragDropProvider
+            key={`drag-structure-${structureRevision}`}
             onDragEnd={handleDragEnd}
+            onDragMove={handleDragMove}
             onDragOver={handleDragOver}
             onDragStart={handleDragStart}
             sensors={sensors}
           >
             <div className="group-list">
-              {orderedGroups.map((group, groupIndex) => (
+              {effectiveGroupIds.map((groupId, groupIndex) => (
                 <SessionGroupSection
-                  autoEdit={autoEditingGroupId === group.groupId}
-                  canClose={orderedGroups.length > 1}
-                  group={group}
+                  autoEdit={autoEditingGroupId === groupId}
+                  canClose={effectiveGroupIds.length > 1}
+                  groupId={groupId}
                   index={groupIndex}
-                  key={group.groupId}
+                  key={groupId}
                   onAutoEditHandled={() => setAutoEditingGroupId(undefined)}
-                  orderedSessions={group.orderedSessions}
-                  showDebugSessionNumbers={serverState.hud.debuggingMode}
-                  showCloseButton={serverState.hud.showCloseButtonOnSessionCards}
-                  showHotkeys={serverState.hud.showHotkeysOnSessionCards}
+                  onFocusRequested={applyLocalFocus}
+                  sessionDragIndicator={sessionDragIndicator}
                   vscode={vscode}
                 />
               ))}
-              <CreateGroupDropTarget
-                isVisible={Boolean(draggedSessionId) && orderedGroups.length < MAX_GROUP_COUNT}
-              />
             </div>
-            <DragOverlay
-              dropAnimation={{
-                duration: 220,
-                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
-            >
-              {draggedSession ? (
-                <div
-                  className="session session-drag-overlay"
-                  data-activity={draggedSession.activity}
-                  data-focused={String(draggedSession.isFocused)}
-                  data-has-agent-icon={String(Boolean(draggedSession.agentIcon))}
-                  data-running={String(draggedSession.isRunning)}
-                  data-visible={String(draggedSession.isVisible)}
-                  style={
-                    dragOverlayWidth ? { width: `${Math.round(dragOverlayWidth)}px` } : undefined
-                  }
-                >
-                  <SessionCardContent
-                    session={draggedSession}
-                    showCloseButton={false}
-                    showDebugSessionNumbers={serverState.hud.debuggingMode}
-                    showHotkeys={serverState.hud.showHotkeysOnSessionCards}
-                  />
-                </div>
-              ) : null}
-            </DragOverlay>
           </DragDropProvider>
-          {fixedGroups.length === 0 &&
-          orderedGroups.every((group) => group.sessions.length === 0) ? (
+          <button
+            aria-label="Create a new group"
+            className="group-create-button"
+            data-empty-space-blocking="true"
+            disabled={effectiveGroupIds.length >= MAX_GROUP_COUNT}
+            onClick={() => {
+              pendingCreateGroupRef.current = true;
+              vscode.postMessage({ type: "createGroup" });
+            }}
+            type="button"
+          >
+            <IconPlus aria-hidden="true" className="group-create-button-icon" size={14} />
+            New Group
+          </button>
+          {browserGroupIds.length === 0 &&
+          effectiveGroupIds.every((groupId) => (effectiveSessionIdsByGroup[groupId] ?? []).length === 0) ? (
             <div className="empty" data-empty-space-blocking="true">
               Create the first session to start the workspace.
             </div>
@@ -852,19 +733,46 @@ export function SidebarApp({ vscode }: SidebarAppProps) {
         <PreviousSessionsModal
           isOpen={isPreviousSessionsOpen}
           onClose={() => setIsPreviousSessionsOpen(false)}
-          previousSessions={serverState.previousSessions}
-          showDebugSessionNumbers={serverState.hud.debuggingMode}
-          showHotkeys={serverState.hud.showHotkeysOnSessionCards}
+          vscode={vscode}
+        />
+        <DaemonSessionsModal
+          isOpen={isDaemonSessionsOpen}
+          onClose={() => setIsDaemonSessionsOpen(false)}
           vscode={vscode}
         />
         <ScratchPadModal
-          content={serverState.scratchPadContent}
           isOpen={isScratchPadOpen}
           onClose={() => setIsScratchPadOpen(false)}
           onSave={(content) => {
             vscode.postMessage({
               content,
               type: "saveScratchPad",
+            });
+          }}
+        />
+        <GitCommitModal
+          draft={
+            gitCommitDraft ?? {
+              confirmLabel: "Commit",
+              description: "",
+              requestId: "",
+              suggestedSubject: "",
+            }
+          }
+          isOpen={gitCommitDraft !== undefined}
+          onCancel={(requestId) => {
+            setGitCommitDraft(undefined);
+            vscode.postMessage({
+              requestId,
+              type: "cancelSidebarGitCommit",
+            });
+          }}
+          onConfirm={(requestId, subject) => {
+            setGitCommitDraft(undefined);
+            vscode.postMessage({
+              requestId,
+              subject,
+              type: "confirmSidebarGitCommit",
             });
           }}
         />
@@ -959,33 +867,13 @@ function ToolbarIconButton({
   );
 }
 
-function createSessionIdsByGroup(groups: readonly SidebarSessionGroup[]): SessionIdsByGroup {
+function createWorkspaceSessionIdsByGroup(
+  workspaceGroupIds: readonly string[],
+  sessionIdsByGroup: SessionIdsByGroup,
+): SessionIdsByGroup {
   return Object.fromEntries(
-    groups.map((group) => [group.groupId, group.sessions.map((session) => session.sessionId)]),
+    workspaceGroupIds.map((groupId) => [groupId, sessionIdsByGroup[groupId] ?? []]),
   );
-}
-
-function getWorkspaceSidebarGroups(groups: readonly SidebarSessionGroup[]): SidebarSessionGroup[] {
-  return groups.filter((group) => group.kind !== "browser");
-}
-
-function cloneSessionIdsByGroup(sessionIdsByGroup: SessionIdsByGroup): SessionIdsByGroup {
-  return Object.fromEntries(
-    Object.entries(sessionIdsByGroup).map(([groupId, sessionIds]) => [groupId, [...sessionIds]]),
-  );
-}
-
-function applySessionOrder(
-  sessionById: ReadonlyMap<string, SidebarSessionItem>,
-  orderedSessionIds: readonly string[] | undefined,
-): SidebarSessionItem[] {
-  if (!orderedSessionIds) {
-    return [];
-  }
-
-  return orderedSessionIds
-    .map((sessionId) => sessionById.get(sessionId))
-    .filter((session): session is SidebarSessionItem => session !== undefined);
 }
 
 function findSessionGroupId(
@@ -997,18 +885,6 @@ function findSessionGroupId(
   )?.[0];
 }
 
-function haveSameSessionIdsByGroup(left: SessionIdsByGroup, right: SessionIdsByGroup): boolean {
-  const leftGroupIds = Object.keys(left);
-  const rightGroupIds = Object.keys(right);
-  if (!haveSameSessionOrder(leftGroupIds, rightGroupIds)) {
-    return false;
-  }
-
-  return leftGroupIds.every((groupId) =>
-    haveSameSessionOrder(left[groupId] ?? [], right[groupId] ?? []),
-  );
-}
-
 function haveSameSessionOrder(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) {
     return false;
@@ -1018,41 +894,11 @@ function haveSameSessionOrder(left: readonly string[], right: readonly string[])
 }
 
 function findCreatedGroupId(
-  previousGroups: readonly SidebarSessionGroup[],
-  nextGroups: readonly SidebarSessionGroup[],
+  previousGroups: readonly string[],
+  nextGroups: readonly string[],
 ): string | undefined {
-  const previousGroupIds = new Set(previousGroups.map((group) => group.groupId));
-  return nextGroups.find((group) => !previousGroupIds.has(group.groupId))?.groupId;
-}
-
-function summarizeSidebarGroups(groups: readonly SidebarSessionGroup[]) {
-  return groups.map((group) => ({
-    groupId: group.groupId,
-    isActive: group.isActive,
-    sessionIds: group.sessions.map((session) => session.sessionId),
-    title: group.title,
-  }));
-}
-
-function summarizeSessionIdsByGroup(sessionIdsByGroup: SessionIdsByGroup | undefined) {
-  if (!sessionIdsByGroup) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    Object.entries(sessionIdsByGroup).map(([groupId, sessionIds]) => [groupId, [...sessionIds]]),
-  );
-}
-
-function safeSerializeSidebarDebugDetails(details: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(details);
-  } catch (error) {
-    return JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      unserializable: true,
-    });
-  }
+  const previousGroupIds = new Set(previousGroups);
+  return nextGroups.find((groupId) => !previousGroupIds.has(groupId));
 }
 
 function OverflowIcon() {
@@ -1065,6 +911,141 @@ function OverflowIcon() {
   );
 }
 
-function getCompletionBellMenuLabel(hud: SidebarHudState): string {
-  return hud.completionBellEnabled ? "Disable Notifications" : "Enable Notifications";
+function getCompletionBellMenuLabel(completionBellEnabled: boolean): string {
+  return completionBellEnabled ? "Disable Notifying" : "Enable Notifying";
+}
+
+function resolveSessionDropTargetFromPoint(
+  nativeEvent: Event | undefined,
+  sessionIdsByGroup: SessionIdsByGroup,
+  targetData: ReturnType<typeof getSidebarDropData>,
+  sourceData: Extract<ReturnType<typeof getSidebarDropData>, { kind: "session" }> | undefined,
+) {
+  const point = getClientPoint(nativeEvent);
+  const candidates = [
+    getSidebarSessionDropTargetFromDropData(targetData, point),
+    point ? getSidebarSessionDropTargetAtPoint(document, point.x, point.y) : undefined,
+    getSidebarSessionDropTargetFromEvent(nativeEvent),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || isSourceSessionDropTarget(candidate, sourceData)) {
+      continue;
+    }
+
+    const groupSessionIds = sessionIdsByGroup[candidate.groupId];
+    if (!groupSessionIds) {
+      continue;
+    }
+
+    if (candidate.kind === "session" && !groupSessionIds.includes(candidate.sessionId)) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return null;
+}
+
+function haveSameSessionDropTarget(
+  left: SidebarSessionDropTarget | undefined,
+  right: SidebarSessionDropTarget | undefined,
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  if (left.groupId !== right.groupId || left.kind !== right.kind || left.position !== right.position) {
+    return false;
+  }
+
+  if (left.kind !== "session" || right.kind !== "session") {
+    return true;
+  }
+
+  return left.sessionId === right.sessionId;
+}
+
+function isSourceSessionDropTarget(
+  candidate: SidebarSessionDropTarget,
+  sourceData: Extract<ReturnType<typeof getSidebarDropData>, { kind: "session" }> | undefined,
+): boolean {
+  return Boolean(
+    sourceData &&
+      candidate.kind === "session" &&
+      candidate.groupId === sourceData.groupId &&
+      candidate.sessionId === sourceData.sessionId,
+  );
+}
+
+function getSidebarSessionDropTargetFromDropData(
+  targetData: ReturnType<typeof getSidebarDropData>,
+  point: ReturnType<typeof getClientPoint>,
+): SidebarSessionDropTarget | undefined {
+  if (targetData?.kind === "session") {
+    const sessionElement = getTargetSessionElement(targetData.sessionId, point);
+    if (!sessionElement) {
+      return undefined;
+    }
+
+    const bounds = sessionElement.getBoundingClientRect();
+    const relativeY = point?.y ?? bounds.top + bounds.height / 2;
+    const position: "after" | "before" =
+      relativeY > bounds.top + bounds.height / 2 ? "after" : "before";
+    return {
+      groupId: targetData.groupId,
+      kind: "session",
+      position,
+      sessionId: targetData.sessionId,
+    };
+  }
+
+  if (targetData?.kind === "group") {
+    const groupElement = document.querySelector<HTMLElement>(
+      `[data-sidebar-group-id="${targetData.groupId}"]`,
+    );
+    if (!groupElement) {
+      return undefined;
+    }
+
+    const bounds = groupElement.getBoundingClientRect();
+    const relativeY = point?.y ?? bounds.top;
+    const position: "end" | "start" =
+      relativeY > bounds.top + bounds.height / 2 ? "end" : "start";
+    return {
+      groupId: targetData.groupId,
+      kind: "group",
+      position,
+    };
+  }
+
+  return undefined;
+}
+
+function getTargetSessionElement(
+  sessionId: string,
+  point: ReturnType<typeof getClientPoint>,
+): HTMLElement | undefined {
+  const selector = `[data-sidebar-session-id="${sessionId}"]`;
+  if (point) {
+    for (const element of document.elementsFromPoint(point.x, point.y)) {
+      const sessionElement = element.closest<HTMLElement>(selector);
+      if (sessionElement && sessionElement.dataset.dragging !== "true") {
+        return sessionElement;
+      }
+    }
+  }
+
+  return Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
+    (sessionElement) => sessionElement.dataset.dragging !== "true",
+  );
+}
+
+function getDragNativeEvent(value: unknown): Event | undefined {
+  return isObjectRecord(value) && value.nativeEvent instanceof Event ? value.nativeEvent : undefined;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

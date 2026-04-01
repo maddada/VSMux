@@ -1,4 +1,6 @@
 import { IconCopy, IconPencil, IconX } from "@tabler/icons-react";
+import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -8,15 +10,44 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
-import { SessionCardContent } from "./session-card-content";
+import { SessionCardContent, SessionFloatingAgentIcon } from "./session-card-content";
 import { createSessionDragData } from "./sidebar-dnd";
+import { useSidebarStore } from "./sidebar-store";
 import type { WebviewApi } from "./webview-api";
 
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 156;
 const CONTEXT_MENU_ITEM_HEIGHT_PX = 34;
 const CONTEXT_MENU_VERTICAL_PADDING_PX = 12;
+const SESSION_CARD_DRAG_HOLD_DELAY_MS = 160;
+const SESSION_CARD_DRAG_HOLD_TOLERANCE_PX = 8;
+const TOUCH_SESSION_CARD_DRAG_HOLD_DELAY_MS = 160;
+const TOUCH_SESSION_CARD_DRAG_HOLD_TOLERANCE_PX = 5;
+
+const sessionCardSensors = [
+  PointerSensor.configure({
+    activationConstraints(event) {
+      if (event.pointerType === "touch") {
+        return [
+          new PointerActivationConstraints.Delay({
+            tolerance: TOUCH_SESSION_CARD_DRAG_HOLD_TOLERANCE_PX,
+            value: TOUCH_SESSION_CARD_DRAG_HOLD_DELAY_MS,
+          }),
+        ];
+      }
+
+      return [
+        new PointerActivationConstraints.Delay({
+          tolerance: SESSION_CARD_DRAG_HOLD_TOLERANCE_PX,
+          value: SESSION_CARD_DRAG_HOLD_DELAY_MS,
+        }),
+      ];
+    },
+  }),
+  KeyboardSensor,
+];
 
 type ContextMenuPosition = {
   x: number;
@@ -24,12 +55,11 @@ type ContextMenuPosition = {
 };
 
 export type SortableSessionCardProps = {
+  dropPosition?: "after" | "before";
   groupId: string;
   index: number;
-  session: SidebarSessionItem;
-  showDebugSessionNumbers: boolean;
-  showCloseButton: boolean;
-  showHotkeys: boolean;
+  onFocusRequested?: (groupId: string, sessionId: string) => void;
+  sessionId: string;
   vscode: WebviewApi;
 };
 
@@ -52,28 +82,58 @@ function clampContextMenuPosition(
 }
 
 export function SortableSessionCard({
+  dropPosition,
   groupId,
   index,
-  session,
-  showDebugSessionNumbers,
-  showCloseButton,
-  showHotkeys,
+  onFocusRequested,
+  sessionId,
   vscode,
 }: SortableSessionCardProps) {
+  const session = useSidebarStore((state) => state.sessionsById[sessionId]);
+  const { showCloseButton, showDebugSessionNumbers, showHotkeys } = useSidebarStore(
+    useShallow((state) => ({
+      showCloseButton: state.hud.showCloseButtonOnSessionCards,
+      showDebugSessionNumbers: state.hud.debuggingMode,
+      showHotkeys: state.hud.showHotkeysOnSessionCards,
+    })),
+  );
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
   const menuRef = useRef<HTMLDivElement>(null);
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
-  const isBrowserSession = session.kind === "browser";
-  const canCopyResumeCommand = !isBrowserSession && supportsResumeCommandCopy(session);
+  const isBrowserSession = session?.kind === "browser";
+  const canCopyResumeCommand = session ? !isBrowserSession && supportsResumeCommandCopy(session) : false;
+  const postSessionDragDebugLog = (event: string, details: Record<string, unknown>) => {
+    if (!showDebugSessionNumbers) {
+      return;
+    }
+
+    vscode.postMessage({
+      details: {
+        groupId,
+        index,
+        sessionId,
+        ...details,
+      },
+      event,
+      type: "sidebarDebugLog",
+    });
+  };
   const sortable = useSortable({
     accept: "session",
     data: createSessionDragData(groupId, session.sessionId),
     disabled: isBrowserSession || contextMenuPosition !== undefined,
+    feedback: "clone",
     group: groupId,
-    id: session.sessionId,
+    id: sessionId,
     index,
+    plugins: [SortableKeyboardPlugin],
+    sensors: sessionCardSensors,
     type: "session",
   });
+
+  if (!session) {
+    return null;
+  }
 
   useEffect(() => {
     setContextMenuPosition(undefined);
@@ -143,11 +203,6 @@ export function SortableSessionCard({
     }
 
     setContextMenuPosition(undefined);
-    console.debug("[VSmux Sidebar] promptRenameSession click", {
-      groupId,
-      sessionAlias: session.alias,
-      sessionId: session.sessionId,
-    });
     vscode.postMessage({
       sessionId: session.sessionId,
       type: "promptRenameSession",
@@ -170,6 +225,18 @@ export function SortableSessionCard({
     });
   };
 
+  const requestFocusSession = () => {
+    const shouldAcknowledgeAttention = session.activity === "attention";
+    if (session.isFocused && !shouldAcknowledgeAttention) {
+      return;
+    }
+
+    if (!session.isFocused) {
+      onFocusRequested?.(groupId, session.sessionId);
+    }
+    vscode.postMessage({ sessionId: session.sessionId, type: "focusSession" });
+  };
+
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
       event.preventDefault();
@@ -185,7 +252,7 @@ export function SortableSessionCard({
 
     event.preventDefault();
     event.stopPropagation();
-    vscode.postMessage({ sessionId: session.sessionId, type: "focusSession" });
+    requestFocusSession();
   };
 
   return (
@@ -193,11 +260,15 @@ export function SortableSessionCard({
       <div
         className="session-frame"
         data-activity={session.activity}
+        data-dragging={String(Boolean(sortable.isDragging))}
+        data-drop-position={dropPosition}
+        data-drop-target={String(Boolean(sortable.isDropTarget))}
         data-focused={String(session.isFocused)}
         data-running={String(session.isRunning)}
         data-visible={String(session.isVisible)}
         ref={sortable.ref}
       >
+        <SessionFloatingAgentIcon agentIcon={session.agentIcon} />
         <article
           aria-expanded={contextMenuPosition ? true : undefined}
           aria-haspopup="menu"
@@ -206,10 +277,44 @@ export function SortableSessionCard({
           data-activity={session.activity}
           data-has-agent-icon={String(Boolean(session.agentIcon))}
           data-dragging={String(Boolean(sortable.isDragging))}
+          data-drop-position={dropPosition}
+          data-drop-target={String(Boolean(sortable.isDropTarget))}
           data-focused={String(session.isFocused)}
           data-running={String(session.isRunning)}
           data-sidebar-session-id={session.sessionId}
           data-visible={String(session.isVisible)}
+          onPointerCancel={(event) => {
+            postSessionDragDebugLog("session.pointerCancel", {
+              button: event.button,
+              buttons: event.buttons,
+              clientX: event.clientX,
+              clientY: event.clientY,
+              pointerId: event.pointerId,
+              pointerType: event.pointerType,
+            });
+          }}
+          onPointerDown={(event) => {
+            postSessionDragDebugLog("session.pointerDown", {
+              button: event.button,
+              buttons: event.buttons,
+              clientX: event.clientX,
+              clientY: event.clientY,
+              isDragging: sortable.isDragging,
+              pointerId: event.pointerId,
+              pointerType: event.pointerType,
+            });
+          }}
+          onPointerUp={(event) => {
+            postSessionDragDebugLog("session.pointerUp", {
+              button: event.button,
+              buttons: event.buttons,
+              clientX: event.clientX,
+              clientY: event.clientY,
+              isDragging: sortable.isDragging,
+              pointerId: event.pointerId,
+              pointerType: event.pointerType,
+            });
+          }}
           onAuxClick={(event) => {
             if (event.button !== 1) {
               return;
@@ -227,10 +332,7 @@ export function SortableSessionCard({
               return;
             }
 
-            vscode.postMessage({
-              sessionId: session.sessionId,
-              type: "focusSession",
-            });
+            requestFocusSession();
           }}
           onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
             event.preventDefault();

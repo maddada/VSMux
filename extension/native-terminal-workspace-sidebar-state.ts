@@ -3,6 +3,7 @@ import {
   getSessionGridLayoutVisibleCount,
   getVisiblePrimaryTitle,
   getVisibleSessionNumber,
+  getVisibleTerminalTitle,
   getOrderedSessions,
   isBrowserSession,
   isSessionGridFocusModeActive,
@@ -53,6 +54,7 @@ type BuildSidebarMessageOptions = {
   getSessionSnapshot: (sessionId: string) => TerminalSessionSnapshot | undefined;
   getT3ActivityState: (sessionRecord: SessionRecord) => {
     activity: TerminalAgentStatus;
+    detail?: string;
     isRunning: boolean;
   };
   getTerminalTitle: (sessionId: string) => string | undefined;
@@ -62,9 +64,9 @@ type BuildSidebarMessageOptions = {
     derivedAgentName: string | undefined,
   ) => SidebarAgentIcon | undefined;
   hud: SidebarHydrateMessage["hud"];
-  ownsNativeTerminalControl: boolean;
   platform: "default" | "mac";
   previousSessions: SidebarPreviousSessionItem[];
+  revision: number;
   scratchPadContent: string;
   terminalHasLiveProjection: (sessionId: string) => boolean;
   browserHasLiveProjection: (sessionId: string) => boolean;
@@ -83,12 +85,29 @@ type CreatePreviousSessionEntryOptions = Pick<
   | "getSidebarAgentIcon"
   | "getT3ActivityState"
   | "getTerminalTitle"
-  | "ownsNativeTerminalControl"
   | "platform"
   | "terminalHasLiveProjection"
   | "workspaceId"
 > & {
   group: SessionGroupRecord;
+  sessionRecord: SessionRecord;
+};
+
+type CreateSidebarSessionItemOptions = Pick<
+  BuildSidebarMessageOptions,
+  | "browserHasLiveProjection"
+  | "debuggingMode"
+  | "getEffectiveSessionActivity"
+  | "getSessionAgentLaunch"
+  | "getSessionSnapshot"
+  | "getSidebarAgentIcon"
+  | "getT3ActivityState"
+  | "getTerminalTitle"
+  | "platform"
+  | "terminalHasLiveProjection"
+  | "workspaceId"
+  | "workspaceSnapshot"
+> & {
   sessionRecord: SessionRecord;
 };
 
@@ -104,6 +123,7 @@ export function buildSidebarMessage(
     hud: options.hud,
     groups: [browserGroup, ...workspaceGroups],
     previousSessions: options.previousSessions,
+    revision: options.revision,
     scratchPadContent: options.scratchPadContent,
     type: options.type,
   };
@@ -139,6 +159,24 @@ export function createPreviousSessionEntry(
       isVisible: false,
     },
   };
+}
+
+export function createSidebarSessionItem(
+  options: CreateSidebarSessionItemOptions,
+): SidebarSessionItem | undefined {
+  const group = options.workspaceSnapshot.groups.find((candidateGroup) =>
+    candidateGroup.snapshot.sessions.some(
+      (sessionRecord) => sessionRecord.sessionId === options.sessionRecord.sessionId,
+    ),
+  );
+  if (!group) {
+    return undefined;
+  }
+
+  return buildSidebarItem(group, group.snapshot, options.sessionRecord, {
+    ...options,
+    activeGroupId: options.workspaceSnapshot.activeGroupId,
+  });
 }
 
 function buildSidebarGroup(
@@ -205,20 +243,21 @@ function buildSidebarItem(
     | "debuggingMode"
     | "getEffectiveSessionActivity"
     | "getSessionAgentLaunch"
-    | "getSessionSnapshot"
-    | "getSidebarAgentIcon"
-    | "getT3ActivityState"
-    | "getTerminalTitle"
-    | "ownsNativeTerminalControl"
-    | "platform"
-    | "terminalHasLiveProjection"
-    | "workspaceId"
+  | "getSessionSnapshot"
+  | "getSidebarAgentIcon"
+  | "getT3ActivityState"
+  | "getTerminalTitle"
+  | "platform"
+  | "terminalHasLiveProjection"
+  | "workspaceId"
   > & { activeGroupId: string },
 ): SidebarSessionItem {
   const isActiveGroup = options.activeGroupId === group.groupId;
   const isVisible =
     isActiveGroup && presentedSnapshot.visibleSessionIds.includes(sessionRecord.sessionId);
   const isFocused = isActiveGroup && presentedSnapshot.focusedSessionId === sessionRecord.sessionId;
+  const visiblePrimaryTitle = getVisibleTerminalTitle(getVisiblePrimaryTitle(sessionRecord.title));
+  const visibleTerminalTitle = getVisibleTerminalTitle(options.getTerminalTitle(sessionRecord.sessionId));
 
   if (isBrowserSession(sessionRecord)) {
     return {
@@ -249,7 +288,13 @@ function buildSidebarItem(
       agentIcon: "t3",
       alias: sessionRecord.alias,
       column: sessionRecord.column,
-      detail: `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`,
+      detail:
+        activityState.detail ??
+        (activityState.activity !== "working" &&
+        !isPendingT3ThreadId(sessionRecord.t3.threadId) &&
+        sessionRecord.t3.threadId.trim()
+          ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
+          : undefined),
       isFocused,
       isRunning: activityState.isRunning,
       isVisible,
@@ -278,35 +323,20 @@ function buildSidebarItem(
     ),
     alias: sessionRecord.alias,
     column: sessionRecord.column,
-    detail: options.ownsNativeTerminalControl
-      ? sessionSnapshot.errorMessage
-      : "Managed in another VS Code window",
+    detail: sessionSnapshot.errorMessage,
     isFocused,
     isRunning:
       sessionSnapshot.status === "running" &&
       options.terminalHasLiveProjection(sessionRecord.sessionId),
     isVisible,
     kind: "workspace",
-    primaryTitle: getVisibleTerminalTitle(getVisiblePrimaryTitle(sessionRecord.title)),
+    primaryTitle: visiblePrimaryTitle ?? visibleTerminalTitle,
     row: sessionRecord.row,
     sessionId: sessionRecord.sessionId,
     sessionNumber: getDebuggingSessionNumber(sessionRecord, options.debuggingMode),
     shortcutLabel: getSessionShortcutLabel(sessionRecord.slotIndex, options.platform),
-    terminalTitle: getVisibleTerminalTitle(options.getTerminalTitle(sessionRecord.sessionId)),
+    terminalTitle: visiblePrimaryTitle ? visibleTerminalTitle : undefined,
   };
-}
-
-function getVisibleTerminalTitle(title: string | undefined): string | undefined {
-  const normalizedTitle = title?.trim();
-  if (!normalizedTitle) {
-    return undefined;
-  }
-
-  if (/^(~|\/)/.test(normalizedTitle)) {
-    return undefined;
-  }
-
-  return normalizedTitle;
 }
 
 function getDebuggingSessionNumber(
@@ -318,4 +348,8 @@ function getDebuggingSessionNumber(
   }
 
   return getVisibleSessionNumber(sessionRecord);
+}
+
+function isPendingT3ThreadId(threadId: string): boolean {
+  return threadId.startsWith("pending-");
 }

@@ -14,6 +14,7 @@ import {
 import type { SidebarAgentButton } from "../shared/sidebar-agents";
 import type { SidebarCommandButton } from "../shared/sidebar-commands";
 import {
+  createGroupInWorkspace,
   createGroupFromSessionInWorkspace,
   focusGroupInWorkspace,
   focusSessionInWorkspace,
@@ -33,7 +34,6 @@ type SidebarStoryWorkspaceOptions = {
   completionBellEnabled: boolean;
   completionSound: SidebarHydrateMessage["hud"]["completionSound"];
   debuggingMode: boolean;
-  isVsMuxDisabled: boolean;
   scratchPadContent: string;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
@@ -60,7 +60,6 @@ export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): Sid
       completionBellEnabled: message.hud.completionBellEnabled,
       completionSound: message.hud.completionSound,
       debuggingMode: message.hud.debuggingMode,
-      isVsMuxDisabled: message.hud.isVsMuxDisabled,
       scratchPadContent: message.scratchPadContent,
       showCloseButtonOnSessionCards: message.hud.showCloseButtonOnSessionCards,
       showHotkeysOnSessionCards: message.hud.showHotkeysOnSessionCards,
@@ -85,8 +84,9 @@ export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): Sid
         message.groups.find((group) => group.isActive)?.groupId ??
         message.groups[0]?.groupId ??
         "group-1",
-      groups: message.groups.map((group) => createSessionGroupRecord(group, message)),
+      groups: message.groups.map((group) => createSessionGroupRecord(group)),
       nextGroupNumber: getNextGroupNumber(message.groups),
+      nextSessionDisplayId: Number.NaN,
       nextSessionNumber: getNextSessionNumber(message.groups),
     }),
   };
@@ -134,8 +134,9 @@ export function createSidebarStoryMessage(
       workspace.options.completionSound,
       workspace.options.agents,
       workspace.options.commands,
-      workspace.options.isVsMuxDisabled,
     ),
+    previousSessions: [],
+    revision: 1,
     scratchPadContent: workspace.options.scratchPadContent,
     type,
   };
@@ -146,6 +147,9 @@ export function reduceSidebarStoryWorkspace(
   message: SidebarToExtensionMessage,
 ): SidebarStoryWorkspace | undefined {
   switch (message.type) {
+    case "sidebarDebugLog":
+      return undefined;
+
     case "moveSessionToGroup": {
       const result = moveSessionToGroupInWorkspace(
         workspace.snapshot,
@@ -196,15 +200,6 @@ export function reduceSidebarStoryWorkspace(
       return {
         ...workspace,
         snapshot: toggleFullscreenSessionInWorkspace(workspace.snapshot),
-      };
-
-    case "toggleVsMuxDisabled":
-      return {
-        ...workspace,
-        options: {
-          ...workspace.options,
-          isVsMuxDisabled: !workspace.options.isVsMuxDisabled,
-        },
       };
 
     case "saveScratchPad":
@@ -356,6 +351,11 @@ export function reduceSidebarStoryWorkspace(
       return result.changed ? { ...workspace, snapshot: result.snapshot } : undefined;
     }
 
+    case "createGroup": {
+      const result = createGroupInWorkspace(workspace.snapshot);
+      return result.changed ? { ...workspace, snapshot: result.snapshot } : undefined;
+    }
+
     default:
       return undefined;
   }
@@ -382,14 +382,43 @@ function createSessionGroupRecord(
 }
 
 function createSessionRecord(session: SidebarSessionItem): SessionRecord {
-  return {
+  const baseRecord = {
     alias: session.alias,
     column: session.column,
     createdAt: new Date(0).toISOString(),
+    displayId: session.sessionNumber ?? parseDisplayId(session.shortcutLabel),
     row: session.row,
     sessionId: session.sessionId,
     slotIndex: parseShortcutIndex(session.shortcutLabel),
     title: session.primaryTitle ?? session.terminalTitle ?? session.alias,
+  };
+
+  if (session.kind === "browser") {
+    return {
+      ...baseRecord,
+      browser: {
+        url: session.detail ?? "",
+      },
+      kind: "browser",
+    };
+  }
+
+  if (session.agentIcon === "t3") {
+    return {
+      ...baseRecord,
+      kind: "t3",
+      t3: {
+        projectId: `story-project-${session.sessionId}`,
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "pending-thread",
+        workspaceRoot: "/tmp/story-workspace",
+      },
+    };
+  }
+
+  return {
+    ...baseRecord,
+    kind: "terminal",
   };
 }
 
@@ -397,6 +426,11 @@ function parseShortcutIndex(shortcutLabel: string): number {
   const matchedIndex = shortcutLabel.match(/(\d+)$/)?.[1];
   const index = matchedIndex ? Number.parseInt(matchedIndex, 10) : Number.NaN;
   return Number.isFinite(index) && index > 0 ? index : 1;
+}
+
+function parseDisplayId(shortcutLabel: string): string {
+  const matchedIndex = shortcutLabel.match(/(\d+)$/)?.[1];
+  return matchedIndex ? matchedIndex.padStart(2, "0") : "00";
 }
 
 function getNextGroupNumber(groups: readonly SidebarHydrateMessage["groups"][number][]): number {

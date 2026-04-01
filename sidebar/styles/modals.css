@@ -102,6 +102,244 @@
   width: min(280px, 100%);
 }
 
+.daemon-sessions-modal {
+  gap: 14px;
+  max-height: calc(100vh - 24px);
+  max-width: min(840px, 100%);
+  width: min(840px, 100%);
+}
+
+.daemon-sessions-toolbar {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.daemon-sessions-search-input {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  min-width: 0;
+  text-transform: none;
+}
+
+.daemon-sessions-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.daemon-sessions-toolbar-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.daemon-sessions-toolbar-button-danger {
+  border-color: color-mix(in srgb, #b03a3a 56%, var(--app-border));
+  color: color-mix(in srgb, #e78484 72%, var(--app-foreground) 28%);
+}
+
+.daemon-sessions-toolbar-button-danger:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.daemon-sessions-modal-body {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 184px);
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.daemon-sessions-summary {
+  background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.daemon-sessions-summary-row {
+  align-items: baseline;
+  column-gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 110px) minmax(0, 1fr);
+}
+
+.daemon-sessions-summary-label {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daemon-sessions-summary-value {
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.daemon-sessions-error-banner {
+  background: color-mix(in srgb, #712626 16%, var(--app-card));
+  border: 1px solid color-mix(in srgb, #b03a3a 38%, var(--app-border));
+  border-radius: 12px;
+  color: color-mix(in srgb, #efb2b2 80%, var(--app-foreground) 20%);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.daemon-sessions-list {
+  display: grid;
+  gap: 12px;
+}
+
+.daemon-session-card {
+  background: color-mix(in srgb, var(--app-card-active) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+}
+
+.daemon-session-card[data-current-workspace="true"] {
+  border-color: color-mix(in srgb, var(--app-button-background) 52%, var(--app-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-button-background) 12%, transparent);
+}
+
+.daemon-session-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.daemon-session-card-title-wrap {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.daemon-session-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.daemon-session-card-subtitle {
+  color: var(--app-muted);
+  font-family: var(
+    --vscode-editor-font-family,
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.daemon-session-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.daemon-session-badge {
+  background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-button-background) 24%, var(--app-border));
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 6px 8px;
+  text-transform: uppercase;
+}
+
+.daemon-session-badge-current {
+  background: color-mix(in srgb, var(--app-button-background) 18%, transparent);
+}
+
+.daemon-session-card-details {
+  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 10px;
+}
+
+.daemon-session-detail {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.daemon-session-detail-label {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.daemon-session-detail-value {
+  font-family: var(
+    --vscode-editor-font-family,
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.daemon-session-card-error {
+  background: color-mix(in srgb, #712626 10%, transparent);
+  border: 1px solid color-mix(in srgb, #b03a3a 24%, var(--app-border));
+  border-radius: 12px;
+  color: color-mix(in srgb, #efb2b2 72%, var(--app-foreground) 28%);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+.daemon-session-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.daemon-session-action-button {
+  min-width: 112px;
+}
+
+.daemon-session-action-button-danger {
+  border-color: color-mix(in srgb, #b03a3a 56%, var(--app-border));
+  color: color-mix(in srgb, #e78484 72%, var(--app-foreground) 28%);
+}
+
+.daemon-sessions-empty-state {
+  line-height: 1.35;
+  min-height: 112px;
+  padding: 12px;
+  text-align: center;
+}
+
 .previous-sessions-toolbar {
   display: grid;
   gap: 10px;
@@ -310,5 +548,23 @@
 
   .previous-sessions-search-input {
     font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .daemon-session-card-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .daemon-session-card-header {
+    display: grid;
+  }
+
+  .daemon-session-card-badges {
+    justify-content: flex-start;
+  }
+
+  .daemon-sessions-summary-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

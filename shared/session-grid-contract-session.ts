@@ -264,7 +264,7 @@ export function createSessionRecord(
     row: position.row,
     sessionId,
     slotIndex,
-    title: `Session ${sessionNumber}`,
+    title,
   };
 }
 
@@ -303,6 +303,24 @@ export function getVisiblePrimaryTitle(title: string): string | undefined {
   }
 
   return normalizedTitle;
+}
+
+export function getVisibleTerminalTitle(title: string | undefined): string | undefined {
+  const normalizedTitle = title?.trim();
+  if (!normalizedTitle) {
+    return undefined;
+  }
+
+  if (/^(~|\/)/.test(normalizedTitle)) {
+    return undefined;
+  }
+
+  const sanitizedTitle = normalizedTitle.replace(/^[\s\u2800-\u28ff·•⋅◦]+/, "").trim();
+  if (!sanitizedTitle) {
+    return undefined;
+  }
+
+  return sanitizedTitle;
 }
 
 export function getOrderedSessions(snapshot: SessionGridSnapshot): SessionRecord[] {

@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { DragDropProvider } from "@dnd-kit/react";
-import { isSortable, useSortable } from "@dnd-kit/react/sortable";
-import { IconCodeDots, IconPencil, IconTrash } from "@tabler/icons-react";
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
+import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
+import { IconCodeDots, IconLoader2, IconPencil, IconTrash } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -11,8 +11,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { SidebarAgentButton } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
+import { useSidebarStore } from "./sidebar-store";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import { AgentConfigModal, type AgentConfigDraft } from "./agent-config-modal";
 import type { WebviewApi } from "./webview-api";
@@ -22,7 +24,6 @@ const CONTEXT_MENU_WIDTH_PX = 180;
 const CONTEXT_MENU_HEIGHT_PX = 110;
 
 type AgentsPanelProps = {
-  agents: SidebarAgentButton[];
   createRequestId: number;
   titlebarActions?: ReactNode;
   vscode: WebviewApi;
@@ -63,24 +64,35 @@ function createAgentDragData(agentId: string): AgentDragData {
   };
 }
 
-function getAgentDragData(candidate: { data?: unknown } | null | undefined) {
-  const data = candidate?.data;
-  if (!data || typeof data !== "object" || !("kind" in data)) {
+function getAgentDragData(candidate: unknown): AgentDragData | undefined {
+  if (!hasData(candidate)) {
     return undefined;
   }
 
-  const parsedData = data as Partial<AgentDragData>;
-  return parsedData.kind === "sidebar-agent" && typeof parsedData.agentId === "string"
-    ? (parsedData as AgentDragData)
+  const data = candidate.data;
+  if (!isObjectRecord(data) || !("kind" in data)) {
+    return undefined;
+  }
+
+  return data.kind === "sidebar-agent" && typeof data.agentId === "string"
+    ? {
+        agentId: data.agentId,
+        kind: "sidebar-agent",
+      }
     : undefined;
 }
 
 export function AgentsPanel({
-  agents,
   createRequestId,
   titlebarActions,
   vscode,
 }: AgentsPanelProps) {
+  const { agents, pendingAgentIds } = useSidebarStore(
+    useShallow((state) => ({
+      agents: state.hud.agents,
+      pendingAgentIds: state.hud.pendingAgentIds,
+    })),
+  );
   const [contextMenu, setContextMenu] = useState<AgentMenuState>();
   const [draftAgentIds, setDraftAgentIds] = useState<string[] | undefined>();
   const [editingAgent, setEditingAgent] = useState<AgentConfigDraft>();
@@ -92,14 +104,14 @@ export function AgentsPanel({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
+      if (isNode(event.target) && menuRef.current?.contains(event.target)) {
         return;
       }
 
       setContextMenu(undefined);
     };
     const handleContextMenu = (event: MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
+      if (isNode(event.target) && menuRef.current?.contains(event.target)) {
         return;
       }
 
@@ -162,7 +174,9 @@ export function AgentsPanel({
   }, [createRequestId]);
 
   const orderedAgents = useMemo(() => {
-    const agentById = new Map(agents.map((agent) => [agent.agentId, agent] as const));
+    const agentById = new Map<string, SidebarAgentButton>(
+      agents.map((agent) => [agent.agentId, agent]),
+    );
     const orderedAgentIds = draftAgentIds
       ? mergeAgentIds(
           draftAgentIds,
@@ -175,24 +189,22 @@ export function AgentsPanel({
       .filter((agent): agent is SidebarAgentButton => agent !== undefined);
   }, [agents, draftAgentIds]);
 
-  const handleDragEnd = (event: {
-    canceled?: boolean;
-    operation: {
-      source: unknown;
-      target: unknown;
-    };
-  }) => {
+  const handleDragEnd = ((event) => {
     if (event.canceled) {
       return;
     }
 
+    if (!isSortableOperation(event.operation)) {
+      return;
+    }
+
     const { source, target } = event.operation;
-    if (!isSortable(source) || !isSortable(target)) {
+    if (!source || !target) {
       return;
     }
 
     const sourceData = getAgentDragData(source);
-    const targetData = getAgentDragData(target as { data?: unknown });
+    const targetData = getAgentDragData(target);
     if (!sourceData || !targetData || sourceData.agentId === targetData.agentId) {
       return;
     }
@@ -213,7 +225,7 @@ export function AgentsPanel({
       agentIds: nextAgentIds,
       type: "syncSidebarAgentOrder",
     });
-  };
+  }) satisfies DragDropEventHandlers["onDragEnd"];
 
   return (
     <>
@@ -238,6 +250,7 @@ export function AgentsPanel({
                   <SortableAgentButton
                     agent={agent}
                     index={index}
+                    isLaunching={pendingAgentIds.includes(agent.agentId)}
                     isContextMenuOpen={contextMenu?.agent.agentId === agent.agentId}
                     key={agent.agentId}
                     onContextMenu={(event) => {
@@ -338,6 +351,7 @@ export function AgentsPanel({
 type SortableAgentButtonProps = {
   agent: SidebarAgentButton;
   index: number;
+  isLaunching: boolean;
   isContextMenuOpen: boolean;
   onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onRun: () => void;
@@ -346,6 +360,7 @@ type SortableAgentButtonProps = {
 function SortableAgentButton({
   agent,
   index,
+  isLaunching,
   isContextMenuOpen,
   onContextMenu,
   onRun,
@@ -353,7 +368,7 @@ function SortableAgentButton({
   const sortable = useSortable({
     accept: "sidebar-agent",
     data: createAgentDragData(agent.agentId),
-    disabled: isContextMenuOpen,
+    disabled: isContextMenuOpen || isLaunching,
     group: "sidebar-agents",
     id: agent.agentId,
     index,
@@ -365,32 +380,46 @@ function SortableAgentButton({
       <Tooltip.Trigger
         render={
           <button
-            aria-label={`Launch ${agent.name}`}
+            aria-busy={isLaunching}
+            aria-label={isLaunching ? `Starting ${agent.name}` : `Launch ${agent.name}`}
             className="agent-button"
             data-dragging={String(Boolean(sortable.isDragging))}
             data-empty-space-blocking="true"
             data-icon-only="true"
-            onClick={onRun}
-            onContextMenu={onContextMenu}
+            data-loading={String(isLaunching)}
+            disabled={isLaunching}
+            onClick={isLaunching ? undefined : onRun}
+            onContextMenu={isLaunching ? undefined : onContextMenu}
             ref={sortable.ref}
             type="button"
           >
             <span className="agent-button-icon-shell">
-              {agent.icon ? (
-                <img
-                  alt=""
+              {isLaunching ? (
+                <IconLoader2
                   aria-hidden="true"
-                  className="agent-button-icon"
-                  data-agent-icon={agent.icon}
-                  src={AGENT_LOGOS[agent.icon]}
-                />
-              ) : (
-                <IconCodeDots
-                  aria-hidden="true"
-                  className="agent-button-fallback-icon"
+                  className="agent-button-loading-icon"
                   size={18}
                   stroke={1.8}
                 />
+              ) : (
+                <>
+                  {agent.icon ? (
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      className="agent-button-icon"
+                      data-agent-icon={agent.icon}
+                      src={AGENT_LOGOS[agent.icon]}
+                    />
+                  ) : (
+                    <IconCodeDots
+                      aria-hidden="true"
+                      className="agent-button-fallback-icon"
+                      size={18}
+                      stroke={1.8}
+                    />
+                  )}
+                </>
               )}
             </span>
           </button>
@@ -399,7 +428,11 @@ function SortableAgentButton({
       <Tooltip.Portal>
         <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
           <Tooltip.Popup className="tooltip-popup">
-            {agent.command ? agent.name : `Configure ${agent.name}`}
+            {isLaunching
+              ? `Starting ${agent.name}`
+              : agent.command
+                ? agent.name
+                : `Configure ${agent.name}`}
           </Tooltip.Popup>
         </Tooltip.Positioner>
       </Tooltip.Portal>
@@ -451,4 +484,16 @@ function haveSameAgentOrder(left: readonly string[], right: readonly string[]): 
   }
 
   return left.every((agentId, index) => agentId === right[index]);
+}
+
+function hasData(candidate: unknown): candidate is { data?: unknown } {
+  return isObjectRecord(candidate) && "data" in candidate;
+}
+
+function isNode(value: EventTarget | null): value is Node {
+  return value instanceof Node;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

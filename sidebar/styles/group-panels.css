@@ -1,6 +1,6 @@
 .session-groups-panel {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
 }
 
 .session-groups-panel[data-dimmed="true"] {
@@ -16,7 +16,7 @@
 .section-titlebar {
   align-items: center;
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   min-width: 0;
 }
@@ -24,7 +24,7 @@
 .section-titlebar-label {
   color: color-mix(in srgb, var(--app-foreground) 74%, var(--app-muted) 26%);
   flex: none;
-  font-size: 11px;
+  font-size: calc(11px * var(--sidebar-density-scale));
   font-weight: 700;
   justify-self: center;
   letter-spacing: 0.12em;
@@ -57,7 +57,7 @@
 .section-titlebar-actions {
   align-items: center;
   display: inline-flex;
-  gap: 8px;
+  gap: calc(8px * var(--sidebar-density-scale));
   min-width: 0;
 }
 

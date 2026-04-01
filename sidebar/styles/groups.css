@@ -1,18 +1,18 @@
 .group-list {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
 }
 
 .group {
   border: 1px solid var(--app-border);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--sidebar-density-scale));
   background: color-mix(in srgb, var(--app-card) 94%, transparent);
   box-shadow: 0 10px 24px color-mix(in srgb, var(--app-shadow) 12%, transparent);
   cursor: pointer;
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--sidebar-density-scale));
   overflow: visible;
-  padding: 12px;
+  padding: calc(12px * var(--sidebar-density-scale));
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -37,6 +37,13 @@
     0 18px 32px color-mix(in srgb, var(--app-button-background) 14%, transparent);
 }
 
+.group:has(.session[data-drop-target="true"]) {
+  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 28%, transparent),
+    0 18px 32px color-mix(in srgb, var(--app-button-background) 14%, transparent);
+}
+
 .group-head {
   min-width: 0;
   position: relative;
@@ -50,7 +57,7 @@
 .group-title-row {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--sidebar-density-scale));
   min-width: 0;
 }
 
@@ -71,7 +78,7 @@
 
 .group-title,
 .group-title-input {
-  font-size: 13px;
+  font-size: calc(13px * var(--sidebar-density-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -155,9 +162,9 @@
 .group-control-count-menu {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(2, 18px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   justify-content: center;
-  min-width: 0;
+  min-width: 132px;
 }
 
 .group-control-menu-item {
@@ -171,9 +178,17 @@
 .group-control-count-menu .group-control-menu-item {
   height: 24px;
   min-width: 0;
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: 8px;
+  padding-right: 8px;
   justify-content: center;
+}
+
+.group-control-count-value,
+.group-control-count-option-value {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
 }
 
 .group-control-menu-item[data-selected="true"] {
@@ -193,10 +208,10 @@
   cursor: default;
   display: inline-flex;
   flex: none;
-  gap: 7px;
+  gap: calc(7px * var(--sidebar-density-scale));
   justify-content: flex-end;
   margin-left: auto;
-  min-height: 14px;
+  min-height: calc(14px * var(--sidebar-density-scale));
   opacity: 0;
   visibility: hidden;
 }
@@ -213,8 +228,8 @@
 .group-meta-icon,
 .group-meta-focus-icon {
   display: block;
-  height: 14px;
-  width: 14px;
+  height: calc(14px * var(--sidebar-density-scale));
+  width: calc(14px * var(--sidebar-density-scale));
 }
 
 .group-meta-frame,
@@ -236,7 +251,7 @@
 .group-meta-count-text {
   dominant-baseline: middle;
   fill: currentColor;
-  font-size: 14px;
+  font-size: calc(14px * var(--sidebar-density-scale));
   font-weight: 700;
   opacity: 0.92;
   transform: translateY(1px);
@@ -245,10 +260,10 @@
 .group-title-input {
   background: color-mix(in srgb, var(--app-card-active) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--app-button-background) 44%, var(--app-border));
-  border-radius: 12px;
+  border-radius: calc(12px * var(--sidebar-density-scale));
   color: inherit;
   outline: none;
-  padding: 6px 9px;
+  padding: calc(6px * var(--sidebar-density-scale)) calc(9px * var(--sidebar-density-scale));
   width: 100%;
 }
 
@@ -281,11 +296,25 @@
   border-radius: 16px;
 }
 
+.group:has(.session[data-drop-target="true"]) .group-sessions {
+  background: color-mix(in srgb, var(--app-button-background) 8%, transparent);
+  border-radius: 16px;
+}
+
 .group-empty-drop-target {
   display: grid;
+  position: relative;
 }
 
 .group-empty-drop-target[data-drop-target="true"] .group-empty-state {
+  background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
+  border-color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 18%, transparent),
+    0 12px 24px color-mix(in srgb, var(--app-button-background) 8%, transparent);
+}
+
+.group:has(.session[data-drop-target="true"]) .group-empty-state {
   background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
   border-color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-border));
   box-shadow:
@@ -309,46 +338,40 @@
   width: 100%;
 }
 
-.group-create-target {
+.group-create-button {
   align-items: center;
-  border: 1px dashed color-mix(in srgb, var(--app-button-background) 42%, var(--app-border));
-  border-radius: 22px;
-  color: var(--app-muted);
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-  min-height: 84px;
-  padding: 16px 12px;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.group-create-target[data-drop-target="true"] {
-  border-color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-border));
-  background: color-mix(in srgb, var(--app-button-background) 12%, transparent);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 18%, transparent),
-    0 14px 30px color-mix(in srgb, var(--app-button-background) 10%, transparent);
-}
-
-.group-create-plus {
-  align-items: center;
-  background: color-mix(in srgb, var(--app-button-background) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--app-button-background) 34%, transparent);
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-foreground) 28%);
+  background: color-mix(in srgb, var(--app-card-active) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, transparent);
+  border-radius: calc(16px * var(--sidebar-density-scale));
+  color: color-mix(in srgb, var(--app-button-background) 76%, var(--app-foreground) 24%);
+  cursor: pointer;
   display: inline-flex;
-  font-size: 24px;
-  height: 42px;
+  gap: calc(8px * var(--sidebar-density-scale));
   justify-content: center;
-  line-height: 1;
-  width: 42px;
+  min-height: calc(38px * var(--sidebar-density-scale));
+  padding: calc(10px * var(--sidebar-density-scale)) calc(14px * var(--sidebar-density-scale));
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+  width: 100%;
 }
 
-.group-create-copy {
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
+.group-create-button:hover,
+.group-create-button:focus-visible {
+  background: color-mix(in srgb, var(--app-button-background) 12%, var(--app-card-active) 88%);
+  border-color: color-mix(in srgb, var(--app-button-background) 54%, var(--app-border));
+  color: var(--app-button-background);
+  outline: none;
+}
+
+.group-create-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.group-create-button-icon {
+  display: block;
+  flex: none;
 }
