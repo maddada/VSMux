@@ -20,6 +20,10 @@ import type {
   TerminalWorkspaceBackendTitleChange,
 } from "./terminal-workspace-backend";
 import {
+  readPersistedSessionStateFromFile,
+  type PersistedSessionState,
+} from "./session-state-file";
+import {
   createBlockedSessionSnapshot,
   createDisconnectedSessionSnapshot,
   getDefaultShell,
@@ -265,7 +269,10 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return;
     }
 
-    this.sessions.set(sessionId, createDisconnectedSessionSnapshot(sessionId, this.options.workspaceId));
+    this.sessions.set(
+      sessionId,
+      await this.createPersistedDisconnectedSnapshot(sessionId, this.options.workspaceId),
+    );
     this.changeSessionsEmitter.fire();
   }
 
@@ -278,7 +285,10 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     for (const sessionRecord of this.sessionRecordBySessionId.values()) {
       this.sessions.set(
         sessionRecord.sessionId,
-        createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
+        await this.createPersistedDisconnectedSnapshot(
+          sessionRecord.sessionId,
+          this.options.workspaceId,
+        ),
       );
     }
     this.changeSessionsEmitter.fire();
@@ -297,7 +307,10 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       const nextSnapshot =
         nextSnapshotsBySessionId.get(sessionId) ??
         this.sessions.get(sessionId) ??
-        createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId);
+        (await this.createPersistedDisconnectedSnapshot(
+          sessionRecord.sessionId,
+          this.options.workspaceId,
+        ));
       const previousSnapshot = this.sessions.get(sessionId);
       const previousTitle = this.sessionTitleBySessionId.get(sessionId);
       if (!haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot)) {
@@ -368,6 +381,29 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     return normalizedTitle;
   }
+
+  private async createPersistedDisconnectedSnapshot(
+    sessionId: string,
+    workspaceId: string,
+  ): Promise<TerminalSessionSnapshot> {
+    const snapshot = createDisconnectedSessionSnapshot(sessionId, workspaceId);
+    const persistedState = await readPersistedSessionStateFromFile(
+      this.getSessionAgentStateFilePath(sessionId),
+    );
+    return applyPersistedSessionStateToDisconnectedSnapshot(snapshot, persistedState);
+  }
+}
+
+export function applyPersistedSessionStateToDisconnectedSnapshot(
+  snapshot: TerminalSessionSnapshot,
+  persistedState: PersistedSessionState,
+): TerminalSessionSnapshot {
+  return {
+    ...snapshot,
+    agentName: persistedState.agentName,
+    agentStatus: persistedState.agentStatus,
+    title: persistedState.title,
+  };
 }
 
 function describeTerminalSessionPresentationDiff(

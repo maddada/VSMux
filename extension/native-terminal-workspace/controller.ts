@@ -406,6 +406,16 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     if (source === "sidebar") {
       this.enqueueWorkspaceAutoFocus(sessionId, "sidebar");
     }
+    if (shouldReattachDetachedTerminal) {
+      await this.backend.createOrAttachSession(sessionRecord);
+      logVSmuxDebug("controller.focusSession.explicitTerminalCreateOrAttach", {
+        durationMs: Date.now() - focusStartedAt,
+        focusRequestId,
+        sessionId,
+        shouldResumeDeadTerminal,
+        source,
+      });
+    }
     const isVisiblePresentationFocus =
       this.isSessionVisibleInWorkspace(sessionId) && !shouldReattachDetachedTerminal;
     const sidebarRefreshPromise =
