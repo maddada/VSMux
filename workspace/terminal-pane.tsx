@@ -1043,9 +1043,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           height: Math.round(bounds.height),
           width: Math.round(bounds.width),
         };
-        fitRef.current?.fit();
-        terminal.refresh(0, terminal.rows - 1);
-        updateScrollToBottomButtonVisibilityRef.current?.();
+        nudgeTerminalHeightRef.current?.(() => {
+          terminal.refresh(0, terminal.rows - 1);
+          requestAnimationFrame(() => {
+            updateScrollToBottomButtonVisibilityRef.current?.();
+          });
+        });
       });
     });
   }, [isVisible, refreshRequestId]);

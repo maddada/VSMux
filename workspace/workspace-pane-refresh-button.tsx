@@ -13,10 +13,14 @@ export const WorkspacePaneRefreshButton: React.FC<WorkspacePaneRefreshButtonProp
     draggable={false}
     onClick={(event) => {
       event.stopPropagation();
-      onRefresh();
+      if (event.detail === 0) {
+        onRefresh();
+      }
     }}
     onMouseDown={(event) => {
+      event.preventDefault();
       event.stopPropagation();
+      onRefresh();
     }}
     type="button"
   >

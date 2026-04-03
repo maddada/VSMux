@@ -82,7 +82,7 @@ type T3IframeBootstrapPayload = {
 function createT3IframeHtml(payload: T3IframeBootstrapPayload): string {
   const csp = [
     "default-src 'none'",
-    "script-src http:",
+    "script-src 'unsafe-eval' 'wasm-unsafe-eval' http:",
     "style-src 'unsafe-inline' http:",
     "img-src http: https: data:",
     "font-src http: https: data:",

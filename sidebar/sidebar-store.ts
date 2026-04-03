@@ -1,8 +1,13 @@
-import { create } from "zustand";
-import { createDefaultSidebarAgentButtons } from "../shared/sidebar-agents";
-import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
-import { createDefaultSidebarGitState } from "../shared/sidebar-git";
+import { create } from 'zustand';
+import { createDefaultSidebarAgentButtons } from '../shared/sidebar-agents';
+import { createDefaultSidebarCommandButtons } from '../shared/sidebar-commands';
+import { createDefaultSidebarGitState } from '../shared/sidebar-git';
+import {
+  createDefaultSidebarSectionCollapseState,
+  createDefaultSidebarSectionVisibility,
+} from '../shared/session-grid-contract';
 import type {
+  SidebarCollapsibleSection,
   SidebarDaemonSessionsStateMessage,
   SidebarHydrateMessage,
   SidebarHudState,
@@ -12,9 +17,9 @@ import type {
   SidebarSessionItem,
   SidebarSessionPresentationChangedMessage,
   SidebarSessionStateMessage,
-} from "../shared/session-grid-contract";
+} from '../shared/session-grid-contract';
 
-export type SidebarGroupRecord = Omit<SidebarSessionGroup, "sessions">;
+export type SidebarGroupRecord = Omit<SidebarSessionGroup, 'sessions'>;
 
 type SidebarStoreDataState = {
   browserGroupIds: string[];
@@ -39,6 +44,7 @@ type SidebarStoreActions = {
   reset: () => void;
   setDaemonSessionsState: (message: SidebarDaemonSessionsStateMessage | undefined) => void;
   setGitCommitDraft: (message: SidebarPromptGitCommitMessage | undefined) => void;
+  setSectionCollapsed: (section: SidebarCollapsibleSection, collapsed: boolean) => void;
 };
 
 export type SidebarStoreState = SidebarStoreDataState & SidebarStoreActions;
@@ -53,27 +59,29 @@ export function createInitialSidebarStoreDataState(): SidebarStoreDataState {
     hud: {
       agentManagerZoomPercent: 100,
       agents: createDefaultSidebarAgentButtons(),
+      collapsedSections: createDefaultSidebarSectionCollapseState(),
       commands: createDefaultSidebarCommandButtons(),
       completionBellEnabled: false,
-      completionSound: "ping",
-      completionSoundLabel: "Ping",
+      completionSound: 'ping',
+      completionSoundLabel: 'Ping',
       debuggingMode: false,
       focusedSessionTitle: undefined,
       git: createDefaultSidebarGitState(),
       highlightedVisibleCount: 1,
       isFocusModeActive: false,
       pendingAgentIds: [],
+      sectionVisibility: createDefaultSidebarSectionVisibility(),
       showCloseButtonOnSessionCards: false,
       showHotkeysOnSessionCards: false,
       theme: getInitialSidebarTheme(),
-      viewMode: "grid",
+      viewMode: 'grid',
       visibleCount: 1,
       visibleSlotLabels: [],
     },
     pendingFocusedSessionId: undefined,
     previousSessions: [],
     revision: 0,
-    scratchPadContent: "",
+    scratchPadContent: '',
     sessionIdsByGroup: {},
     sessionsById: {},
     workspaceGroupIds: [],
@@ -100,35 +108,49 @@ export const useSidebarStore = create<SidebarStoreState>((set) => ({
   setGitCommitDraft: (message) => {
     set({ gitCommitDraft: message });
   },
+  setSectionCollapsed: (section, collapsed) => {
+    set((state) => {
+      if (state.hud.collapsedSections[section] === collapsed) {
+        return state;
+      }
+
+      return {
+        hud: {
+          ...state.hud,
+          collapsedSections: {
+            ...state.hud.collapsedSections,
+            [section]: collapsed,
+          },
+        },
+      };
+    });
+  },
 }));
 
 export function resetSidebarStore() {
   useSidebarStore.getState().reset();
 }
 
-function getInitialSidebarTheme(): SidebarHudState["theme"] {
-  if (typeof document === "undefined") {
-    return "dark-blue";
+function getInitialSidebarTheme(): SidebarHudState['theme'] {
+  if (typeof document === 'undefined') {
+    return 'dark-blue';
   }
 
-  return document.body.classList.contains("vscode-light") ||
-    document.body.classList.contains("vscode-high-contrast-light")
-    ? "light-blue"
-    : "dark-blue";
+  return document.body.classList.contains('vscode-light') ||
+    document.body.classList.contains('vscode-high-contrast-light')
+    ? 'light-blue'
+    : 'dark-blue';
 }
 
 function applySidebarMessageState(
   state: SidebarStoreState,
-  message: SidebarHydrateMessage | SidebarSessionStateMessage,
+  message: SidebarHydrateMessage | SidebarSessionStateMessage
 ): Partial<SidebarStoreState> | SidebarStoreState {
   if (message.revision < state.revision) {
     return state;
   }
 
-  const reconciledGroups = reconcilePendingFocusedSession(
-    message.groups,
-    state.pendingFocusedSessionId,
-  );
+  const reconciledGroups = reconcilePendingFocusedSession(message.groups, state.pendingFocusedSessionId);
   const normalizedGroups = normalizeSidebarGroups(state, reconciledGroups.groups);
 
   return {
@@ -148,7 +170,7 @@ function applySidebarMessageState(
 
 function applySessionPresentationMessageState(
   state: SidebarStoreState,
-  message: SidebarSessionPresentationChangedMessage,
+  message: SidebarSessionPresentationChangedMessage
 ): Partial<SidebarStoreState> | SidebarStoreState {
   const currentSession = state.sessionsById[message.session.sessionId];
   if (!currentSession || haveSameSidebarSessionItem(currentSession, message.session)) {
@@ -166,7 +188,7 @@ function applySessionPresentationMessageState(
 function applyLocalFocusState(
   state: SidebarStoreState,
   groupId: string,
-  sessionId: string,
+  sessionId: string
 ): Partial<SidebarStoreState> | SidebarStoreState {
   if (!state.groupsById[groupId] || !state.sessionsById[sessionId]) {
     return state;
@@ -200,9 +222,7 @@ function applyLocalFocusState(
 
       const isFocused = isActiveGroup && candidateSessionId === sessionId;
       const isVisible =
-        group.kind !== "browser" && isActiveGroup && candidateSessionId === sessionId
-          ? true
-          : session.isVisible;
+        group.kind !== 'browser' && isActiveGroup && candidateSessionId === sessionId ? true : session.isVisible;
       if (session.isFocused === isFocused && session.isVisible === isVisible) {
         continue;
       }
@@ -236,14 +256,9 @@ function applyLocalFocusState(
 function normalizeSidebarGroups(
   previousState: Pick<
     SidebarStoreDataState,
-    | "browserGroupIds"
-    | "groupOrder"
-    | "groupsById"
-    | "sessionIdsByGroup"
-    | "sessionsById"
-    | "workspaceGroupIds"
+    'browserGroupIds' | 'groupOrder' | 'groupsById' | 'sessionIdsByGroup' | 'sessionsById' | 'workspaceGroupIds'
   >,
-  groups: readonly SidebarSessionGroup[],
+  groups: readonly SidebarSessionGroup[]
 ) {
   const nextGroupOrder = groups.map((group) => group.groupId);
   const nextBrowserGroupIds: string[] = [];
@@ -253,7 +268,7 @@ function normalizeSidebarGroups(
   const nextSessionsById: Record<string, SidebarSessionItem> = {};
 
   for (const group of groups) {
-    if (group.kind === "browser") {
+    if (group.kind === 'browser') {
       nextBrowserGroupIds.push(group.groupId);
     } else {
       nextWorkspaceGroupIds.push(group.groupId);
@@ -274,32 +289,29 @@ function normalizeSidebarGroups(
     for (const session of group.sessions) {
       const previousSession = previousState.sessionsById[session.sessionId];
       nextSessionsById[session.sessionId] =
-        previousSession && haveSameSidebarSessionItem(previousSession, session)
-          ? previousSession
-          : session;
+        previousSession && haveSameSidebarSessionItem(previousSession, session) ? previousSession : session;
     }
   }
 
   return {
-    browserGroupIds:
-      haveSameStringArray(previousState.browserGroupIds, nextBrowserGroupIds)
-        ? previousState.browserGroupIds
-        : nextBrowserGroupIds,
-    groupOrder:
-      haveSameStringArray(previousState.groupOrder, nextGroupOrder) ? previousState.groupOrder : nextGroupOrder,
+    browserGroupIds: haveSameStringArray(previousState.browserGroupIds, nextBrowserGroupIds)
+      ? previousState.browserGroupIds
+      : nextBrowserGroupIds,
+    groupOrder: haveSameStringArray(previousState.groupOrder, nextGroupOrder)
+      ? previousState.groupOrder
+      : nextGroupOrder,
     groupsById: nextGroupsById,
     sessionIdsByGroup: nextSessionIdsByGroup,
     sessionsById: nextSessionsById,
-    workspaceGroupIds:
-      haveSameStringArray(previousState.workspaceGroupIds, nextWorkspaceGroupIds)
-        ? previousState.workspaceGroupIds
-        : nextWorkspaceGroupIds,
+    workspaceGroupIds: haveSameStringArray(previousState.workspaceGroupIds, nextWorkspaceGroupIds)
+      ? previousState.workspaceGroupIds
+      : nextWorkspaceGroupIds,
   };
 }
 
 function reconcilePendingFocusedSession(
   groups: readonly SidebarSessionGroup[],
-  pendingFocusedSessionId: string | undefined,
+  pendingFocusedSessionId: string | undefined
 ): {
   groups: SidebarSessionGroup[];
   pendingFocusedSessionId: string | undefined;
@@ -312,7 +324,7 @@ function reconcilePendingFocusedSession(
   }
 
   const containingGroup = groups.find((group) =>
-    group.sessions.some((session) => session.sessionId === pendingFocusedSessionId),
+    group.sessions.some((session) => session.sessionId === pendingFocusedSessionId)
   );
   if (!containingGroup) {
     return {
@@ -322,7 +334,7 @@ function reconcilePendingFocusedSession(
   }
 
   const isConfirmed = containingGroup.sessions.some(
-    (session) => session.sessionId === pendingFocusedSessionId && session.isFocused,
+    (session) => session.sessionId === pendingFocusedSessionId && session.isFocused
   );
   if (isConfirmed) {
     return {
@@ -341,9 +353,7 @@ function reconcilePendingFocusedSession(
           ...session,
           isFocused: isActiveGroup && session.sessionId === pendingFocusedSessionId,
           isVisible:
-            group.kind !== "browser" &&
-            isActiveGroup &&
-            session.sessionId === pendingFocusedSessionId
+            group.kind !== 'browser' && isActiveGroup && session.sessionId === pendingFocusedSessionId
               ? true
               : session.isVisible,
         })),

@@ -70,7 +70,7 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/vscode": "1.80.0",
+    "@types/vscode": "1.100.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "@vscode/vsce": "^3.7.1",
@@ -373,6 +373,30 @@
           "default": false,
           "description": "Show hotkey labels on session cards all the time instead of only revealing them when you hover a card."
         },
+        "VSmux.showSidebarActions": {
+          "title": "Show Sidebar Actions",
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Actions section in the VSmux sidebar."
+        },
+        "VSmux.showSidebarAgents": {
+          "title": "Show Sidebar Agents",
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Agents section in the VSmux sidebar."
+        },
+        "VSmux.showSidebarBrowsers": {
+          "title": "Show Sidebar Browsers",
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Browsers section in the VSmux sidebar when browser tabs are detected."
+        },
+        "VSmux.showSidebarGitButton": {
+          "title": "Show Sidebar Git Button",
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Git button inside the Actions section in the VSmux sidebar."
+        },
         "VSmux.completionSound": {
           "title": "Completion Sound",
           "type": "string",
@@ -614,7 +638,7 @@
   ],
   "icon": "media/VSmux-marketplace-icon.png",
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.100.0"
   },
   "packageManager": "pnpm@10.14.0",
   "pnpm": {

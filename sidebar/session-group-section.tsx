@@ -374,7 +374,11 @@ export function SessionGroupSection({
               />
             ) : (
               <div className="group-title-row">
-                <div className="group-title-handle" ref={sortable.handleRef}>
+                <div
+                  className="group-title-handle"
+                  data-draggable={String(!isBrowserGroup)}
+                  ref={isBrowserGroup ? undefined : sortable.handleRef}
+                >
                   <div className="group-title">{group.title}</div>
                 </div>
                 {group.isActive && !isBrowserGroup ? (

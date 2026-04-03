@@ -1,28 +1,28 @@
-import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel } from "../shared/completion-sound";
-import { createDefaultSidebarAgentButtons } from "../shared/sidebar-agents";
-import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
-import { createDefaultSidebarGitState } from "../shared/sidebar-git";
+import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel } from '../shared/completion-sound';
+import { createDefaultSidebarAgentButtons } from '../shared/sidebar-agents';
+import { createDefaultSidebarCommandButtons } from '../shared/sidebar-commands';
+import { createDefaultSidebarGitState } from '../shared/sidebar-git';
 import type {
   SidebarHydrateMessage,
   SidebarHudState,
   SidebarTheme,
   TerminalViewMode,
   VisibleSessionCount,
-} from "../shared/session-grid-contract";
-import { clampVisibleSessionCount } from "../shared/session-grid-contract";
-import { GROUPS_BY_FIXTURE } from "./sidebar-story-fixture-data";
+} from '../shared/session-grid-contract';
 import {
-  cloneGroups,
-  getFocusedSessionTitle,
-  getVisibleSlotLabels,
-} from "./sidebar-story-fixture-helpers";
+  clampVisibleSessionCount,
+  createDefaultSidebarSectionCollapseState,
+  createDefaultSidebarSectionVisibility,
+} from '../shared/session-grid-contract';
+import { GROUPS_BY_FIXTURE } from './sidebar-story-fixture-data';
+import { cloneGroups, getFocusedSessionTitle, getVisibleSlotLabels } from './sidebar-story-fixture-helpers';
 
 export type SidebarStoryFixture =
-  | "default"
-  | "selector-states"
-  | "overflow-stress"
-  | "empty-groups"
-  | "three-groups-stress";
+  | 'default'
+  | 'selector-states'
+  | 'overflow-stress'
+  | 'empty-groups'
+  | 'three-groups-stress';
 
 export type SidebarStoryArgs = {
   fixture: SidebarStoryFixture;
@@ -45,13 +45,14 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
       ...group,
       isFocusModeActive: group.isActive ? args.isFocusModeActive : false,
       layoutVisibleCount: group.isActive ? args.highlightedVisibleCount : visibleCount,
-      viewMode: group.isActive ? args.viewMode : "grid",
+      viewMode: group.isActive ? args.viewMode : 'grid',
       visibleCount,
     };
   });
   const hud: SidebarHudState = {
     agentManagerZoomPercent: 100,
     agents: createDefaultSidebarAgentButtons(),
+    collapsedSections: createDefaultSidebarSectionCollapseState(),
     commands: createDefaultSidebarCommandButtons(),
     completionBellEnabled: false,
     completionSound: DEFAULT_COMPLETION_SOUND,
@@ -62,6 +63,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     highlightedVisibleCount: args.highlightedVisibleCount,
     isFocusModeActive: args.isFocusModeActive,
     pendingAgentIds: [],
+    sectionVisibility: createDefaultSidebarSectionVisibility(),
     showCloseButtonOnSessionCards: args.showCloseButtonOnSessionCards,
     showHotkeysOnSessionCards: args.showHotkeysOnSessionCards,
     theme: args.theme,
@@ -75,7 +77,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     hud,
     previousSessions: [],
     revision: 1,
-    scratchPadContent: "",
-    type: "hydrate",
+    scratchPadContent: '',
+    type: 'hydrate',
   };
 }

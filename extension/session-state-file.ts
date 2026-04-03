@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import type { TerminalAgentStatus } from "../shared/terminal-host-protocol";
 
@@ -100,6 +100,10 @@ export async function updatePersistedSessionStateFile(
 
   await writePersistedSessionStateToFile(filePath, nextState);
   return nextState;
+}
+
+export async function deletePersistedSessionStateFile(filePath: string): Promise<void> {
+  await rm(filePath, { force: true }).catch(() => undefined);
 }
 
 function normalizePersistedSessionValue(value: string | undefined): string | undefined {

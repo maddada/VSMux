@@ -535,7 +535,6 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
       onDrop={canDrag ? onDrop : undefined}
       onMouseDown={() => {
         onLocalFocus();
-        onRefreshAllTerminals();
         if (!isFocused) {
           debugLog("focus.mouseDownRequestsFocus", {
             sessionId: pane.sessionId,
@@ -570,7 +569,6 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
             isVisible={pane.isVisible}
             onActivate={() => {
               onLocalFocus();
-              onRefreshAllTerminals();
               if (!isFocused) {
                 onFocus();
               }

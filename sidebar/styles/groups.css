@@ -62,13 +62,16 @@
 }
 
 .group-title-handle {
-  cursor: grab;
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.group-title-handle:active {
+.group-title-handle[data-draggable="true"] {
+  cursor: grab;
+}
+
+.group-title-handle[data-draggable="true"]:active {
   cursor: grabbing;
 }
 
@@ -348,6 +351,7 @@
   display: inline-flex;
   gap: calc(8px * var(--sidebar-density-scale));
   justify-content: center;
+  margin-bottom: calc(10px * var(--sidebar-density-scale));
   min-height: calc(38px * var(--sidebar-density-scale));
   padding: calc(10px * var(--sidebar-density-scale)) calc(14px * var(--sidebar-density-scale));
   transition:

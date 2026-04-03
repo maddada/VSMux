@@ -1,18 +1,21 @@
-import {
-  DEFAULT_COMPLETION_SOUND,
-  getCompletionSoundLabel,
-  type CompletionSoundSetting,
-} from "./completion-sound";
-import { createDefaultSidebarAgentButtons, type SidebarAgentButton } from "./sidebar-agents";
-import { createDefaultSidebarCommandButtons, type SidebarCommandButton } from "./sidebar-commands";
+import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel, type CompletionSoundSetting } from './completion-sound';
+import { createDefaultSidebarAgentButtons, type SidebarAgentButton } from './sidebar-agents';
+import { createDefaultSidebarCommandButtons, type SidebarCommandButton } from './sidebar-commands';
 import {
   DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   type SessionGridSnapshot,
   type SessionRecord,
   type SidebarTheme,
-} from "./session-grid-contract-core";
-import { createDefaultSidebarGitState, type SidebarGitState } from "./sidebar-git";
-import type { SidebarHudState, SidebarSessionItem } from "./session-grid-contract-sidebar";
+} from './session-grid-contract-core';
+import { createDefaultSidebarGitState, type SidebarGitState } from './sidebar-git';
+import {
+  createDefaultSidebarSectionCollapseState,
+  createDefaultSidebarSectionVisibility,
+  type SidebarHudState,
+  type SidebarSectionCollapseState,
+  type SidebarSectionVisibility,
+  type SidebarSessionItem,
+} from './session-grid-contract-sidebar';
 import {
   getOrderedSessions,
   getSessionGridLayoutVisibleCount,
@@ -21,11 +24,11 @@ import {
   getVisiblePrimaryTitle,
   getVisibleSessionNumber,
   isSessionGridFocusModeActive,
-} from "./session-grid-contract-session";
+} from './session-grid-contract-session';
 
 export function createSidebarHudState(
   snapshot: SessionGridSnapshot,
-  theme: SidebarTheme = "dark-blue",
+  theme: SidebarTheme = 'dark-blue',
   agentManagerZoomPercent = DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   showCloseButtonOnSessionCards = false,
   showHotkeysOnSessionCards = false,
@@ -36,15 +39,16 @@ export function createSidebarHudState(
   commands: SidebarCommandButton[] = createDefaultSidebarCommandButtons(),
   pendingAgentIds: string[] = [],
   git: SidebarGitState = createDefaultSidebarGitState(),
+  sectionVisibility: SidebarSectionVisibility = createDefaultSidebarSectionVisibility(),
+  collapsedSections: SidebarSectionCollapseState = createDefaultSidebarSectionCollapseState()
 ): SidebarHudState {
   const sessionById = new Map(snapshot.sessions.map((session) => [session.sessionId, session]));
-  const focusedSession = snapshot.focusedSessionId
-    ? sessionById.get(snapshot.focusedSessionId)
-    : undefined;
+  const focusedSession = snapshot.focusedSessionId ? sessionById.get(snapshot.focusedSessionId) : undefined;
 
   return {
     agentManagerZoomPercent,
     agents,
+    collapsedSections,
     commands,
     completionBellEnabled,
     completionSound,
@@ -55,6 +59,7 @@ export function createSidebarHudState(
     highlightedVisibleCount: getSessionGridLayoutVisibleCount(snapshot),
     isFocusModeActive: isSessionGridFocusModeActive(snapshot),
     pendingAgentIds,
+    sectionVisibility,
     showCloseButtonOnSessionCards,
     showHotkeysOnSessionCards,
     theme,
@@ -69,11 +74,11 @@ export function createSidebarHudState(
 
 export function createSidebarSessionItems(
   snapshot: SessionGridSnapshot,
-  platform: "default" | "mac" = "default",
+  platform: 'default' | 'mac' = 'default'
 ): SidebarSessionItem[] {
   const visibleIds = new Set(snapshot.visibleSessionIds);
   return getOrderedSessions(snapshot).map((session) => ({
-    activity: "idle",
+    activity: 'idle',
     activityLabel: undefined,
     agentIcon: undefined,
     alias: session.alias,

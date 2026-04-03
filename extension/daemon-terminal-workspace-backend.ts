@@ -20,6 +20,7 @@ import type {
   TerminalWorkspaceBackendTitleChange,
 } from "./terminal-workspace-backend";
 import {
+  deletePersistedSessionStateFile,
   readPersistedSessionStateFromFile,
   type PersistedSessionState,
 } from "./session-state-file";
@@ -203,6 +204,11 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     await this.runtime.kill(this.options.workspaceId, sessionId);
     this.sessions.delete(sessionId);
     this.changeSessionsEmitter.fire();
+  }
+
+  public async deletePersistedSessionState(sessionId: string): Promise<void> {
+    await deletePersistedSessionStateFile(this.getSessionAgentStateFilePath(sessionId));
+    this.sessionTitleBySessionId.delete(sessionId);
   }
 
   public async renameSession(sessionRecord: SessionRecord): Promise<void> {

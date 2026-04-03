@@ -1,53 +1,54 @@
-import * as vscode from "vscode";
-import {
-  clampCompletionSoundSetting,
-  type CompletionSoundSetting,
-} from "../../shared/completion-sound";
+import * as vscode from 'vscode';
+import { clampCompletionSoundSetting, type CompletionSoundSetting } from '../../shared/completion-sound';
 import {
   clampAgentManagerZoomPercent,
   clampSidebarThemeSetting,
   DEFAULT_AGENT_MANAGER_ZOOM_PERCENT,
   type SidebarThemeSetting,
   type SidebarThemeVariant,
-} from "../../shared/session-grid-contract";
-import { DEFAULT_BROWSER_LAUNCH_URL } from "../../shared/sidebar-commands";
+} from '../../shared/session-grid-contract';
+import { DEFAULT_BROWSER_LAUNCH_URL } from '../../shared/sidebar-commands';
 
-export const SETTINGS_SECTION = "VSmux";
-export const BACKGROUND_SESSION_TIMEOUT_MINUTES_SETTING = "backgroundSessionTimeoutMinutes";
-export const MATCH_VISIBLE_TERMINAL_ORDER_SETTING = "matchVisibleTerminalOrderInSessionsArea";
-export const NATIVE_TERMINAL_ACTION_DELAY_MS_SETTING = "nativeTerminalActionDelayMs";
-export const KEEP_SESSION_GROUPS_UNLOCKED_SETTING = "keepSessionGroupsUnlocked";
-export const SEND_RENAME_COMMAND_ON_SIDEBAR_RENAME_SETTING = "sendRenameCommandOnSidebarRename";
-export const SIDEBAR_THEME_SETTING = "sidebarTheme";
-export const AGENT_MANAGER_ZOOM_SETTING = "agentManagerZoom";
-export const SHOW_CLOSE_BUTTON_ON_SESSION_CARDS_SETTING = "showCloseButtonOnSessionCards";
-export const SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING = "showHotkeysOnSessionCards";
-export const DEBUGGING_MODE_SETTING = "debuggingMode";
-export const COMPLETION_SOUND_SETTING = "completionSound";
-export const DEFAULT_BROWSER_LAUNCH_URL_SETTING = "defaultBrowserLaunchUrl";
-export const AGENTS_SETTING = "agents";
-export const GIT_TEXT_GENERATION_PROVIDER_SETTING = "gitTextGenerationProvider";
-export const GIT_TEXT_GENERATION_CUSTOM_COMMAND_SETTING = "gitTextGenerationCustomCommand";
-export const GIT_TEXT_GENERATION_AGENT_ID_SETTING = "gitTextGenerationAgentId";
-export const GIT_SKIP_SUGGESTED_COMMIT_CONFIRMATION_SETTING = "gitSkipSuggestedCommitConfirmation";
-export const TERMINAL_FONT_FAMILY_SETTING = "terminalFontFamily";
-export const TERMINAL_FONT_SIZE_SETTING = "terminalFontSize";
-export const TERMINAL_LINE_HEIGHT_SETTING = "terminalLineHeight";
-export const TERMINAL_LETTER_SPACING_SETTING = "terminalLetterSpacing";
-export const TERMINAL_CURSOR_STYLE_SETTING = "terminalCursorStyle";
-export const TERMINAL_CURSOR_BLINK_SETTING = "terminalCursorBlink";
-export const WORKSPACE_PANE_GAP_SETTING = "workspacePaneGap";
-export const WORKSPACE_ACTIVE_PANE_BORDER_COLOR_SETTING = "workspaceActivePaneBorderColor";
-export const COMPLETION_BELL_ENABLED_KEY = "VSmux.completionBellEnabled";
-export const SCRATCH_PAD_CONTENT_KEY = "VSmux.sidebarScratchPadContent";
-export const NATIVE_TERMINAL_DEBUG_STATE_KEY = "VSmux.nativeTerminalDebugState";
-export const SIDEBAR_WELCOME_DISMISSED_KEY = "VSmux.sidebarWelcomeDismissed";
-export const SIDEBAR_LOCATION_IN_SECONDARY_KEY = "VSmux.sidebarLocationInSecondary";
-export const SESSIONS_VIEW_ID = "VSmux.sessions";
-export const PRIMARY_SESSIONS_CONTAINER_ID = "VSmuxSessions";
-export const SECONDARY_SESSIONS_CONTAINER_ID = "VSmuxSessionsSecondary";
+export const SETTINGS_SECTION = 'VSmux';
+export const BACKGROUND_SESSION_TIMEOUT_MINUTES_SETTING = 'backgroundSessionTimeoutMinutes';
+export const MATCH_VISIBLE_TERMINAL_ORDER_SETTING = 'matchVisibleTerminalOrderInSessionsArea';
+export const NATIVE_TERMINAL_ACTION_DELAY_MS_SETTING = 'nativeTerminalActionDelayMs';
+export const KEEP_SESSION_GROUPS_UNLOCKED_SETTING = 'keepSessionGroupsUnlocked';
+export const SEND_RENAME_COMMAND_ON_SIDEBAR_RENAME_SETTING = 'sendRenameCommandOnSidebarRename';
+export const SIDEBAR_THEME_SETTING = 'sidebarTheme';
+export const AGENT_MANAGER_ZOOM_SETTING = 'agentManagerZoom';
+export const SHOW_CLOSE_BUTTON_ON_SESSION_CARDS_SETTING = 'showCloseButtonOnSessionCards';
+export const SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING = 'showHotkeysOnSessionCards';
+export const SHOW_SIDEBAR_ACTIONS_SETTING = 'showSidebarActions';
+export const SHOW_SIDEBAR_AGENTS_SETTING = 'showSidebarAgents';
+export const SHOW_SIDEBAR_BROWSERS_SETTING = 'showSidebarBrowsers';
+export const SHOW_SIDEBAR_GIT_BUTTON_SETTING = 'showSidebarGitButton';
+export const DEBUGGING_MODE_SETTING = 'debuggingMode';
+export const COMPLETION_SOUND_SETTING = 'completionSound';
+export const DEFAULT_BROWSER_LAUNCH_URL_SETTING = 'defaultBrowserLaunchUrl';
+export const AGENTS_SETTING = 'agents';
+export const GIT_TEXT_GENERATION_PROVIDER_SETTING = 'gitTextGenerationProvider';
+export const GIT_TEXT_GENERATION_CUSTOM_COMMAND_SETTING = 'gitTextGenerationCustomCommand';
+export const GIT_TEXT_GENERATION_AGENT_ID_SETTING = 'gitTextGenerationAgentId';
+export const GIT_SKIP_SUGGESTED_COMMIT_CONFIRMATION_SETTING = 'gitSkipSuggestedCommitConfirmation';
+export const TERMINAL_FONT_FAMILY_SETTING = 'terminalFontFamily';
+export const TERMINAL_FONT_SIZE_SETTING = 'terminalFontSize';
+export const TERMINAL_LINE_HEIGHT_SETTING = 'terminalLineHeight';
+export const TERMINAL_LETTER_SPACING_SETTING = 'terminalLetterSpacing';
+export const TERMINAL_CURSOR_STYLE_SETTING = 'terminalCursorStyle';
+export const TERMINAL_CURSOR_BLINK_SETTING = 'terminalCursorBlink';
+export const WORKSPACE_PANE_GAP_SETTING = 'workspacePaneGap';
+export const WORKSPACE_ACTIVE_PANE_BORDER_COLOR_SETTING = 'workspaceActivePaneBorderColor';
+export const COMPLETION_BELL_ENABLED_KEY = 'VSmux.completionBellEnabled';
+export const SCRATCH_PAD_CONTENT_KEY = 'VSmux.sidebarScratchPadContent';
+export const NATIVE_TERMINAL_DEBUG_STATE_KEY = 'VSmux.nativeTerminalDebugState';
+export const SIDEBAR_WELCOME_DISMISSED_KEY = 'VSmux.sidebarWelcomeDismissed';
+export const SIDEBAR_LOCATION_IN_SECONDARY_KEY = 'VSmux.sidebarLocationInSecondary';
+export const SESSIONS_VIEW_ID = 'VSmux.sessions';
+export const PRIMARY_SESSIONS_CONTAINER_ID = 'VSmuxSessions';
+export const SECONDARY_SESSIONS_CONTAINER_ID = 'VSmuxSessionsSecondary';
 export const DEBUG_STATE_POLL_INTERVAL_MS = 500;
-export const SIDEBAR_WELCOME_OK_LABEL = "OK";
+export const SIDEBAR_WELCOME_OK_LABEL = 'OK';
 export const WORKING_ACTIVITY_STALE_TIMEOUT_MS = 10_000;
 export const COMMAND_TERMINAL_EXIT_POLL_MS = 250;
 
@@ -115,9 +116,27 @@ export function getShowHotkeysOnSessionCardsConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING}`;
 }
 
+export function getShowSidebarActions(): boolean {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(SHOW_SIDEBAR_ACTIONS_SETTING, true) ?? true;
+}
+
+export function getShowSidebarAgents(): boolean {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(SHOW_SIDEBAR_AGENTS_SETTING, true) ?? true;
+}
+
+export function getShowSidebarBrowsers(): boolean {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(SHOW_SIDEBAR_BROWSERS_SETTING, true) ?? true;
+}
+
+export function getShowSidebarGitButton(): boolean {
+  return (
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(SHOW_SIDEBAR_GIT_BUTTON_SETTING, true) ?? true
+  );
+}
+
 export function getSidebarThemeVariant(): SidebarThemeVariant {
   const activeKind = vscode.window.activeColorTheme.kind;
-  return activeKind === vscode.ColorThemeKind.Light ? "light" : "dark";
+  return activeKind === vscode.ColorThemeKind.Light ? 'light' : 'dark';
 }
 
 export function getShowCloseButtonOnSessionCards(): boolean {
@@ -130,17 +149,13 @@ export function getShowCloseButtonOnSessionCards(): boolean {
 
 export function getShowHotkeysOnSessionCards(): boolean {
   return (
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<boolean>(SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING, false) ?? false
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING, false) ??
+    false
   );
 }
 
 export function getDebuggingMode(): boolean {
-  return (
-    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(DEBUGGING_MODE_SETTING) ??
-    false
-  );
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(DEBUGGING_MODE_SETTING) ?? false;
 }
 
 export function getSendRenameCommandOnSidebarRename(): boolean {
@@ -153,9 +168,7 @@ export function getSendRenameCommandOnSidebarRename(): boolean {
 
 export function getClampedSidebarThemeSetting(): SidebarThemeSetting {
   const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<string>(SIDEBAR_THEME_SETTING, "auto") ?? "auto";
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<string>(SIDEBAR_THEME_SETTING, 'auto') ?? 'auto';
   return clampSidebarThemeSetting(value);
 }
 
@@ -170,9 +183,7 @@ export function getClampedAgentManagerZoomPercent(): number {
 
 export function getClampedCompletionSoundSetting(): CompletionSoundSetting {
   const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<string>(COMPLETION_SOUND_SETTING, "ping") ?? "ping";
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<string>(COMPLETION_SOUND_SETTING, 'ping') ?? 'ping';
   return clampCompletionSoundSetting(value);
 }
 
@@ -180,8 +191,7 @@ export function getDefaultBrowserLaunchUrl(): string {
   const value =
     vscode.workspace
       .getConfiguration(SETTINGS_SECTION)
-      .get<string>(DEFAULT_BROWSER_LAUNCH_URL_SETTING, DEFAULT_BROWSER_LAUNCH_URL) ??
-    DEFAULT_BROWSER_LAUNCH_URL;
+      .get<string>(DEFAULT_BROWSER_LAUNCH_URL_SETTING, DEFAULT_BROWSER_LAUNCH_URL) ?? DEFAULT_BROWSER_LAUNCH_URL;
 
   return value.trim() || DEFAULT_BROWSER_LAUNCH_URL;
 }
@@ -197,63 +207,45 @@ export function getGitSkipSuggestedCommitConfirmation(): boolean {
 export function getTerminalFontFamily(): string {
   const defaultFontFamily = '"MesloLGL Nerd Font Mono", Menlo, Monaco, "Courier New", monospace';
   const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<string>(TERMINAL_FONT_FAMILY_SETTING, defaultFontFamily) ?? defaultFontFamily;
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<string>(TERMINAL_FONT_FAMILY_SETTING, defaultFontFamily) ??
+    defaultFontFamily;
 
   return value.trim() || defaultFontFamily;
 }
 
 export function getTerminalFontSize(): number {
-  const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<number>(TERMINAL_FONT_SIZE_SETTING, 12) ?? 12;
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<number>(TERMINAL_FONT_SIZE_SETTING, 12) ?? 12;
   return clampNumber(value, 8, 32, 12);
 }
 
 export function getTerminalLineHeight(): number {
-  const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<number>(TERMINAL_LINE_HEIGHT_SETTING, 1) ?? 1;
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<number>(TERMINAL_LINE_HEIGHT_SETTING, 1) ?? 1;
   return clampNumber(value, 0.8, 2, 1);
 }
 
 export function getTerminalLetterSpacing(): number {
   const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<number>(TERMINAL_LETTER_SPACING_SETTING, 0) ?? 0;
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<number>(TERMINAL_LETTER_SPACING_SETTING, 0) ?? 0;
   return clampNumber(value, -2, 8, 0);
 }
 
-export function getTerminalCursorStyle(): "bar" | "block" | "underline" {
+export function getTerminalCursorStyle(): 'bar' | 'block' | 'underline' {
   const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<string>(TERMINAL_CURSOR_STYLE_SETTING, "bar") ?? "bar";
-  return value === "block" || value === "underline" ? value : "bar";
+    vscode.workspace.getConfiguration(SETTINGS_SECTION).get<string>(TERMINAL_CURSOR_STYLE_SETTING, 'bar') ?? 'bar';
+  return value === 'block' || value === 'underline' ? value : 'bar';
 }
 
 export function getTerminalCursorBlink(): boolean {
-  return (
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<boolean>(TERMINAL_CURSOR_BLINK_SETTING, true) ?? true
-  );
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).get<boolean>(TERMINAL_CURSOR_BLINK_SETTING, true) ?? true;
 }
 
 export function getWorkspacePaneGap(): number {
-  const value =
-    vscode.workspace
-      .getConfiguration(SETTINGS_SECTION)
-      .get<number>(WORKSPACE_PANE_GAP_SETTING, 12) ?? 12;
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<number>(WORKSPACE_PANE_GAP_SETTING, 12) ?? 12;
   return clampNumber(value, 0, 48, 12);
 }
 
 export function getWorkspaceActivePaneBorderColor(): string {
-  const defaultColor = "rgba(90, 134, 255, 0.95)";
+  const defaultColor = 'rgba(90, 134, 255, 0.95)';
   const value =
     vscode.workspace
       .getConfiguration(SETTINGS_SECTION)
