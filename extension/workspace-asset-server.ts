@@ -2,7 +2,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { WebSocket, WebSocketServer } from "ws";
 
 type AssetScope = "workspace" | "t3-embed";
 
@@ -20,7 +19,6 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
 
 export class WorkspaceAssetServer implements vscode.Disposable {
   private readonly roots: Record<AssetScope, string>;
-  private readonly websocketServer = new WebSocketServer({ noServer: true });
   private readonly server = createServer((request, response) => {
     void this.handleRequest(request, response);
   });
@@ -32,15 +30,11 @@ export class WorkspaceAssetServer implements vscode.Disposable {
       "t3-embed": path.join(context.extensionPath, "forks", "t3code-embed", "dist"),
       workspace: path.join(context.extensionPath, "out", "workspace"),
     };
-    this.server.on("upgrade", (request, socket, head) => {
-      void this.handleUpgrade(request, socket, head);
-    });
   }
 
   public dispose(): void {
     this.listenPromise = undefined;
     this.port = undefined;
-    this.websocketServer.close();
     this.server.close();
   }
 
@@ -116,65 +110,6 @@ export class WorkspaceAssetServer implements vscode.Disposable {
     }
   }
 
-  private async handleUpgrade(
-    request: IncomingMessage,
-    socket: import("node:stream").Duplex,
-    head: Buffer,
-  ): Promise<void> {
-    try {
-      if (!request.url) {
-        socket.destroy();
-        return;
-      }
-
-      const url = new URL(request.url, "http://127.0.0.1");
-      if (url.pathname !== "/ws") {
-        socket.destroy();
-        return;
-      }
-
-      this.websocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
-        const targetSocket = new WebSocket("ws://127.0.0.1:3773/ws");
-
-        const closeTarget = () => {
-          if (
-            targetSocket.readyState === WebSocket.OPEN ||
-            targetSocket.readyState === WebSocket.CONNECTING
-          ) {
-            targetSocket.close();
-          }
-        };
-        const closeClient = () => {
-          if (
-            clientSocket.readyState === WebSocket.OPEN ||
-            clientSocket.readyState === WebSocket.CONNECTING
-          ) {
-            clientSocket.close();
-          }
-        };
-
-        clientSocket.on("message", (data, isBinary) => {
-          if (targetSocket.readyState !== WebSocket.OPEN) {
-            return;
-          }
-          targetSocket.send(data, { binary: isBinary });
-        });
-        clientSocket.on("close", closeTarget);
-        clientSocket.on("error", closeTarget);
-
-        targetSocket.on("message", (data, isBinary) => {
-          if (clientSocket.readyState !== WebSocket.OPEN) {
-            return;
-          }
-          clientSocket.send(data, { binary: isBinary });
-        });
-        targetSocket.on("close", closeClient);
-        targetSocket.on("error", closeClient);
-      });
-    } catch {
-      socket.destroy();
-    }
-  }
 }
 
 function normalizeRelativePath(relativePath: string): string {
@@ -185,6 +120,7 @@ function normalizeRelativePath(relativePath: string): string {
 
   return normalized;
 }
+
 function respondNotFound(response: ServerResponse): void {
   response.writeHead(404, {
     "Access-Control-Allow-Origin": "*",

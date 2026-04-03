@@ -115,51 +115,29 @@ export class T3RuntimeManager implements vscode.Disposable {
       snapshot.projects.find(
         (candidate) => candidate.deletedAt === null && candidate.workspaceRoot === workspaceRoot,
       ) ?? (await this.createProject(workspaceRoot));
-    const threadId = await this.createThread(project, title);
+    const threadId = randomUUID();
+    await this.dispatchCommand({
+      branch: null,
+      commandId: randomUUID(),
+      createdAt: new Date().toISOString(),
+      interactionMode: "default",
+      modelSelection: project.defaultModelSelection ?? {
+        model: DEFAULT_MODEL,
+        provider: "codex",
+      },
+      projectId: project.id,
+      runtimeMode: "full-access",
+      threadId,
+      title,
+      type: "thread.create",
+      worktreePath: null,
+    });
 
     return {
       projectId: project.id,
       serverOrigin: this.getServerOrigin(),
       threadId,
       workspaceRoot,
-    };
-  }
-
-  public async ensureThreadSession(
-    session: T3SessionMetadata,
-    title = "T3 Code",
-    startupCommand = DEFAULT_T3_COMMAND,
-  ): Promise<T3SessionMetadata> {
-    await this.ensureRunning(session.workspaceRoot, startupCommand);
-    const snapshot = await this.getSnapshot();
-    const project =
-      snapshot.projects.find(
-        (candidate) =>
-          candidate.deletedAt === null &&
-          (candidate.id === session.projectId || candidate.workspaceRoot === session.workspaceRoot),
-      ) ?? (await this.createProject(session.workspaceRoot));
-    const thread = snapshot.threads.find(
-      (candidate) =>
-        candidate.deletedAt === null &&
-        candidate.id === session.threadId &&
-        candidate.projectId === project.id,
-    );
-
-    if (thread) {
-      return {
-        projectId: project.id,
-        serverOrigin: this.getServerOrigin(),
-        threadId: thread.id,
-        workspaceRoot: project.workspaceRoot,
-      };
-    }
-
-    const threadId = await this.createThread(project, title);
-    return {
-      projectId: project.id,
-      serverOrigin: this.getServerOrigin(),
-      threadId,
-      workspaceRoot: project.workspaceRoot,
     };
   }
 
@@ -234,27 +212,6 @@ export class T3RuntimeManager implements vscode.Disposable {
       updatedAt: now,
       workspaceRoot,
     };
-  }
-
-  private async createThread(project: T3Project, title: string): Promise<string> {
-    const threadId = randomUUID();
-    await this.dispatchCommand({
-      branch: null,
-      commandId: randomUUID(),
-      createdAt: new Date().toISOString(),
-      interactionMode: "default",
-      modelSelection: project.defaultModelSelection ?? {
-        model: DEFAULT_MODEL,
-        provider: "codex",
-      },
-      projectId: project.id,
-      runtimeMode: "full-access",
-      threadId,
-      title,
-      type: "thread.create",
-      worktreePath: null,
-    });
-    return threadId;
   }
 
   private async getSnapshot(): Promise<T3Snapshot> {

@@ -22,13 +22,7 @@ if (!existsSync(overlayRoot)) {
 
 copyTree(overlayRoot, vendorRoot);
 run("bun", ["install"], { cwd: vendorRoot });
-run("bun", ["run", "build"], {
-  cwd: vendorWebRoot,
-  env: {
-    ...process.env,
-    T3CODE_WEB_SOURCEMAP: "false",
-  },
-});
+run("bun", ["run", "build"], { cwd: vendorWebRoot });
 
 rmSync(distRoot, { force: true, recursive: true });
 mkdirSync(distRoot, { recursive: true });
@@ -45,7 +39,6 @@ function copyTree(source, destination) {
 function run(command, args, options) {
   const result = spawnSync(command, args, {
     cwd: options.cwd,
-    ...(options.env ? { env: options.env } : {}),
     stdio: "inherit",
   });
 

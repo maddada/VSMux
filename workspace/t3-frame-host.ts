@@ -33,8 +33,6 @@ window.__VSMUX_T3_BOOTSTRAP__ = {
   wsUrl: bootstrap.wsUrl,
 };
 
-installWebSocketUrlPatch(bootstrap.wsUrl);
-
 if (bootstrap.styleHref) {
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
@@ -122,53 +120,4 @@ function notifyParentFocus() {
     },
     "*",
   );
-}
-
-function installWebSocketUrlPatch(wsBaseUrl: string) {
-  const NativeWebSocket = window.WebSocket;
-  const baseUrl = new URL(wsBaseUrl);
-
-  class VSmuxWebSocket extends NativeWebSocket {
-    constructor(url: string | URL, protocols?: string | string[]) {
-      super(resolveWebSocketUrl(url, baseUrl), protocols);
-    }
-  }
-
-  Object.defineProperties(VSmuxWebSocket, {
-    CONNECTING: { value: NativeWebSocket.CONNECTING },
-    OPEN: { value: NativeWebSocket.OPEN },
-    CLOSING: { value: NativeWebSocket.CLOSING },
-    CLOSED: { value: NativeWebSocket.CLOSED },
-  });
-
-  Object.defineProperty(VSmuxWebSocket, "name", {
-    value: NativeWebSocket.name,
-  });
-
-  const patchedWebSocket = VSmuxWebSocket as typeof WebSocket;
-  window.WebSocket = patchedWebSocket;
-  globalThis.WebSocket = patchedWebSocket;
-}
-
-function resolveWebSocketUrl(url: string | URL, baseUrl: URL): string | URL {
-  const raw = typeof url === "string" ? url : url.toString();
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol === "ws:" || parsed.protocol === "wss:") {
-      return url;
-    }
-  } catch {
-    // Fall through to relative URL handling.
-  }
-
-  if (raw.startsWith("/")) {
-    return new URL(raw, `${baseUrl.toString()}/`).toString();
-  }
-
-  if (raw.startsWith("./") || raw.startsWith("../") || !raw.includes(":")) {
-    return new URL(raw, `${baseUrl.toString()}/`).toString();
-  }
-
-  return url;
 }

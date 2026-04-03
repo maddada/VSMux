@@ -2237,23 +2237,18 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
             return undefined;
           }
 
-          const resolvedSessionRecord =
-            this.pendingT3SessionIds.has(sessionRecord.sessionId) || isPendingT3Metadata(sessionRecord.t3)
-              ? sessionRecord
-              : await this.resolveT3SessionRecordForWorkspacePane(sessionRecord);
-
           return {
             kind: 't3' as const,
-            isVisible: visibleSessionIdSet.has(resolvedSessionRecord.sessionId),
-            sessionId: resolvedSessionRecord.sessionId,
-            sessionRecord: resolvedSessionRecord,
+            isVisible: visibleSessionIdSet.has(sessionRecord.sessionId),
+            sessionId: sessionRecord.sessionId,
+            sessionRecord,
             html:
-              this.pendingT3SessionIds.has(resolvedSessionRecord.sessionId) ||
-              isPendingT3Metadata(resolvedSessionRecord.t3)
-                ? createPendingT3IframeSource(resolvedSessionRecord.title)
+              this.pendingT3SessionIds.has(sessionRecord.sessionId) ||
+              isPendingT3Metadata(sessionRecord.t3)
+                ? createPendingT3IframeSource(sessionRecord.title)
                 : await createT3IframeSource(
                     this.context,
-                    resolvedSessionRecord,
+                    sessionRecord,
                     this.workspaceAssetServer,
                   ),
           };
@@ -2387,27 +2382,6 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     });
   }
 
-  private async resolveT3SessionRecordForWorkspacePane(
-    sessionRecord: T3SessionRecord,
-  ): Promise<T3SessionRecord> {
-    const runtime = this.t3Runtime ?? new T3RuntimeManager(this.context);
-    this.t3Runtime = runtime;
-    const nextMetadata = await runtime.ensureThreadSession(sessionRecord.t3, sessionRecord.title);
-    if (
-      nextMetadata.projectId === sessionRecord.t3.projectId &&
-      nextMetadata.threadId === sessionRecord.t3.threadId &&
-      nextMetadata.workspaceRoot === sessionRecord.t3.workspaceRoot &&
-      nextMetadata.serverOrigin === sessionRecord.t3.serverOrigin
-    ) {
-      return sessionRecord;
-    }
-
-    await this.store.setT3SessionMetadata(sessionRecord.sessionId, nextMetadata);
-    return {
-      ...sessionRecord,
-      t3: nextMetadata,
-    };
-  }
 }
 
 function createPendingT3Metadata(serverOrigin: string) {

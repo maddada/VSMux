@@ -191,6 +191,12 @@ export const DragToReorderWithinGroup: Story = {
 
     await step("reorder sessions inside a group", async () => {
       const dragState = await dragToHover(firstSession, secondSession, "after");
+
+      await waitFor(() => {
+        const targetFrame = secondSession.closest(".session-frame");
+        return expect(targetFrame).toHaveAttribute("data-drop-position", "after");
+      });
+
       await releaseDrag(secondSession, dragState);
 
       await expectMessage({
@@ -302,18 +308,27 @@ export const DragIntoEmptyGroupAndRejectOutsideDrops: Story = {
 
     await step("move a session into an empty group", async () => {
       resetSidebarStoryMessages();
-      await dragAndDrop(
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-session-id="session-1"]',
-          "session-1 card",
-        ),
-        await findRequiredElement(
-          storyRoot,
-          '[data-sidebar-group-id="group-2"] .group-empty-state',
-          "group-2 empty state",
-        ),
+      const sourceSession = await findRequiredElement(
+        storyRoot,
+        '[data-sidebar-session-id="session-1"]',
+        "session-1 card",
       );
+      const emptyState = await findRequiredElement(
+        storyRoot,
+        '[data-sidebar-group-id="group-2"] .group-empty-state',
+        "group-2 empty state",
+      );
+      const dragState = await dragToHover(sourceSession, emptyState);
+
+      await waitFor(() => {
+        const emptyDropTarget = storyRoot.querySelector(
+          '[data-sidebar-group-id="group-2"] .group-empty-drop-target',
+        );
+        expect(emptyDropTarget).toHaveAttribute("data-drop-position", "start");
+        return expect(emptyDropTarget).toHaveAttribute("data-drop-target", "true");
+      });
+
+      await releaseDrag(emptyState, dragState);
 
       await expectMessage({
         groupId: "group-2",

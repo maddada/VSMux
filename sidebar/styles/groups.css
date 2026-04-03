@@ -292,6 +292,39 @@
 .group-sessions {
   display: grid;
   gap: 8px;
+  position: relative;
+}
+
+.group-sessions::before,
+.group-sessions::after,
+.group-empty-drop-target::before,
+.group-empty-drop-target::after {
+  content: "";
+  position: absolute;
+  left: calc(12px * var(--sidebar-density-scale));
+  right: calc(12px * var(--sidebar-density-scale));
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-button-background) 86%, #ffffff 14%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 22%, transparent),
+    0 0 14px color-mix(in srgb, var(--app-button-background) 28%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 3;
+}
+
+.group-sessions[data-drop-position="start"]::before,
+.group-empty-drop-target[data-drop-position="start"]::before {
+  opacity: 1;
+  top: calc(-5px * var(--sidebar-density-scale));
+}
+
+.group-sessions[data-drop-position="end"]::after,
+.group-empty-drop-target[data-drop-position="end"]::after {
+  bottom: calc(-5px * var(--sidebar-density-scale));
+  opacity: 1;
 }
 
 .group-sessions[data-drop-target="true"] {
