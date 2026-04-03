@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { GitTextGenerationSettings } from "../../shared/git-text-generation-provider";
@@ -11,10 +11,11 @@ import {
   resolveDefaultBranchName,
   type GitStatusDetails,
 } from "./status";
-import { buildCommandLine, runGitCommand, runGitStdout, runShellCommand } from "./process";
+import { buildCommandLine, runGitCommand, runGitCommandResult, runGitStdout, runShellCommand } from "./process";
 
 const COMMIT_TIMEOUT_MS = 180_000;
 const GITHUB_CLI_TIMEOUT_MS = 60_000;
+const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 export type SidebarGitCommitScope = "allChanges" | "stagedOnly";
 
@@ -276,7 +277,7 @@ async function prepareCommitContext(
     return loadCommitContextFromIndex(cwd, "stagedOnly");
   }
 
-  return loadCommitContextFromTemporaryIndex(cwd);
+  return loadCommitContextFromWorkingTree(cwd);
 }
 
 async function loadCommitContextFromIndex(
@@ -325,27 +326,176 @@ function truncateDebugPreview(value: string, maxLength = 400): string {
   return `${normalized.slice(0, maxLength)}...`;
 }
 
-async function loadCommitContextFromTemporaryIndex(
+async function loadCommitContextFromWorkingTree(
   cwd: string,
 ): Promise<{ scope: SidebarGitCommitScope; stagedPatch: string; stagedSummary: string } | null> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "vsmux-git-index-"));
-  const tempIndexPath = path.join(tempDir, "index");
+  const statusOutput = await runGitStdout(cwd, ["status", "--porcelain=v1", "--untracked-files=all"]);
+  const statusEntries = parseWorkingTreeStatusEntries(statusOutput);
+  if (statusEntries.length === 0) {
+    return null;
+  }
 
-  try {
-    const gitIndexPath = (await runGitStdout(cwd, ["rev-parse", "--git-path", "index"])).trim();
-    if (gitIndexPath) {
-      await copyFile(path.resolve(cwd, gitIndexPath), tempIndexPath).catch(() => undefined);
+  const baseRef = await resolveAllChangesBaseRef(cwd);
+  const trackedSummary = (await runGitStdout(cwd, ["diff", "--name-status", baseRef, "--"])).trim();
+  const trackedPatch = await runGitStdout(cwd, ["diff", "--patch", "--minimal", baseRef, "--"]);
+  const untrackedEntries = statusEntries.filter((entry) => entry.kind === "untracked");
+  const untrackedPatchParts = await Promise.all(
+    untrackedEntries.map((entry) => loadUntrackedFilePatch(cwd, entry.path)),
+  );
+  const stagedSummary = buildAllChangesSummary(trackedSummary, statusEntries);
+  const stagedPatch = [trackedPatch.trim(), ...untrackedPatchParts.map((part) => part.trim()).filter(Boolean)]
+    .filter(Boolean)
+    .join("\n\n");
+  if (!stagedSummary || !stagedPatch) {
+    return null;
+  }
+
+  return {
+    scope: "allChanges",
+    stagedPatch: `${stagedPatch}\n`,
+    stagedSummary,
+  };
+}
+
+async function resolveAllChangesBaseRef(cwd: string): Promise<string> {
+  const head = (await runGitStdout(cwd, ["rev-parse", "--verify", "HEAD"]).catch(() => "")).trim();
+  return head || EMPTY_TREE_HASH;
+}
+
+async function loadUntrackedFilePatch(cwd: string, filePath: string): Promise<string> {
+  const result = await runGitCommandResult(cwd, ["diff", "--no-index", "--", "/dev/null", filePath], 60_000);
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    throw new Error(result.stderr.trim() || result.stdout.trim() || "Failed to diff untracked file.");
+  }
+
+  return result.stdout;
+}
+
+type WorkingTreeStatusEntry = {
+  kind: "added" | "deleted" | "modified" | "renamed" | "untracked";
+  path: string;
+  summaryLine: string;
+};
+
+function parseWorkingTreeStatusEntries(statusOutput: string): WorkingTreeStatusEntry[] {
+  const entries = statusOutput
+    .split(/\r?\n/g)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map(parseWorkingTreeStatusEntry)
+    .filter((entry): entry is WorkingTreeStatusEntry => entry !== undefined);
+
+  const seenSummaryLines = new Set<string>();
+  return entries.filter((entry) => {
+    if (seenSummaryLines.has(entry.summaryLine)) {
+      return false;
+    }
+    seenSummaryLines.add(entry.summaryLine);
+    return true;
+  });
+}
+
+function parseWorkingTreeStatusEntry(line: string): WorkingTreeStatusEntry | undefined {
+  if (line.startsWith("!! ")) {
+    return undefined;
+  }
+
+  if (line.startsWith("?? ")) {
+    const path = line.slice(3).trim();
+    return path
+      ? {
+          kind: "untracked",
+          path,
+          summaryLine: `A\t${path}`,
+        }
+      : undefined;
+  }
+
+  if (line.length < 4) {
+    return undefined;
+  }
+
+  const statusCode = line.slice(0, 2);
+  const rawPath = line.slice(3).trim();
+  if (!rawPath) {
+    return undefined;
+  }
+
+  const renameParts = rawPath.split(" -> ");
+  const resolvedPath = renameParts[renameParts.length - 1]?.trim();
+  if (!resolvedPath) {
+    return undefined;
+  }
+
+  if (statusCode.includes("R") || statusCode.includes("C")) {
+    return {
+      kind: "renamed",
+      path: resolvedPath,
+      summaryLine: `R\t${rawPath}`,
+    };
+  }
+
+  if (statusCode.includes("D")) {
+    return {
+      kind: "deleted",
+      path: resolvedPath,
+      summaryLine: `D\t${resolvedPath}`,
+    };
+  }
+
+  if (statusCode.includes("A")) {
+    return {
+      kind: "added",
+      path: resolvedPath,
+      summaryLine: `A\t${resolvedPath}`,
+    };
+  }
+
+  return {
+    kind: "modified",
+    path: resolvedPath,
+    summaryLine: `M\t${resolvedPath}`,
+  };
+}
+
+function buildAllChangesSummary(
+  trackedSummary: string,
+  statusEntries: readonly WorkingTreeStatusEntry[],
+): string {
+  const lines = trackedSummary
+    .split(/\r?\n/g)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const seenPaths = new Set(lines.map((line) => extractSummaryIdentity(line)));
+  const mergedLines = [...lines];
+
+  for (const entry of statusEntries) {
+    const identity = extractSummaryIdentity(entry.summaryLine);
+    if (seenPaths.has(identity)) {
+      continue;
     }
 
-    const env = {
-      ...process.env,
-      GIT_INDEX_FILE: tempIndexPath,
-    };
-    await runGitCommand(cwd, ["add", "-A"], 60_000, env);
-    return loadCommitContextFromIndex(cwd, "allChanges", env);
-  } finally {
-    await rm(tempDir, { force: true, recursive: true }).catch(() => undefined);
+    mergedLines.push(entry.summaryLine);
+    seenPaths.add(identity);
   }
+
+  return mergedLines.join("\n").trim();
+}
+
+function extractSummaryIdentity(summaryLine: string): string {
+  const trimmedLine = summaryLine.trim();
+  if (/^[RC]\d*\t/.test(trimmedLine)) {
+    const renameFields = trimmedLine.split("\t");
+    return renameFields[renameFields.length - 1]?.trim() ?? trimmedLine;
+  }
+
+  if (/^[RC]\t/.test(trimmedLine)) {
+    const renameText = trimmedLine.slice(2);
+    const renameParts = renameText.split(" -> ");
+    return renameParts[renameParts.length - 1]?.trim() ?? renameText;
+  }
+
+  return trimmedLine.split("\t").slice(1).join("\t").trim();
 }
 
 async function commitChanges(

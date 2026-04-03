@@ -44,17 +44,26 @@ export async function runGitCommand(
     cwd,
     overrideGitEnvKeys: Object.keys(env ?? {}).filter((key) => key.startsWith("GIT_")),
   });
-  const result = await runChildProcess("git", args, buildCommandLine("git", args), {
-    cwd,
-    env: createGitCommandEnv(env),
-    timeoutMs,
-  });
+  const result = await runGitCommandResult(cwd, args, timeoutMs, env);
 
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || result.stdout.trim() || "Git command failed.");
   }
 
   return result;
+}
+
+export async function runGitCommandResult(
+  cwd: string,
+  args: readonly string[],
+  timeoutMs = 60_000,
+  env?: NodeJS.ProcessEnv,
+): Promise<ShellCommandResult> {
+  return runChildProcess("git", args, buildCommandLine("git", args), {
+    cwd,
+    env: createGitCommandEnv(env),
+    timeoutMs,
+  });
 }
 
 async function runChildProcess(
