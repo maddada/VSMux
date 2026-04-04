@@ -41,7 +41,7 @@
   font: inherit;
   font-size: 11px;
   font-weight: 600;
-  height: 30px;
+  height: 37.5px;
   justify-content: center;
   letter-spacing: 0.02em;
   padding: 0;
@@ -51,7 +51,7 @@
   transition:
     background 120ms ease,
     border-color 120ms ease;
-  width: 30px;
+  width: 37.5px;
   z-index: 20;
 }
 

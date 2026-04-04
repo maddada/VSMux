@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import { TerminalDaemonRingBuffer } from "./terminal-daemon-ring-buffer";
 import {
+  createTerminalReplayChunks,
   createPendingAttachQueue,
   createTerminalReplaySnapshot,
+  splitTerminalReplaySnapshot,
   queuePendingAttachChunk,
   serializeTerminalReplayHistory,
 } from "./terminal-daemon-replay";
@@ -30,6 +32,45 @@ describe("createTerminalReplaySnapshot", () => {
     historyBuffer.write(Buffer.from("\u001b]0;title\u0007ok", "utf8"));
 
     expect(createTerminalReplaySnapshot(historyBuffer).toString("utf8")).toBe("ok");
+  });
+});
+
+describe("createTerminalReplayChunks", () => {
+  test("should split the replay snapshot into ordered chunks", () => {
+    const historyBuffer = new TerminalDaemonRingBuffer(64);
+
+    historyBuffer.write(Buffer.from("0123456789abcdef", "utf8"));
+
+    expect(createTerminalReplayChunks(historyBuffer, historyBuffer.bytesWritten, 5)).toEqual([
+      Buffer.from("01234"),
+      Buffer.from("56789"),
+      Buffer.from("abcde"),
+      Buffer.from("f"),
+    ]);
+  });
+
+  test("should preserve the tail when replay and live output are stitched at the ready cursor", () => {
+    const historyBuffer = new TerminalDaemonRingBuffer(64);
+
+    historyBuffer.write(Buffer.from("before-ready\n", "utf8"));
+    const pendingAttachQueue = createPendingAttachQueue(historyBuffer.bytesWritten);
+    const replayChunks = createTerminalReplayChunks(
+      historyBuffer,
+      pendingAttachQueue.replayCursor,
+      5,
+    );
+
+    const liveChunk = Buffer.from("after-ready\n", "utf8");
+    queuePendingAttachChunk(
+      pendingAttachQueue,
+      liveChunk,
+      historyBuffer.bytesWritten,
+      historyBuffer.bytesWritten + liveChunk.length,
+    );
+
+    expect(Buffer.concat([...replayChunks, ...pendingAttachQueue.chunks]).toString("utf8")).toBe(
+      "before-ready\nafter-ready\n",
+    );
   });
 });
 
@@ -74,5 +115,23 @@ describe("queuePendingAttachChunk", () => {
     queuePendingAttachChunk(pendingAttachQueue, Buffer.from("hello"), 0, 5);
 
     expect(pendingAttachQueue.chunks).toEqual([Buffer.from("lo")]);
+  });
+});
+
+describe("splitTerminalReplaySnapshot", () => {
+  test("should keep the full snapshot as one frame when it already fits", () => {
+    expect(splitTerminalReplaySnapshot(Buffer.from("hello"), 16)).toEqual([Buffer.from("hello")]);
+  });
+
+  test("should split large snapshots into ordered chunks", () => {
+    expect(splitTerminalReplaySnapshot(Buffer.from("abcdefgh"), 3)).toEqual([
+      Buffer.from("abc"),
+      Buffer.from("def"),
+      Buffer.from("gh"),
+    ]);
+  });
+
+  test("should return no frames for an empty snapshot", () => {
+    expect(splitTerminalReplaySnapshot(Buffer.alloc(0), 3)).toEqual([]);
   });
 });

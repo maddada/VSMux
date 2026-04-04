@@ -6,15 +6,15 @@ import {
   type TerminalSessionRecord,
 } from "../shared/session-grid-contract";
 import { getVisibleTerminalTitle } from "../shared/session-grid-contract-session";
-import type {
-  TerminalSessionSnapshot,
-} from "../shared/terminal-host-protocol";
+import type { TerminalSessionSnapshot } from "../shared/terminal-host-protocol";
 import {
   DaemonTerminalRuntime,
   type DaemonTerminalConnection,
+  type TerminalCreateOrAttachResponse,
   type TerminalDaemonState,
 } from "./daemon-terminal-runtime";
 import type {
+  TerminalCreateOrAttachResult,
   TerminalWorkspaceBackend,
   TerminalWorkspaceBackendPresentationChange,
   TerminalWorkspaceBackendTitleChange,
@@ -159,12 +159,14 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   public async createOrAttachSession(
     sessionRecord: SessionRecord,
-  ): Promise<TerminalSessionSnapshot> {
+  ): Promise<TerminalCreateOrAttachResult> {
     if (!isTerminalSession(sessionRecord)) {
-      return (
-        this.sessions.get(sessionRecord.sessionId) ??
-        createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId)
-      );
+      return {
+        didCreateTerminal: false,
+        snapshot:
+          this.sessions.get(sessionRecord.sessionId) ??
+          createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
+      };
     }
 
     if (!(await this.options.ensureShellSpawnAllowed())) {
@@ -174,10 +176,13 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       );
       this.sessions.set(sessionRecord.sessionId, blockedSnapshot);
       this.changeSessionsEmitter.fire();
-      return blockedSnapshot;
+      return {
+        didCreateTerminal: false,
+        snapshot: blockedSnapshot,
+      };
     }
 
-    const snapshot = await this.runtime.createOrAttach({
+    const createOrAttachResult: TerminalCreateOrAttachResponse = await this.runtime.createOrAttach({
       cols: 120,
       cwd: getDefaultWorkspaceCwd(),
       rows: 34,
@@ -186,10 +191,14 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       shell: getDefaultShell(),
       workspaceId: this.options.workspaceId,
     });
+    const snapshot = createOrAttachResult.session;
     this.sessions.set(sessionRecord.sessionId, snapshot);
     this.syncSessionTitle(sessionRecord.sessionId, snapshot.title);
     this.changeSessionsEmitter.fire();
-    return snapshot;
+    return {
+      didCreateTerminal: createOrAttachResult.didCreateSession,
+      snapshot,
+    };
   }
 
   public async focusSession(_sessionId: string): Promise<boolean> {
@@ -224,7 +233,7 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
 
     await this.killSession(sessionRecord.sessionId);
-    return this.createOrAttachSession(sessionRecord);
+    return (await this.createOrAttachSession(sessionRecord)).snapshot;
   }
 
   public syncSessions(sessionRecords: readonly SessionRecord[]): void {
@@ -350,7 +359,8 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   private getIdleShutdownTimeoutMs(): number | null {
     const timeoutMinutes =
-      vscode.workspace.getConfiguration("VSmux").get<number>("backgroundSessionTimeoutMinutes") ?? 5;
+      vscode.workspace.getConfiguration("VSmux").get<number>("backgroundSessionTimeoutMinutes") ??
+      5;
     if (timeoutMinutes <= 0) {
       return null;
     }
@@ -359,7 +369,10 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   }
 
   private getSessionAgentStateFilePath(sessionId: string): string {
-    const workspaceStateKey = getWorkspaceStorageKey(AGENT_STATE_DIR_NAME, this.options.workspaceId);
+    const workspaceStateKey = getWorkspaceStorageKey(
+      AGENT_STATE_DIR_NAME,
+      this.options.workspaceId,
+    );
     return path.join(
       this.options.context.globalStorageUri.fsPath,
       workspaceStateKey,

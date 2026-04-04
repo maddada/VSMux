@@ -2,8 +2,10 @@ import * as vscode from "vscode";
 import { type VisibleSessionCount } from "../shared/session-grid-contract";
 import { DebuggingStatusIndicator } from "./debugging-status-indicator";
 import { NativeTerminalWorkspaceController, SESSIONS_VIEW_ID } from "./native-terminal-workspace";
+import { initializeVSmuxDebugLog } from "./vsmux-debug-log";
 
 export function activate(context: vscode.ExtensionContext): void {
+  initializeVSmuxDebugLog(context);
   const workspace = new NativeTerminalWorkspaceController(context);
   const debuggingStatusIndicator = new DebuggingStatusIndicator(workspace);
 

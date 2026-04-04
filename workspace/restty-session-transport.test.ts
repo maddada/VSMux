@@ -81,7 +81,7 @@ describe("createWorkspaceResttyTransport", () => {
     );
   });
 
-  test("should send an initial resize message when the socket opens", () => {
+  test("should wait for an explicit ready signal before sending the attach handshake", () => {
     const controller = createWorkspaceResttyTransport({
       sessionId: "session-1",
     });
@@ -95,13 +95,15 @@ describe("createWorkspaceResttyTransport", () => {
 
     const socket = FakeWebSocket.instances[0];
     socket?.open();
+    expect(socket?.sentMessages).toEqual([]);
 
+    controller.markTerminalReady(120, 34);
     expect(socket?.sentMessages).toEqual([
       JSON.stringify({
         cols: 120,
         rows: 34,
         sessionId: "session-1",
-        type: "terminalResize",
+        type: "terminalReady",
       }),
     ]);
   });
@@ -119,6 +121,7 @@ describe("createWorkspaceResttyTransport", () => {
     });
 
     const firstSocket = FakeWebSocket.instances[0];
+    controller.markTerminalReady(120, 34);
     firstSocket?.open();
 
     controller.transport.resize(160, 48);
@@ -155,5 +158,40 @@ describe("createWorkspaceResttyTransport", () => {
     secondSocket?.open();
 
     expect(onData).toHaveBeenCalledWith("\x1bc");
+  });
+
+  test("should queue resize messages until the daemon is told the terminal is ready", () => {
+    const controller = createWorkspaceResttyTransport({
+      sessionId: "session-1",
+    });
+
+    controller.transport.connect({
+      callbacks: {},
+      cols: 120,
+      rows: 34,
+      url: "ws://127.0.0.1:9000/session?token=test&workspaceId=workspace-1&sessionId=session-1",
+    });
+
+    const socket = FakeWebSocket.instances[0];
+    socket?.open();
+    controller.transport.resize(140, 40);
+    expect(socket?.sentMessages).toEqual([]);
+
+    controller.markTerminalReady(140, 40);
+
+    expect(socket?.sentMessages).toEqual([
+      JSON.stringify({
+        cols: 140,
+        rows: 40,
+        sessionId: "session-1",
+        type: "terminalReady",
+      }),
+      JSON.stringify({
+        cols: 140,
+        rows: 40,
+        sessionId: "session-1",
+        type: "terminalResize",
+      }),
+    ]);
   });
 });

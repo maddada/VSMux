@@ -140,9 +140,7 @@ describe("buildCopyResumeCommandText", () => {
         "gemini",
         "Session 04",
       ),
-    ).toBe(
-      "gemini -y --list-sessions && echo 'Enter gemini -y -r id' to resume a session",
-    );
+    ).toBe("gemini -y --list-sessions && echo 'Enter gemini -y -r id' to resume a session");
   });
 
   test("should copy opencode guidance text", () => {
@@ -206,6 +204,15 @@ describe("buildDetachedResumeAction", () => {
     ).toEqual({
       shouldExecute: true,
       text: "x resume 'Terminal bugfix'",
+    });
+  });
+
+  test("should fall back to the default codex command when only the sidebar icon is known", () => {
+    expect(
+      buildDetachedResumeAction(undefined, "codex", "Session 814", "Auto fix corruption"),
+    ).toEqual({
+      shouldExecute: true,
+      text: "codex resume 'Auto fix corruption'",
     });
   });
 

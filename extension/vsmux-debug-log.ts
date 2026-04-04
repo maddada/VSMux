@@ -1,17 +1,21 @@
 import * as vscode from "vscode";
+import { appendFile, mkdir } from "node:fs/promises";
+import * as path from "node:path";
 
 const SETTINGS_SECTION = "VSmux";
 const DEBUGGING_MODE_SETTING = "debuggingMode";
+const DEBUG_LOG_FILE_NAME = "vsmux-debug.log";
 
 let outputChannel: vscode.OutputChannel | undefined;
+let debugLogFilePath: string | undefined;
+let fileWriteQueue: Promise<void> = Promise.resolve();
+
+export function initializeVSmuxDebugLog(context: vscode.ExtensionContext): void {
+  debugLogFilePath = path.join(context.globalStorageUri.fsPath, DEBUG_LOG_FILE_NAME);
+}
 
 export function resetVSmuxDebugLog(): void {
-  if (!isDebugLoggingEnabled()) {
-    outputChannel?.clear();
-    return;
-  }
-
-  getOutputChannel().clear();
+  outputChannel?.clear();
 }
 
 export function logVSmuxDebug(event: string, details?: unknown): void {
@@ -21,7 +25,9 @@ export function logVSmuxDebug(event: string, details?: unknown): void {
 
   const output = getOutputChannel();
   const suffix = details === undefined ? "" : ` ${safeSerialize(details)}`;
-  output.appendLine(`${new Date().toISOString()} ${event}${suffix}`);
+  const line = `${new Date().toISOString()} ${event}${suffix}`;
+  output.appendLine(line);
+  queueDebugLogFileAppend(`${line}\n`);
 }
 
 export function disposeVSmuxDebugLog(): void {
@@ -50,4 +56,19 @@ function safeSerialize(details: unknown): string {
       unserializable: true,
     });
   }
+}
+
+function queueDebugLogFileAppend(text: string): void {
+  if (!debugLogFilePath) {
+    return;
+  }
+  const logFilePath = debugLogFilePath;
+
+  fileWriteQueue = fileWriteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const parentDir = path.dirname(logFilePath);
+      await mkdir(parentDir, { recursive: true });
+      await appendFile(logFilePath, text, "utf8");
+    });
 }

@@ -17,6 +17,7 @@ import type {
   TerminalSessionSnapshot,
 } from "../shared/terminal-host-protocol";
 import { TERMINAL_HOST_PROTOCOL_VERSION } from "../shared/terminal-host-protocol";
+import { logVSmuxDebug } from "./vsmux-debug-log";
 
 type DaemonInfo = {
   pid: number;
@@ -59,6 +60,11 @@ const LAUNCH_LOCK_FILE_NAME = "daemon-launch.lock";
 export type DaemonTerminalConnection = {
   baseUrl: string;
   token: string;
+};
+
+export type TerminalCreateOrAttachResponse = {
+  didCreateSession: boolean;
+  session: TerminalSessionSnapshot;
 };
 
 export class DaemonTerminalRuntime implements vscode.Disposable {
@@ -124,17 +130,20 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
 
   public async createOrAttach(
     request: Omit<TerminalHostCreateOrAttachRequest, "requestId" | "type">,
-  ): Promise<TerminalSessionSnapshot> {
+  ): Promise<TerminalCreateOrAttachResponse> {
     await this.ensureReady();
     const response = await this.sendRequest({
       ...request,
       requestId: this.nextRequestId(),
       type: "createOrAttach",
     });
-    if (!("session" in response) || !response.session) {
+    if (!("session" in response) || !response.session || !("didCreateSession" in response)) {
       throw new Error("VSmux daemon did not return a session snapshot.");
     }
-    return response.session;
+    return {
+      didCreateSession: response.didCreateSession,
+      session: response.session,
+    };
   }
 
   public async listSessions(workspaceId?: string): Promise<TerminalSessionSnapshot[]> {
@@ -269,15 +278,31 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
 
   private async ensureDaemonProcess(): Promise<DaemonInfo> {
     const deadline = Date.now() + DAEMON_READY_TIMEOUT_MS;
+    logVSmuxDebug("daemon.runtime.ensureDaemonProcess.start", {
+      deadline,
+      extensionHostPid: process.pid,
+    });
     while (Date.now() < deadline) {
+      await this.replaceStaleDaemonIfNeeded();
+
       const info = await this.getReachableDaemonInfo();
       if (info && (await this.canReachDaemon(info))) {
+        logVSmuxDebug("daemon.runtime.ensureDaemonProcess.readyExisting", {
+          pid: info.pid,
+          port: info.port,
+          protocolVersion: info.protocolVersion,
+          startedAt: info.startedAt,
+        });
         return info;
       }
 
       const daemonStateDir = this.getDaemonStateDir();
       const launchLock = await this.tryAcquireLaunchLock(daemonStateDir);
       if (!launchLock) {
+        logVSmuxDebug("daemon.runtime.ensureDaemonProcess.waitingForLaunchLock", {
+          daemonStateDir,
+          extensionHostPid: process.pid,
+        });
         await delay(150);
         continue;
       }
@@ -285,6 +310,13 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
       try {
         const lockedInfo = await this.getReachableDaemonInfo();
         if (lockedInfo) {
+          logVSmuxDebug("daemon.runtime.ensureDaemonProcess.readyAfterLaunchLock", {
+            extensionHostPid: process.pid,
+            pid: lockedInfo.pid,
+            port: lockedInfo.port,
+            protocolVersion: lockedInfo.protocolVersion,
+            startedAt: lockedInfo.startedAt,
+          });
           return lockedInfo;
         }
 
@@ -294,10 +326,21 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
           stdio: "ignore",
         });
         child.unref();
+        logVSmuxDebug("daemon.runtime.ensureDaemonProcess.spawned", {
+          daemonStateDir,
+          extensionHostPid: process.pid,
+          pid: child.pid,
+        });
 
         while (Date.now() < deadline) {
           const readyInfo = await this.getReachableDaemonInfo();
           if (readyInfo) {
+            logVSmuxDebug("daemon.runtime.ensureDaemonProcess.readySpawned", {
+              pid: readyInfo.pid,
+              port: readyInfo.port,
+              protocolVersion: readyInfo.protocolVersion,
+              startedAt: readyInfo.startedAt,
+            });
             return readyInfo;
           }
           await delay(150);
@@ -312,6 +355,38 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
     throw new Error("VSmux terminal daemon did not become ready in time.");
   }
 
+  private async replaceStaleDaemonIfNeeded(): Promise<void> {
+    const daemonInfo = await this.readDaemonInfo();
+    if (!daemonInfo) {
+      return;
+    }
+
+    const hasExpectedProtocol = daemonInfo.protocolVersion === TERMINAL_HOST_PROTOCOL_VERSION;
+    const isReachable = await this.canReachDaemon(daemonInfo).catch(() => false);
+    if (hasExpectedProtocol && isReachable) {
+      logVSmuxDebug("daemon.runtime.replaceStaleDaemonIfNeeded.keep", {
+        hasExpectedProtocol,
+        isReachable,
+        pid: daemonInfo.pid,
+        port: daemonInfo.port,
+        protocolVersion: daemonInfo.protocolVersion,
+        startedAt: daemonInfo.startedAt,
+      });
+      return;
+    }
+
+    logVSmuxDebug("daemon.runtime.replaceStaleDaemonIfNeeded.replace", {
+      hasExpectedProtocol,
+      isReachable,
+      pid: daemonInfo.pid,
+      port: daemonInfo.port,
+      protocolVersion: daemonInfo.protocolVersion,
+      startedAt: daemonInfo.startedAt,
+    });
+    await terminateDaemonProcess(daemonInfo.pid);
+    await this.clearPersistedDaemonInfo();
+  }
+
   private async readDaemonInfo(): Promise<DaemonInfo | undefined> {
     const daemonStateDir = this.getDaemonStateDir();
     const infoFilePath = path.join(daemonStateDir, INFO_FILE_NAME);
@@ -324,6 +399,16 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
     }
   }
 
+  private async clearPersistedDaemonInfo(): Promise<void> {
+    const daemonStateDir = this.getDaemonStateDir();
+    const infoFilePath = path.join(daemonStateDir, INFO_FILE_NAME);
+    try {
+      await unlink(infoFilePath);
+    } catch {
+      // Ignore missing or concurrently removed info files.
+    }
+  }
+
   private async canReachDaemon(daemonInfo: DaemonInfo): Promise<boolean> {
     try {
       const socket = await this.openWebSocket(
@@ -333,7 +418,14 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
       );
       socket.close();
       return true;
-    } catch {
+    } catch (error) {
+      logVSmuxDebug("daemon.runtime.canReachDaemon.failed", {
+        error: error instanceof Error ? error.message : String(error),
+        pid: daemonInfo.pid,
+        port: daemonInfo.port,
+        protocolVersion: daemonInfo.protocolVersion,
+        startedAt: daemonInfo.startedAt,
+      });
       return false;
     }
   }
@@ -382,7 +474,9 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
     return path.join(this.context.globalStorageUri.fsPath, DAEMON_STATE_DIR_NAME);
   }
 
-  private async tryAcquireLaunchLock(daemonStateDir: string): Promise<DaemonLaunchLock | undefined> {
+  private async tryAcquireLaunchLock(
+    daemonStateDir: string,
+  ): Promise<DaemonLaunchLock | undefined> {
     await mkdir(daemonStateDir, { recursive: true });
     const lockFilePath = path.join(daemonStateDir, LAUNCH_LOCK_FILE_NAME);
 
@@ -546,12 +640,7 @@ async function delay(durationMs: number): Promise<void> {
 }
 
 function isFileExistsError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "EEXIST"
-  );
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -565,5 +654,39 @@ function isProcessAlive(pid: number): boolean {
       "code" in error &&
       error.code === "ESRCH"
     );
+  }
+}
+
+async function terminateDaemonProcess(pid: number): Promise<void> {
+  if (!isProcessAlive(pid)) {
+    return;
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await delay(100);
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Ignore if the process exited between checks.
+  }
+
+  const killDeadline = Date.now() + 1_000;
+  while (Date.now() < killDeadline) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await delay(50);
   }
 }

@@ -2,6 +2,11 @@ import * as vscode from "vscode";
 import type { SessionRecord } from "../shared/session-grid-contract";
 import type { TerminalSessionSnapshot } from "../shared/terminal-host-protocol";
 
+export type TerminalCreateOrAttachResult = {
+  didCreateTerminal: boolean;
+  snapshot: TerminalSessionSnapshot;
+};
+
 export type TerminalWorkspaceBackendTitleChange = {
   sessionId: string;
   title?: string;
@@ -21,7 +26,7 @@ export type TerminalWorkspaceBackend = vscode.Disposable & {
   hasLiveTerminal: (sessionId: string) => boolean;
   initialize: (sessionRecords: readonly SessionRecord[]) => Promise<void>;
   acknowledgeAttention: (sessionId: string) => Promise<boolean>;
-  createOrAttachSession: (sessionRecord: SessionRecord) => Promise<TerminalSessionSnapshot>;
+  createOrAttachSession: (sessionRecord: SessionRecord) => Promise<TerminalCreateOrAttachResult>;
   focusSession: (sessionId: string) => Promise<boolean>;
   getSessionSnapshot: (sessionId: string) => TerminalSessionSnapshot | undefined;
   killSession: (sessionId: string) => Promise<void>;

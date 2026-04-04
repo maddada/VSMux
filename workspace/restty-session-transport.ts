@@ -3,13 +3,16 @@ import type { PtyCallbacks, PtyTransport } from "restty/internal";
 const SOCKET_RECONNECT_BASE_DELAY_MS = 250;
 const SOCKET_RECONNECT_MAX_DELAY_MS = 2_000;
 const TERMINAL_RECONNECT_RESET_SEQUENCE = "\x1bc";
+const CONNECTION_SUMMARY_DELAY_MS = 4_000;
 
 export type WorkspaceResttyTransportController = {
+  markTerminalReady: (cols: number, rows: number) => void;
   sendRawInput: (data: string) => boolean;
   transport: PtyTransport;
 };
 
 type CreateWorkspaceResttyTransportOptions = {
+  onFirstData?: (connectionId: number) => void;
   reportDebug?: (event: string, payload?: Record<string, unknown>) => void;
   sessionId: string;
 };
@@ -30,6 +33,15 @@ function createResizeMessage(sessionId: string, cols: number, rows: number): str
   });
 }
 
+function createReadyMessage(sessionId: string, cols: number, rows: number): string {
+  return JSON.stringify({
+    cols,
+    rows,
+    sessionId,
+    type: "terminalReady",
+  });
+}
+
 export function createWorkspaceResttyTransport(
   options: CreateWorkspaceResttyTransportOptions,
 ): WorkspaceResttyTransportController {
@@ -39,13 +51,47 @@ export function createWorkspaceResttyTransport(
   let reconnectAttempt = 0;
   let connectSequence = 0;
   let activeConnectId = 0;
+  let readySentConnectId = 0;
   let hasConnectedOnce = false;
   let explicitDisconnect = false;
+  let terminalReady = false;
   let desiredCols = 80;
   let desiredRows = 24;
   let desiredUrl = "";
   let callbacks: PtyCallbacks | undefined;
   let pendingMessages: string[] = [];
+  let activeConnectionOpenedAt = 0;
+  let activeConnectionFirstDataAt = 0;
+  let activeConnectionBytes = 0;
+  let activeConnectionChunks = 0;
+  let activeConnectionSummaryTimeoutId: number | undefined;
+
+  const clearConnectionSummaryTimeout = () => {
+    if (activeConnectionSummaryTimeoutId !== undefined) {
+      globalThis.clearTimeout(activeConnectionSummaryTimeoutId);
+      activeConnectionSummaryTimeoutId = undefined;
+    }
+  };
+
+  const reportConnectionSummary = (connectionId: number, reason: "window" | "close" | "error") => {
+    if (activeConnectionOpenedAt === 0) {
+      return;
+    }
+
+    options.reportDebug?.("terminal.connectionSummary", {
+      chunks: activeConnectionChunks,
+      connectionId,
+      durationMs: Math.round(performance.now() - activeConnectionOpenedAt),
+      firstDataDelayMs:
+        activeConnectionFirstDataAt > 0
+          ? Math.round(activeConnectionFirstDataAt - activeConnectionOpenedAt)
+          : undefined,
+      isReconnect: hasConnectedOnce,
+      reason,
+      sessionId: options.sessionId,
+      totalBytes: activeConnectionBytes,
+    });
+  };
 
   const clearReconnectTimeout = () => {
     if (reconnectTimeoutId !== undefined) {
@@ -55,7 +101,12 @@ export function createWorkspaceResttyTransport(
   };
 
   const flushPendingMessages = () => {
-    if (!socket || socket.readyState !== WebSocket.OPEN || pendingMessages.length === 0) {
+    if (
+      !socket ||
+      socket.readyState !== WebSocket.OPEN ||
+      pendingMessages.length === 0 ||
+      readySentConnectId !== activeConnectId
+    ) {
       return;
     }
 
@@ -69,6 +120,27 @@ export function createWorkspaceResttyTransport(
     const activeDecoder = decoder ?? new TextDecoder();
     decoder = activeDecoder;
     return activeDecoder.decode(new Uint8Array(payload), { stream: true });
+  };
+
+  const sendReadyIfPossible = () => {
+    if (
+      !terminalReady ||
+      !socket ||
+      socket.readyState !== WebSocket.OPEN ||
+      readySentConnectId === activeConnectId
+    ) {
+      return;
+    }
+
+    socket.send(createReadyMessage(options.sessionId, desiredCols, desiredRows));
+    readySentConnectId = activeConnectId;
+    options.reportDebug?.("terminal.socketReady", {
+      cols: desiredCols,
+      connectionId: activeConnectId,
+      rows: desiredRows,
+      sessionId: options.sessionId,
+    });
+    flushPendingMessages();
   };
 
   const scheduleReconnect = () => {
@@ -123,6 +195,11 @@ export function createWorkspaceResttyTransport(
 
       reconnectAttempt = 0;
       clearReconnectTimeout();
+      clearConnectionSummaryTimeout();
+      activeConnectionOpenedAt = performance.now();
+      activeConnectionFirstDataAt = 0;
+      activeConnectionBytes = 0;
+      activeConnectionChunks = 0;
       options.reportDebug?.("terminal.socketOpen", {
         cols: desiredCols,
         connectionId: connectId,
@@ -138,9 +215,13 @@ export function createWorkspaceResttyTransport(
         });
       }
       hasConnectedOnce = true;
-      nextSocket.send(createResizeMessage(options.sessionId, desiredCols, desiredRows));
+      sendReadyIfPossible();
       callbacks?.onConnect?.();
       flushPendingMessages();
+      activeConnectionSummaryTimeoutId = globalThis.setTimeout(() => {
+        activeConnectionSummaryTimeoutId = undefined;
+        reportConnectionSummary(connectId, "window");
+      }, CONNECTION_SUMMARY_DELAY_MS);
     });
 
     nextSocket.addEventListener("message", (event) => {
@@ -149,11 +230,37 @@ export function createWorkspaceResttyTransport(
       }
 
       if (typeof event.data === "string") {
+        activeConnectionChunks += 1;
+        activeConnectionBytes += new TextEncoder().encode(event.data).length;
+        if (activeConnectionFirstDataAt === 0) {
+          activeConnectionFirstDataAt = performance.now();
+          options.onFirstData?.(connectId);
+          options.reportDebug?.("terminal.socketFirstData", {
+            bytes: new TextEncoder().encode(event.data).length,
+            connectionId: connectId,
+            delayMs: Math.round(activeConnectionFirstDataAt - activeConnectionOpenedAt),
+            payloadType: "string",
+            sessionId: options.sessionId,
+          });
+        }
         callbacks?.onData?.(event.data);
         return;
       }
 
       if (event.data instanceof ArrayBuffer) {
+        activeConnectionChunks += 1;
+        activeConnectionBytes += event.data.byteLength;
+        if (activeConnectionFirstDataAt === 0) {
+          activeConnectionFirstDataAt = performance.now();
+          options.onFirstData?.(connectId);
+          options.reportDebug?.("terminal.socketFirstData", {
+            bytes: event.data.byteLength,
+            connectionId: connectId,
+            delayMs: Math.round(activeConnectionFirstDataAt - activeConnectionOpenedAt),
+            payloadType: "arraybuffer",
+            sessionId: options.sessionId,
+          });
+        }
         const text = decodeBinaryPayload(event.data);
         if (text) {
           callbacks?.onData?.(text);
@@ -165,6 +272,19 @@ export function createWorkspaceResttyTransport(
         void event.data.arrayBuffer().then((buffer) => {
           if (activeConnectId !== connectId || socket !== nextSocket) {
             return;
+          }
+          activeConnectionChunks += 1;
+          activeConnectionBytes += buffer.byteLength;
+          if (activeConnectionFirstDataAt === 0) {
+            activeConnectionFirstDataAt = performance.now();
+            options.onFirstData?.(connectId);
+            options.reportDebug?.("terminal.socketFirstData", {
+              bytes: buffer.byteLength,
+              connectionId: connectId,
+              delayMs: Math.round(activeConnectionFirstDataAt - activeConnectionOpenedAt),
+              payloadType: "blob",
+              sessionId: options.sessionId,
+            });
           }
           const text = decodeBinaryPayload(buffer);
           if (text) {
@@ -179,6 +299,8 @@ export function createWorkspaceResttyTransport(
         return;
       }
 
+      clearConnectionSummaryTimeout();
+      reportConnectionSummary(connectId, reason);
       cleanupSocket(nextSocket);
       options.reportDebug?.(reason === "close" ? "terminal.socketClose" : "terminal.socketError", {
         connectionId: connectId,
@@ -197,12 +319,15 @@ export function createWorkspaceResttyTransport(
   };
 
   const sendQueuedOrImmediate = (message: string) => {
-    if (socket?.readyState === WebSocket.OPEN) {
+    if (socket?.readyState === WebSocket.OPEN && readySentConnectId === activeConnectId) {
       socket.send(message);
       return true;
     }
 
-    if (socket?.readyState === WebSocket.CONNECTING) {
+    if (
+      socket?.readyState === WebSocket.CONNECTING ||
+      (socket?.readyState === WebSocket.OPEN && readySentConnectId !== activeConnectId)
+    ) {
       pendingMessages.push(message);
     }
     return false;
@@ -217,6 +342,12 @@ export function createWorkspaceResttyTransport(
   };
 
   return {
+    markTerminalReady: (cols, rows) => {
+      desiredCols = Math.max(1, Math.round(cols));
+      desiredRows = Math.max(1, Math.round(rows));
+      terminalReady = true;
+      sendReadyIfPossible();
+    },
     sendRawInput,
     transport: {
       connect: ({ callbacks: nextCallbacks, cols, rows, url }) => {
@@ -232,6 +363,7 @@ export function createWorkspaceResttyTransport(
         explicitDisconnect = true;
         clearReconnectTimeout();
         pendingMessages = [];
+        clearConnectionSummaryTimeout();
         const activeSocket = socket;
         socket = null;
         if (activeSocket) {
@@ -244,6 +376,7 @@ export function createWorkspaceResttyTransport(
         clearReconnectTimeout();
         const activeSocket = socket;
         socket = null;
+        clearConnectionSummaryTimeout();
         if (activeSocket) {
           activeSocket.close();
         }

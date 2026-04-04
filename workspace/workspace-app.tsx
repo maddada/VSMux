@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createEditorLayoutPlan } from "../shared/editor-layout";
 import type {
   ExtensionToWorkspacePanelMessage,
@@ -37,6 +44,14 @@ type WorkspaceShellStyle = CSSProperties & {
   "--workspace-pane-gap": string;
 };
 
+type WorkspacePanePointerDragState = {
+  isDragging: boolean;
+  pointerId: number;
+  sourcePaneId: string;
+  startX: number;
+  startY: number;
+};
+
 export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = window, vscode }) => {
   const [isWorkspaceFocused, setIsWorkspaceFocused] = useState(
     () =>
@@ -51,6 +66,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const [dropTargetPaneId, setDropTargetPaneId] = useState<string | undefined>();
   const [terminalRefreshRequestId, setTerminalRefreshRequestId] = useState(0);
   const focusRequestSequenceRef = useRef(0);
+  const pointerDragStateRef = useRef<WorkspacePanePointerDragState | undefined>(undefined);
   const pendingFocusRequestRef = useRef<
     | {
         requestId: number;
@@ -60,6 +76,11 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     | undefined
   >(undefined);
   const pendingFocusedSessionIdRef = useRef<string | undefined>(undefined);
+  const requestPaneReorderRef = useRef<(sourcePaneId: string, targetPaneId: string) => void>(
+    () => {},
+  );
+  const reorderablePaneIdsRef = useRef<string[]>([]);
+  const dropTargetPaneIdRef = useRef<string | undefined>(undefined);
   const workspaceState =
     serverState && (serverState.type === "hydrate" || serverState.type === "sessionState")
       ? serverState
@@ -115,7 +136,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           pendingFocusRequestRef.current &&
           message.focusedSessionId === pendingFocusRequestRef.current.sessionId
             ? {
-                durationMs: Math.round(performance.now() - pendingFocusRequestRef.current.startedAt),
+                durationMs: Math.round(
+                  performance.now() - pendingFocusRequestRef.current.startedAt,
+                ),
                 requestId: pendingFocusRequestRef.current.requestId,
                 sessionId: pendingFocusRequestRef.current.sessionId,
               }
@@ -206,10 +229,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     () => (localPaneOrder ? sortPanesBySessionIds(panes, localPaneOrder) : panes),
     [localPaneOrder, panes],
   );
-  const visiblePanes = useMemo(
-    () => orderedPanes.filter((pane) => pane.isVisible),
-    [orderedPanes],
-  );
+  const visiblePanes = useMemo(() => orderedPanes.filter((pane) => pane.isVisible), [orderedPanes]);
   const visiblePaneLayoutBySessionId = useMemo(() => {
     const resolvedViewMode = workspaceState?.viewMode ?? "grid";
     const rowLengths = createEditorLayoutPlan(
@@ -245,39 +265,33 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     return nextLayoutBySessionId;
   }, [visiblePanes, workspaceState?.viewMode]);
   const presentedFocusedSessionId = localFocusedSessionId ?? workspaceState?.focusedSessionId;
-  const visiblePaneIds = useMemo(
-    () => visiblePanes.map((pane) => pane.sessionId),
-    [visiblePanes],
-  );
+  const visiblePaneIds = useMemo(() => visiblePanes.map((pane) => pane.sessionId), [visiblePanes]);
   const visiblePaneIdsKey = visiblePaneIds.join("|");
   const reorderablePaneIds = useMemo(
     () => orderedPanes.filter((pane) => pane.kind === "terminal").map((pane) => pane.sessionId),
     [orderedPanes],
   );
-  const workspaceShellStyle = useMemo(
-    () => {
-      const nextStyle: WorkspaceShellStyle = {
-        "--workspace-active-pane-border-color":
-          workspaceState?.layoutAppearance.activePaneBorderColor,
-        "--workspace-pane-gap": `${String(workspaceState?.layoutAppearance.paneGap ?? 12)}px`,
-      };
+  const workspaceShellStyle = useMemo(() => {
+    const nextStyle: WorkspaceShellStyle = {
+      "--workspace-active-pane-border-color":
+        workspaceState?.layoutAppearance.activePaneBorderColor,
+      "--workspace-pane-gap": `${String(workspaceState?.layoutAppearance.paneGap ?? 12)}px`,
+    };
 
-      if (visiblePanes.length > 0) {
-        nextStyle.gridTemplateColumns = getWorkspaceGridTemplateColumns(
-          workspaceState?.viewMode ?? "grid",
-          visiblePanes.length,
-        );
-      }
+    if (visiblePanes.length > 0) {
+      nextStyle.gridTemplateColumns = getWorkspaceGridTemplateColumns(
+        workspaceState?.viewMode ?? "grid",
+        visiblePanes.length,
+      );
+    }
 
-      return nextStyle;
-    },
-    [
-      workspaceState?.layoutAppearance.activePaneBorderColor,
-      workspaceState?.layoutAppearance.paneGap,
-      workspaceState?.viewMode,
-      visiblePanes.length,
-    ],
-  );
+    return nextStyle;
+  }, [
+    workspaceState?.layoutAppearance.activePaneBorderColor,
+    workspaceState?.layoutAppearance.paneGap,
+    workspaceState?.viewMode,
+    visiblePanes.length,
+  ]);
 
   useEffect(() => {
     if (!workspaceState) {
@@ -365,11 +379,91 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       type: "syncSessionOrder",
     });
   };
+  requestPaneReorderRef.current = requestPaneReorder;
+  reorderablePaneIdsRef.current = reorderablePaneIds;
 
   const clearDragState = () => {
+    pointerDragStateRef.current = undefined;
     setDraggedPaneId(undefined);
+    dropTargetPaneIdRef.current = undefined;
     setDropTargetPaneId(undefined);
   };
+
+  const setCurrentDropTargetPaneId = (paneId: string | undefined) => {
+    dropTargetPaneIdRef.current = paneId;
+    setDropTargetPaneId(paneId);
+  };
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const pointerDragState = pointerDragStateRef.current;
+      if (!pointerDragState || event.pointerId !== pointerDragState.pointerId) {
+        return;
+      }
+
+      if (
+        !pointerDragState.isDragging &&
+        !hasWorkspacePanePointerDragExceededThreshold(
+          pointerDragState.startX,
+          pointerDragState.startY,
+          event.clientX,
+          event.clientY,
+        )
+      ) {
+        return;
+      }
+
+      if (!pointerDragState.isDragging) {
+        pointerDragState.isDragging = true;
+        setDraggedPaneId(pointerDragState.sourcePaneId);
+      }
+
+      event.preventDefault();
+      setCurrentDropTargetPaneId(
+        getWorkspacePaneDropTargetIdAtPoint(
+          event.clientX,
+          event.clientY,
+          pointerDragState.sourcePaneId,
+          reorderablePaneIdsRef.current,
+        ),
+      );
+    };
+
+    const handlePointerFinish = (event: PointerEvent) => {
+      const pointerDragState = pointerDragStateRef.current;
+      if (!pointerDragState || event.pointerId !== pointerDragState.pointerId) {
+        return;
+      }
+
+      const sourcePaneId = pointerDragState.sourcePaneId;
+      const targetPaneId = pointerDragState.isDragging
+        ? (dropTargetPaneIdRef.current ??
+          getWorkspacePaneDropTargetIdAtPoint(
+            event.clientX,
+            event.clientY,
+            sourcePaneId,
+            reorderablePaneIdsRef.current,
+          ))
+        : undefined;
+
+      clearDragState();
+      if (!pointerDragState.isDragging || !targetPaneId) {
+        return;
+      }
+
+      requestPaneReorderRef.current(sourcePaneId, targetPaneId);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, true);
+    window.addEventListener("pointerup", handlePointerFinish, true);
+    window.addEventListener("pointercancel", handlePointerFinish, true);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerFinish, true);
+      window.removeEventListener("pointercancel", handlePointerFinish, true);
+    };
+  }, []);
 
   if (!workspaceState) {
     return (
@@ -381,7 +475,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
   return (
     <main
-      className={visiblePanes.length === 0 ? "workspace-shell workspace-shell-empty" : "workspace-shell"}
+      className={
+        visiblePanes.length === 0 ? "workspace-shell workspace-shell-empty" : "workspace-shell"
+      }
       style={workspaceShellStyle}
     >
       {orderedPanes.map((pane) => (
@@ -419,44 +515,20 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           }
           isDragging={draggedPaneId === pane.sessionId}
           isDropTarget={dropTargetPaneId === pane.sessionId && draggedPaneId !== pane.sessionId}
-          onDragEnd={clearDragState}
-          onDragOver={(event) => {
-            if (
-              pane.kind !== "terminal" ||
-              !pane.isVisible ||
-              !draggedPaneId ||
-              draggedPaneId === pane.sessionId
-            ) {
+          onHeaderPointerDown={(event) => {
+            if (pane.kind !== "terminal" || !pane.isVisible || event.button !== 0) {
               return;
             }
 
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            setDropTargetPaneId(pane.sessionId);
-          }}
-          onDragStart={(event) => {
-            if (pane.kind !== "terminal" || !pane.isVisible) {
-              return;
-            }
-
-            setDraggedPaneId(pane.sessionId);
-            setDropTargetPaneId(undefined);
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", pane.sessionId);
-          }}
-          onDrop={(event) => {
-            if (pane.kind !== "terminal" || !pane.isVisible) {
-              return;
-            }
-
-            event.preventDefault();
-            const sourcePaneId = draggedPaneId ?? event.dataTransfer.getData("text/plain");
-            clearDragState();
-            if (!sourcePaneId) {
-              return;
-            }
-
-            requestPaneReorder(sourcePaneId, pane.sessionId);
+            pointerDragStateRef.current = {
+              isDragging: false,
+              pointerId: event.pointerId,
+              sourcePaneId: pane.sessionId,
+              startX: event.clientX,
+              startY: event.clientY,
+            };
+            setDraggedPaneId(undefined);
+            setCurrentDropTargetPaneId(undefined);
           }}
           onRefreshAllTerminals={() => {
             setTerminalRefreshRequestId((currentValue) => currentValue + 1);
@@ -484,10 +556,7 @@ type WorkspacePaneViewProps = {
   onLocalFocus: () => void;
   onFocus: () => void;
   onClose: () => void;
-  onDragEnd: () => void;
-  onDragOver: (event: DragEvent<HTMLElement>) => void;
-  onDragStart: (event: DragEvent<HTMLElement>) => void;
-  onDrop: (event: DragEvent<HTMLElement>) => void;
+  onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onRefreshAllTerminals: () => void;
   pane: WorkspacePanelPane;
   refreshRequestId: number;
@@ -508,10 +577,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onLocalFocus,
   onFocus,
   onClose,
-  onDragEnd,
-  onDragOver,
-  onDragStart,
-  onDrop,
+  onHeaderPointerDown,
   onRefreshAllTerminals,
   pane,
   refreshRequestId,
@@ -531,8 +597,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
       ]
         .filter(Boolean)
         .join(" ")}
-      onDragOver={canDrag ? onDragOver : undefined}
-      onDrop={canDrag ? onDrop : undefined}
+      data-workspace-pane-id={pane.sessionId}
       onMouseDown={() => {
         onLocalFocus();
         if (!isFocused) {
@@ -546,9 +611,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
     >
       <header
         className={`workspace-pane-header ${canDrag ? "workspace-pane-header-draggable" : ""}`}
-        draggable={canDrag}
-        onDragEnd={canDrag ? onDragEnd : undefined}
-        onDragStart={canDrag ? onDragStart : undefined}
+        onPointerDown={canDrag ? onHeaderPointerDown : undefined}
       >
         <div className="workspace-pane-title">{primaryTitle}</div>
         {pane.kind === "terminal" ? (
@@ -658,4 +721,37 @@ function getWorkspacePaneGridPlacement(
     gridColumn: `${String(startColumn)} / span ${String(span)}`,
     gridRow: `${String(rowNumber)} / span 1`,
   };
+}
+
+function hasWorkspacePanePointerDragExceededThreshold(
+  startX: number,
+  startY: number,
+  currentX: number,
+  currentY: number,
+): boolean {
+  return Math.hypot(currentX - startX, currentY - startY) >= 6;
+}
+
+function getWorkspacePaneDropTargetIdAtPoint(
+  clientX: number,
+  clientY: number,
+  sourcePaneId: string,
+  reorderablePaneIds: readonly string[],
+): string | undefined {
+  const hitElement = document.elementFromPoint(clientX, clientY);
+  if (!(hitElement instanceof Element)) {
+    return undefined;
+  }
+
+  const targetPaneId = hitElement.closest<HTMLElement>("[data-workspace-pane-id]")?.dataset
+    .workspacePaneId;
+  if (
+    !targetPaneId ||
+    targetPaneId === sourcePaneId ||
+    !reorderablePaneIds.includes(targetPaneId)
+  ) {
+    return undefined;
+  }
+
+  return targetPaneId;
 }

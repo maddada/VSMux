@@ -39,6 +39,33 @@ export function createTerminalReplaySnapshot(
   return historyBuffer.snapshotRange(replayStartOffset, replayCursor);
 }
 
+export function createTerminalReplayChunks(
+  historyBuffer: TerminalDaemonRingBuffer,
+  replayCursor = historyBuffer.bytesWritten,
+  chunkSize = 128 * 1024,
+): Buffer[] {
+  return splitTerminalReplaySnapshot(
+    createTerminalReplaySnapshot(historyBuffer, replayCursor),
+    chunkSize,
+  );
+}
+
+export function splitTerminalReplaySnapshot(replaySnapshot: Buffer, chunkSize: number): Buffer[] {
+  if (replaySnapshot.length === 0) {
+    return [];
+  }
+
+  if (chunkSize <= 0 || replaySnapshot.length <= chunkSize) {
+    return [replaySnapshot];
+  }
+
+  const chunks: Buffer[] = [];
+  for (let index = 0; index < replaySnapshot.length; index += chunkSize) {
+    chunks.push(replaySnapshot.subarray(index, Math.min(replaySnapshot.length, index + chunkSize)));
+  }
+  return chunks;
+}
+
 export function serializeTerminalReplayHistory(
   historyBuffer: TerminalDaemonRingBuffer,
   replayCursor = historyBuffer.bytesWritten,

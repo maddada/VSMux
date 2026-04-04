@@ -1,4 +1,4 @@
-export const TERMINAL_HOST_PROTOCOL_VERSION = 15;
+export const TERMINAL_HOST_PROTOCOL_VERSION = 19;
 
 export type TerminalSessionStatus = "starting" | "running" | "exited" | "error" | "disconnected";
 
@@ -110,6 +110,7 @@ export type TerminalHostResponse =
       requestId: string;
       ok: true;
       session: TerminalSessionSnapshot;
+      didCreateSession: boolean;
     }
   | {
       type: "response";
@@ -149,6 +150,13 @@ export type TerminalInputMessage = {
 
 export type TerminalResizeMessage = {
   type: "terminalResize";
+  sessionId: string;
+  cols: number;
+  rows: number;
+};
+
+export type TerminalReadyMessage = {
+  type: "terminalReady";
   sessionId: string;
   cols: number;
   rows: number;

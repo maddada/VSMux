@@ -18,7 +18,7 @@ import "./terminal-pane.css";
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 const RESTTY_STARTUP_BACKGROUND = "#121212";
 const SCROLL_TO_BOTTOM_THRESHOLD_PX = 200;
-const VISIBLE_RESIZE_DELAY_MS = 2_000;
+const SCROLL_TO_BOTTOM_HIDE_THRESHOLD_PX = 40;
 const SEARCH_RESULTS_EMPTY = {
   resultCount: 0,
   resultIndex: -1,
@@ -62,8 +62,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const boundScrollHostRef = useRef<HTMLElement | null>(null);
   const canvasVisibleRef = useRef(false);
   const appearanceRequestIdRef = useRef(0);
+  const appearancePromiseRef = useRef<Promise<void>>(Promise.resolve());
   const appliedFontSourcesSignatureRef = useRef("");
   const activePaneRef = useRef<ReturnType<Restty["activePane"]>>(null);
+  const connectPtyStartedRef = useRef(false);
+  const maintenanceProbeIdRef = useRef(0);
+  const latestTermSizeRef = useRef<{ cols: number; rows: number } | null>(null);
+  const rendererModeRef = useRef<string | null>(null);
   const resttyRef = useRef<Restty | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const transportRef = useRef<WorkspaceResttyTransportController | null>(null);
@@ -110,11 +115,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
   };
 
-  const applyAppearance = (sourceLabel = "vscode") => {
+  const applyAppearance = (sourceLabel = "vscode"): Promise<void> => {
     const restty = resttyRef.current;
     const activePane = activePaneRef.current;
     if (!restty || !activePane) {
-      return;
+      return Promise.resolve();
     }
 
     const requestId = appearanceRequestIdRef.current + 1;
@@ -122,79 +127,90 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const fontSources = getResttyFontSources(terminalAppearance.fontFamily);
     const fontSourcesSignature = JSON.stringify(fontSources);
     const theme = getResttyTheme();
+    const appearancePromise = new Promise<void>((resolve) => {
+      const resolveAppearance = () => {
+        resolve();
+      };
 
-    const applyResolvedTheme = (phase: string) => {
-      if (
-        appearanceRequestIdRef.current !== requestId ||
-        resttyRef.current !== restty ||
-        activePaneRef.current !== activePane
-      ) {
-        return;
-      }
-
-      if (theme) {
-        activePane.applyTheme(theme, `${sourceLabel}:${phase}`);
-      }
-    };
-
-    activePane.setFontSize(terminalAppearance.fontSize);
-
-    const finishAppearanceApply = () => {
-      if (
-        appearanceRequestIdRef.current !== requestId ||
-        resttyRef.current !== restty ||
-        activePaneRef.current !== activePane
-      ) {
-        return;
-      }
-
-      activePane.setFontSize(terminalAppearance.fontSize);
-      applyResolvedTheme("applied");
-      requestAnimationFrame(() => {
-        if (appearanceRequestIdRef.current !== requestId) {
+      const applyResolvedTheme = (phase: string) => {
+        if (
+          appearanceRequestIdRef.current !== requestId ||
+          resttyRef.current !== restty ||
+          activePaneRef.current !== activePane
+        ) {
           return;
         }
 
-        applyResolvedTheme("raf-1");
+        if (theme) {
+          activePane.applyTheme(theme, `${sourceLabel}:${phase}`);
+        }
+      };
+
+      activePane.setFontSize(terminalAppearance.fontSize);
+
+      const finishAppearanceApply = () => {
+        if (
+          appearanceRequestIdRef.current !== requestId ||
+          resttyRef.current !== restty ||
+          activePaneRef.current !== activePane
+        ) {
+          resolveAppearance();
+          return;
+        }
+
+        activePane.setFontSize(terminalAppearance.fontSize);
+        applyResolvedTheme("applied");
+        resolveAppearance();
         requestAnimationFrame(() => {
           if (appearanceRequestIdRef.current !== requestId) {
             return;
           }
 
-          applyResolvedTheme("raf-2");
+          applyResolvedTheme("raf-1");
+          requestAnimationFrame(() => {
+            if (appearanceRequestIdRef.current !== requestId) {
+              return;
+            }
+
+            applyResolvedTheme("raf-2");
+          });
         });
-      });
-      window.setTimeout(() => {
-        if (appearanceRequestIdRef.current !== requestId) {
-          return;
-        }
+        window.setTimeout(() => {
+          if (appearanceRequestIdRef.current !== requestId) {
+            return;
+          }
 
-        applyResolvedTheme("timeout");
-      }, 120);
-    };
+          applyResolvedTheme("timeout");
+        }, 120);
+      };
 
-    if (appliedFontSourcesSignatureRef.current === fontSourcesSignature) {
-      finishAppearanceApply();
-      return;
-    }
-
-    void restty
-      .setFontSources(fontSources)
-      .then(() => {
-        if (appearanceRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        appliedFontSourcesSignatureRef.current = fontSourcesSignature;
+      if (appliedFontSourcesSignatureRef.current === fontSourcesSignature) {
         finishAppearanceApply();
-      })
-      .catch(() => {
-        if (appearanceRequestIdRef.current !== requestId) {
-          return;
-        }
+        return;
+      }
 
-        finishAppearanceApply();
-      });
+      void restty
+        .setFontSources(fontSources)
+        .then(() => {
+          if (appearanceRequestIdRef.current !== requestId) {
+            resolveAppearance();
+            return;
+          }
+
+          appliedFontSourcesSignatureRef.current = fontSourcesSignature;
+          finishAppearanceApply();
+        })
+        .catch(() => {
+          if (appearanceRequestIdRef.current !== requestId) {
+            resolveAppearance();
+            return;
+          }
+
+          finishAppearanceApply();
+        });
+    });
+    appearancePromiseRef.current = appearancePromise;
+    return appearancePromise;
   };
 
   const updateTerminalSize = () => {
@@ -211,6 +227,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     activePane.updateSize(true);
     return true;
+  };
+
+  const runVisibleMaintenance = (
+    sourceLabel: string,
+    options: {
+      updateSize?: boolean;
+    } = {},
+  ) => {
+    if (options.updateSize) {
+      updateTerminalSize();
+    }
+    seedResttyBackgroundSurfaces();
+    maybeRevealResttyCanvas(sourceLabel);
+    ensureScrollHostListener();
+    updateScrollToBottomVisibility();
   };
 
   const seedResttyBackgroundSurfaces = () => {
@@ -298,7 +329,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const distanceFromBottom =
       scrollHost.scrollHeight - scrollHost.clientHeight - scrollHost.scrollTop;
-    setShowScrollToBottom(distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD_PX);
+    setShowScrollToBottom((currentValue) => {
+      if (currentValue) {
+        return distanceFromBottom > SCROLL_TO_BOTTOM_HIDE_THRESHOLD_PX;
+      }
+
+      return distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD_PX;
+    });
   };
 
   const ensureScrollHostListener = () => {
@@ -338,6 +375,191 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     return transportRef.current?.sendRawInput(data) ?? false;
   };
 
+  const collectViewportMetrics = () => {
+    const container = containerRef.current;
+    const scrollHost = getScrollHost();
+    const bounds = container?.getBoundingClientRect();
+    const distanceFromBottom = scrollHost
+      ? scrollHost.scrollHeight - scrollHost.clientHeight - scrollHost.scrollTop
+      : undefined;
+
+    return {
+      containerHeight: bounds ? Math.round(bounds.height) : undefined,
+      containerWidth: bounds ? Math.round(bounds.width) : undefined,
+      distanceFromBottomPx:
+        distanceFromBottom === undefined ? undefined : Math.max(0, Math.round(distanceFromBottom)),
+      rendererMode: rendererModeRef.current,
+      scrollClientHeight: scrollHost ? Math.round(scrollHost.clientHeight) : undefined,
+      scrollHeight: scrollHost ? Math.round(scrollHost.scrollHeight) : undefined,
+      scrollTop: scrollHost ? Math.round(scrollHost.scrollTop) : undefined,
+      showScrollToBottom,
+      terminalCols: latestTermSizeRef.current?.cols,
+      terminalRows: latestTermSizeRef.current?.rows,
+    };
+  };
+
+  const logViewportMetrics = (event: string, payload?: Record<string, unknown>) => {
+    reportDebug(event, {
+      ...collectViewportMetrics(),
+      sessionId: pane.sessionId,
+      ...payload,
+    });
+  };
+
+  const schedulePostReplayViewportLogs = (connectionId: number) => {
+    logViewportMetrics("terminal.postReplayViewport", {
+      connectionId,
+      phase: "first-data",
+    });
+
+    for (const delayMs of [150, 600, 1500]) {
+      window.setTimeout(() => {
+        logViewportMetrics("terminal.postReplayViewport", {
+          connectionId,
+          phase: `after-${String(delayMs)}ms`,
+        });
+      }, delayMs);
+    }
+  };
+
+  const waitForAnimationFrame = () =>
+    new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+  const waitForStableTerminalSize = async (): Promise<{ cols: number; rows: number } | null> => {
+    let previousMeasurement = "";
+    let stableMeasurementCount = 0;
+    const startedAt = performance.now();
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      updateTerminalSize();
+      await waitForAnimationFrame();
+
+      const container = containerRef.current;
+      const stableSize = latestTermSizeRef.current;
+      const bounds = container?.getBoundingClientRect();
+      if (!container || !bounds || bounds.width <= 0 || bounds.height <= 0 || !stableSize) {
+        await waitForAnimationFrame();
+        continue;
+      }
+
+      const measurement = [
+        stableSize.cols,
+        stableSize.rows,
+        Math.round(bounds.width),
+        Math.round(bounds.height),
+      ].join("x");
+      stableMeasurementCount = measurement === previousMeasurement ? stableMeasurementCount + 1 : 1;
+      previousMeasurement = measurement;
+      if (stableMeasurementCount >= 2) {
+        reportDebug("terminal.stableSizeResolved", {
+          attempts: attempt + 1,
+          cols: stableSize.cols,
+          durationMs: Math.round(performance.now() - startedAt),
+          rows: stableSize.rows,
+          sessionId: pane.sessionId,
+        });
+        return stableSize;
+      }
+
+      await waitForAnimationFrame();
+    }
+
+    reportDebug("terminal.stableSizeFallback", {
+      attempts: 20,
+      cols: latestTermSizeRef.current?.cols,
+      durationMs: Math.round(performance.now() - startedAt),
+      rows: latestTermSizeRef.current?.rows,
+      sessionId: pane.sessionId,
+    });
+    return latestTermSizeRef.current;
+  };
+
+  const startReconnectPerformanceProbe = (sourceLabel: string) => {
+    const probeId = maintenanceProbeIdRef.current + 1;
+    maintenanceProbeIdRef.current = probeId;
+    const startedAt = performance.now();
+    let previousFrameAt = startedAt;
+    let maxFrameGapMs = 0;
+    let frameCount = 0;
+    let longTaskCount = 0;
+    let longTaskTotalDurationMs = 0;
+    let observer: PerformanceObserver | undefined;
+
+    if (typeof PerformanceObserver !== "undefined") {
+      try {
+        observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            longTaskCount += 1;
+            longTaskTotalDurationMs += entry.duration;
+          }
+        });
+        observer.observe({ entryTypes: ["longtask"] });
+      } catch {
+        observer = undefined;
+      }
+    }
+
+    const sampleFrame = () => {
+      if (maintenanceProbeIdRef.current !== probeId) {
+        observer?.disconnect();
+        return;
+      }
+
+      const now = performance.now();
+      maxFrameGapMs = Math.max(maxFrameGapMs, now - previousFrameAt);
+      previousFrameAt = now;
+      frameCount += 1;
+      if (now - startedAt >= 5_000) {
+        observer?.disconnect();
+        reportDebug("terminal.performanceWindow", {
+          durationMs: Math.round(now - startedAt),
+          frameCount,
+          longTaskCount,
+          longTaskTotalDurationMs: Math.round(longTaskTotalDurationMs),
+          maxFrameGapMs: Math.round(maxFrameGapMs),
+          rendererMode: rendererModeRef.current,
+          sessionId: pane.sessionId,
+          source: sourceLabel,
+        });
+        return;
+      }
+
+      requestAnimationFrame(sampleFrame);
+    };
+
+    requestAnimationFrame(sampleFrame);
+  };
+
+  const connectTerminalWhenReady = async (sourceLabel: string) => {
+    if (connection.mock || connectPtyStartedRef.current || !isVisible) {
+      return;
+    }
+
+    const activePane = activePaneRef.current;
+    const transportController = transportRef.current;
+    if (!activePane || !transportController) {
+      return;
+    }
+
+    await appearancePromiseRef.current;
+    const stableTerminalSize = await waitForStableTerminalSize();
+    if (!stableTerminalSize || connectPtyStartedRef.current) {
+      return;
+    }
+
+    transportController.markTerminalReady(stableTerminalSize.cols, stableTerminalSize.rows);
+    activePane.connectPty(buildSessionSocketUrl(connection, pane.sessionId));
+    connectPtyStartedRef.current = true;
+    startReconnectPerformanceProbe(sourceLabel);
+    logViewportMetrics("terminal.connectWhenReady", {
+      cols: stableTerminalSize.cols,
+      rows: stableTerminalSize.rows,
+      source: sourceLabel,
+    });
+  };
+
   const pasteClipboardText = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -361,6 +583,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const transportController = connection.mock
       ? null
       : createWorkspaceResttyTransport({
+          onFirstData: (connectionId) => {
+            schedulePostReplayViewportLogs(connectionId);
+          },
           reportDebug,
           sessionId: pane.sessionId,
         });
@@ -380,6 +605,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         autoResize: false,
         callbacks: {
           onBackend: (backend) => {
+            rendererModeRef.current = backend;
             reportDebug("terminal.rendererReady", {
               rendererMode: backend,
               sessionId: pane.sessionId,
@@ -396,6 +622,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             });
           },
           onTermSize: (cols, rows) => {
+            latestTermSizeRef.current = { cols, rows };
             reportDebug("terminal.termSizeChanged", {
               cols,
               rows,
@@ -453,10 +680,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
         updateTerminalSize();
         applyAppearance("mount-visible");
-        seedResttyBackgroundSurfaces();
-        maybeRevealResttyCanvas("mount-visible");
-        ensureScrollHostListener();
-        updateScrollToBottomVisibility();
+        runVisibleMaintenance("mount-visible");
         if (document.hasFocus()) {
           focusTerminal();
         }
@@ -465,17 +689,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           if (pane.snapshot?.history) {
             activePane.sendInput(pane.snapshot.history, "pty");
           }
-          seedResttyBackgroundSurfaces();
-          maybeRevealResttyCanvas("mock-history");
+          runVisibleMaintenance("mock-history");
           return;
         }
 
-        const socketUrl = buildSessionSocketUrl(connection, pane.sessionId);
-        activePane.connectPty(socketUrl);
-        seedResttyBackgroundSurfaces();
-        window.setTimeout(() => {
-          maybeRevealResttyCanvas("post-connect");
-        }, 0);
+        runVisibleMaintenance("mount-visible");
+        void connectTerminalWhenReady("mount-visible");
       });
     });
 
@@ -492,6 +711,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       resttyRef.current = null;
       transportRef.current = null;
       canvasVisibleRef.current = false;
+      connectPtyStartedRef.current = false;
+      maintenanceProbeIdRef.current += 1;
+      latestTermSizeRef.current = null;
+      rendererModeRef.current = null;
       setShowScrollToBottom(false);
       setSearchResults(SEARCH_RESULTS_EMPTY);
     };
@@ -515,29 +738,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   ]);
 
   useEffect(() => {
-    if (!isVisible) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          updateTerminalSize();
-          applyAppearance("visible");
-          seedResttyBackgroundSurfaces();
-          maybeRevealResttyCanvas("visible");
-          ensureScrollHostListener();
-          updateScrollToBottomVisibility();
-        });
-      });
-    }, VISIBLE_RESIZE_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [isVisible, pane.sessionId]);
-
-  useEffect(() => {
     if (handledRefreshRequestIdRef.current === refreshRequestId) {
       return;
     }
@@ -549,10 +749,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        updateTerminalSize();
-        seedResttyBackgroundSurfaces();
-        maybeRevealResttyCanvas("refresh");
-        updateScrollToBottomVisibility();
+        runVisibleMaintenance("refresh", {
+          updateSize: true,
+        });
       });
     });
   }, [isVisible, refreshRequestId]);
@@ -563,21 +762,49 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       return;
     }
 
-    const intervalId = window.setInterval(() => {
-      seedResttyBackgroundSurfaces();
-      maybeRevealResttyCanvas("visibility-poll");
-      ensureScrollHostListener();
-      updateScrollToBottomVisibility();
-    }, 250);
+    runVisibleMaintenance("visible-effect");
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
 
-    seedResttyBackgroundSurfaces();
-    maybeRevealResttyCanvas("visible-effect");
-    ensureScrollHostListener();
-    updateScrollToBottomVisibility();
-    return () => {
-      window.clearInterval(intervalId);
+    const handleCapturedScroll = () => {
+      updateScrollToBottomVisibility();
     };
-  }, [isVisible]);
+    container.addEventListener("scroll", handleCapturedScroll, {
+      capture: true,
+      passive: true,
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      reportDebug("terminal.resizeObserved", {
+        bounds: {
+          height: Math.round(container.getBoundingClientRect().height),
+          width: Math.round(container.getBoundingClientRect().width),
+        },
+        sessionId: pane.sessionId,
+      });
+      runVisibleMaintenance("resize-observer", {
+        updateSize: true,
+      });
+      void connectTerminalWhenReady("resize-observer");
+    });
+    resizeObserver.observe(container);
+
+    const mutationObserver = new MutationObserver(() => {
+      runVisibleMaintenance("mutation-observer");
+    });
+    mutationObserver.observe(container, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      container.removeEventListener("scroll", handleCapturedScroll, true);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [isVisible, pane.sessionId]);
 
   useEffect(() => {
     if (isFocused || !isSearchOpen) {

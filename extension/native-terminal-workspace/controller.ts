@@ -301,6 +301,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     resetVSmuxDebugLog();
     logVSmuxDebug("controller.initialize", {
       activeGroupId: this.store.getSnapshot().activeGroupId,
+      extensionHostPid: process.pid,
       sessionCount: this.getAllSessionRecords().length,
     });
     await this.backend.initialize(this.getAllSessionRecords());
@@ -396,14 +397,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       source,
       startedAt: focusStartedAt,
     });
-    const hadLiveTerminal =
-      sessionRecord.kind === "terminal" && this.backend.hasLiveTerminal(sessionRecord.sessionId);
     const shouldReattachDetachedTerminal =
       source === "sidebar" &&
       sessionRecord.kind === "terminal" &&
       !this.backend.hasAttachedTerminal(sessionRecord.sessionId);
-    const shouldResumeDeadTerminal =
-      shouldReattachDetachedTerminal && sessionRecord.kind === "terminal" && !hadLiveTerminal;
+    let terminalSurfaceEnsureResult: TerminalSurfaceEnsureResult = "non-terminal";
     const acknowledgedAttention = await this.acknowledgeSessionAttentionIfNeeded(sessionId);
     logVSmuxDebug("controller.focusSession.afterAcknowledge", {
       acknowledgedAttention,
@@ -423,12 +421,24 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       this.enqueueWorkspaceAutoFocus(sessionId, "sidebar");
     }
     if (shouldReattachDetachedTerminal) {
-      await this.backend.createOrAttachSession(sessionRecord);
+      terminalSurfaceEnsureResult = await this.createSurfaceIfNeeded(sessionRecord);
+    }
+    if (shouldReattachDetachedTerminal && terminalSurfaceEnsureResult === "created-terminal") {
       logVSmuxDebug("controller.focusSession.explicitTerminalCreateOrAttach", {
         durationMs: Date.now() - focusStartedAt,
         focusRequestId,
         sessionId,
-        shouldResumeDeadTerminal,
+        shouldResumeDeadTerminal: true,
+        source,
+      });
+    } else if (
+      shouldReattachDetachedTerminal &&
+      terminalSurfaceEnsureResult === "existing-live-terminal"
+    ) {
+      logVSmuxDebug("controller.focusSession.skipExplicitCreateOrAttachForLiveTerminal", {
+        durationMs: Date.now() - focusStartedAt,
+        focusRequestId,
+        sessionId,
         source,
       });
     }
@@ -480,7 +490,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           focusRequestId,
           sessionId,
         });
-        if (shouldResumeDeadTerminal) {
+        if (
+          terminalSurfaceEnsureResult === "created-terminal" &&
+          this.canResumeDetachedTerminalSession(sessionRecord)
+        ) {
           await this.resumeDetachedTerminalSession(sessionRecord);
           logVSmuxDebug("controller.focusSession.afterResumeDetachedTerminal", {
             durationMs: Date.now() - focusStartedAt,
@@ -504,7 +517,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       focusRequestId,
       sessionId,
     });
-    if (shouldResumeDeadTerminal) {
+    if (
+      terminalSurfaceEnsureResult === "created-terminal" &&
+      this.canResumeDetachedTerminalSession(sessionRecord)
+    ) {
       await this.resumeDetachedTerminalSession(sessionRecord);
       logVSmuxDebug("controller.focusSession.afterResumeDetachedTerminal", {
         durationMs: Date.now() - focusStartedAt,
@@ -980,7 +996,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     const nextSessionRecord = this.store.getSession(restoredSession.sessionId) ?? restoredSession;
     await finalizeRestoredPreviousSession({
       afterStateChange: async () => this.afterStateChange(),
-      createSurfaceIfNeeded: async () => this.createSurfaceIfNeeded(nextSessionRecord),
+      createSurfaceIfNeeded: async () => {
+        await this.createSurfaceIfNeeded(nextSessionRecord);
+      },
       persistSessionAgentLaunchState: async () => this.persistSessionAgentLaunchState(),
       removePreviousSession: async () => this.previousSessionHistory.remove(historyId),
       resumeDetachedTerminalSession: async () =>
@@ -1743,13 +1761,18 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           });
           continue;
         }
-        const hadLiveTerminal =
-          sessionRecord.kind === "terminal" &&
-          this.backend.hasLiveTerminal(sessionRecord.sessionId);
-        await this.createSurfaceIfNeeded(sessionRecord);
-        if (this.shouldAutoResumeVisibleTerminalSession(sessionRecord, hadLiveTerminal)) {
+        const surfaceEnsureResult = await this.createSurfaceIfNeeded(sessionRecord);
+        if (this.shouldAutoResumeVisibleTerminalSession(sessionRecord, surfaceEnsureResult)) {
           await this.resumeDetachedTerminalSession(sessionRecord);
           logVSmuxDebug("controller.reconcile.autoResumeVisibleTerminal", {
+            sessionId: sessionRecord.sessionId,
+            version: requestVersion,
+          });
+        } else if (
+          sessionRecord.kind === "terminal" &&
+          surfaceEnsureResult === "existing-live-terminal"
+        ) {
+          logVSmuxDebug("controller.reconcile.skipAutoResumeForLiveTerminal", {
             sessionId: sessionRecord.sessionId,
             version: requestVersion,
           });
@@ -1785,24 +1808,48 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     return requestVersion !== this.reconcileRequestVersion;
   }
 
-  private async createSurfaceIfNeeded(sessionRecord: SessionRecord): Promise<void> {
+  private async createSurfaceIfNeeded(
+    sessionRecord: SessionRecord,
+  ): Promise<TerminalSurfaceEnsureResult> {
     if (sessionRecord.kind === "terminal") {
-      await this.backend.createOrAttachSession(sessionRecord);
-      return;
+      if (this.backend.hasLiveTerminal(sessionRecord.sessionId)) {
+        logVSmuxDebug("controller.createSurfaceIfNeeded.skipCreateOrAttachForLiveTerminal", {
+          sessionId: sessionRecord.sessionId,
+        });
+        return "existing-live-terminal";
+      }
+
+      const createOrAttachResult = await this.backend.createOrAttachSession(sessionRecord);
+      if (
+        !createOrAttachResult.didCreateTerminal &&
+        this.backend.hasLiveTerminal(sessionRecord.sessionId)
+      ) {
+        logVSmuxDebug("controller.createSurfaceIfNeeded.attachedExistingLiveTerminal", {
+          sessionId: sessionRecord.sessionId,
+        });
+        return "existing-live-terminal";
+      }
+
+      if (!createOrAttachResult.didCreateTerminal) {
+        return "non-terminal";
+      }
+
+      return "created-terminal";
     }
 
     if (sessionRecord.kind !== "t3") {
-      return;
+      return "non-terminal";
     }
 
     if (
       this.pendingT3SessionIds.has(sessionRecord.sessionId) ||
       isPendingT3Metadata(sessionRecord.t3)
     ) {
-      return;
+      return "non-terminal";
     }
 
     await this.ensureT3Ready(sessionRecord);
+    return "non-terminal";
   }
 
   private shouldEnsureSessionSurface(sessionRecord: SessionRecord): boolean {
@@ -1872,12 +1919,27 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
   private shouldAutoResumeVisibleTerminalSession(
     sessionRecord: SessionRecord,
-    hadLiveTerminal: boolean,
+    surfaceEnsureResult: TerminalSurfaceEnsureResult,
   ): boolean {
     return (
       sessionRecord.kind === "terminal" &&
-      !hadLiveTerminal &&
-      this.sessionAgentLaunchBySessionId.has(sessionRecord.sessionId)
+      surfaceEnsureResult === "created-terminal" &&
+      this.canResumeDetachedTerminalSession(sessionRecord)
+    );
+  }
+
+  private canResumeDetachedTerminalSession(sessionRecord: SessionRecord): boolean {
+    if (sessionRecord.kind !== "terminal") {
+      return false;
+    }
+
+    return Boolean(
+      buildDetachedResumeAction(
+        this.sessionAgentLaunchBySessionId.get(sessionRecord.sessionId),
+        this.getSidebarAgentIconForSession(sessionRecord.sessionId),
+        sessionRecord.title,
+        this.terminalTitleBySessionId.get(sessionRecord.sessionId),
+      ),
     );
   }
 
@@ -2047,7 +2109,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   private async resumeDetachedTerminalSession(sessionRecord: SessionRecord): Promise<void> {
-    if (sessionRecord.kind !== "terminal") {
+    if (!this.canResumeDetachedTerminalSession(sessionRecord)) {
       return;
     }
 
@@ -2564,6 +2626,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     });
   }
 }
+
+type TerminalSurfaceEnsureResult = "created-terminal" | "existing-live-terminal" | "non-terminal";
 
 function createPendingT3Metadata(serverOrigin: string) {
   const pendingId = `pending-${randomUUID()}`;

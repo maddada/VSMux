@@ -17,6 +17,7 @@ import {
 } from "./native-managed-terminal";
 import { readManagedTerminalIdentityFromProcessId } from "./native-terminal-process-identity";
 import type {
+  TerminalCreateOrAttachResult,
   TerminalWorkspaceBackend,
   TerminalWorkspaceBackendPresentationChange,
   TerminalWorkspaceBackendTitleChange,
@@ -27,10 +28,7 @@ import {
   getDefaultWorkspaceCwd,
   getWorkspaceStorageKey,
 } from "./terminal-workspace-helpers";
-import {
-  focusEditorGroupByIndex,
-  moveActiveEditorToGroup,
-} from "./terminal-workspace-environment";
+import { focusEditorGroupByIndex, moveActiveEditorToGroup } from "./terminal-workspace-environment";
 import {
   findTerminalTabIndex as findTerminalTabIndexByTitle,
   findTerminalGroupIndex as findTerminalGroupIndexByTitle,
@@ -258,12 +256,14 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   public async createOrAttachSession(
     sessionRecord: SessionRecord,
-  ): Promise<TerminalSessionSnapshot> {
+  ): Promise<TerminalCreateOrAttachResult> {
     if (!isTerminalSession(sessionRecord)) {
-      return (
-        this.sessions.get(sessionRecord.sessionId) ??
-        createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId)
-      );
+      return {
+        didCreateTerminal: false,
+        snapshot:
+          this.sessions.get(sessionRecord.sessionId) ??
+          createDisconnectedSessionSnapshot(sessionRecord.sessionId, this.options.workspaceId),
+      };
     }
 
     this.upsertSession(sessionRecord);
@@ -274,7 +274,10 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     const projection = await this.ensureTerminal(sessionRecord);
     await this.syncTerminalName(projection.terminal, sessionRecord.sessionId);
     await this.refreshSessionSnapshot(sessionRecord.sessionId);
-    return this.sessions.get(sessionRecord.sessionId)!;
+    return {
+      didCreateTerminal: true,
+      snapshot: this.sessions.get(sessionRecord.sessionId)!,
+    };
   }
 
   public async focusSession(sessionId: string): Promise<boolean> {
@@ -337,11 +340,18 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
         );
         if (!isForegroundAfterActivationAttempt) {
           this.observedEditorGroupIndexBySessionId.delete(sessionRecord.sessionId);
-          this.logBackendDebug("backend.revealSessionInGroup.forceMoveToEditorAfterUnavailableTab", {
-            sessionId: sessionRecord.sessionId,
+          this.logBackendDebug(
+            "backend.revealSessionInGroup.forceMoveToEditorAfterUnavailableTab",
+            {
+              sessionId: sessionRecord.sessionId,
+              targetGroupIndex,
+            },
+          );
+          projection = await this.ensureTerminalInGroup(
+            sessionRecord,
             targetGroupIndex,
-          });
-          projection = await this.ensureTerminalInGroup(sessionRecord, targetGroupIndex, isCancelled);
+            isCancelled,
+          );
           if (!projection || isCancelled()) {
             this.logBackendDebug(
               "backend.revealSessionInGroup.forceMoveToEditorAfterUnavailableTab.failed",
@@ -373,18 +383,24 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
         projection.terminal.show(false);
         const isActive = await this.waitForActiveTerminal(projection.terminal, isCancelled);
         if (!isActive || isCancelled()) {
-          this.logBackendDebug("backend.revealSessionInGroup.fallbackWaitForActiveTerminal.failed", {
+          this.logBackendDebug(
+            "backend.revealSessionInGroup.fallbackWaitForActiveTerminal.failed",
+            {
+              durationMs: Date.now() - fallbackStartedAt,
+              sessionId: sessionRecord.sessionId,
+              targetGroupIndex,
+            },
+          );
+          return false;
+        }
+        this.logBackendDebug(
+          "backend.revealSessionInGroup.fallbackWaitForActiveTerminal.succeeded",
+          {
             durationMs: Date.now() - fallbackStartedAt,
             sessionId: sessionRecord.sessionId,
             targetGroupIndex,
-          });
-          return false;
-        }
-        this.logBackendDebug("backend.revealSessionInGroup.fallbackWaitForActiveTerminal.succeeded", {
-          durationMs: Date.now() - fallbackStartedAt,
-          sessionId: sessionRecord.sessionId,
-          targetGroupIndex,
-        });
+          },
+        );
       }
     } else if (!this.isTerminalTabActive(sessionRecord.sessionId, projection.terminal)) {
       const activateStartedAt = Date.now();
@@ -442,7 +458,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     const activeTerminalBefore = vscode.window.activeTerminal;
     await appendCodeModeDebugLog("park-editor-terminals-to-panel:start", {
       activeTerminalBefore: activeTerminalBefore
-        ? getTerminalDisplayName(activeTerminalBefore) ?? activeTerminalBefore.name
+        ? (getTerminalDisplayName(activeTerminalBefore) ?? activeTerminalBefore.name)
         : undefined,
       panelTerminalTabLabel,
       terminals: terminals.map((terminal) => ({
@@ -618,7 +634,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
 
     await this.killSession(sessionRecord.sessionId);
-    return this.createOrAttachSession(sessionRecord);
+    return (await this.createOrAttachSession(sessionRecord)).snapshot;
   }
 
   public async writeText(sessionId: string, data: string, shouldExecute = true): Promise<void> {
@@ -1080,7 +1096,8 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     await vscode.commands.executeCommand(`${OPEN_EDITOR_AT_INDEX_COMMAND_PREFIX}${tabIndex + 1}`);
     const becameForeground =
       isCancelled === defaultNeverCancelled
-        ? (await waitForTerminalTabForeground(this.getSessionSurfaceTitle(sessionId), groupIndex), true)
+        ? (await waitForTerminalTabForeground(this.getSessionSurfaceTitle(sessionId), groupIndex),
+          true)
         : await waitForTerminalTabForegroundOrCancel(
             this.getSessionSurfaceTitle(sessionId),
             groupIndex,
@@ -1109,7 +1126,9 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return activeGroupIndex;
     }
 
-    const heuristicGroupIndex = findTerminalGroupIndexByTitle(this.getSessionSurfaceTitle(sessionId));
+    const heuristicGroupIndex = findTerminalGroupIndexByTitle(
+      this.getSessionSurfaceTitle(sessionId),
+    );
     if (heuristicGroupIndex !== undefined) {
       this.observedEditorGroupIndexBySessionId.set(sessionId, heuristicGroupIndex);
       return heuristicGroupIndex;
@@ -1395,7 +1414,6 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     if (didChangeSessions) {
       this.changeSessionsEmitter.fire();
     }
-
   }
 
   private async refreshSessionSnapshot(sessionId: string): Promise<{
@@ -1440,26 +1458,34 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       this.sessionTitleBySessionId.delete(sessionId);
       return {
         didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
-        presentationChange:
-          haveSameTerminalSessionPresentation(previousSnapshot, previousTitle, nextSnapshot, nextTitle)
-            ? undefined
-            : {
-                sessionId,
-                title: nextTitle,
-              },
+        presentationChange: haveSameTerminalSessionPresentation(
+          previousSnapshot,
+          previousTitle,
+          nextSnapshot,
+          nextTitle,
+        )
+          ? undefined
+          : {
+              sessionId,
+              title: nextTitle,
+            },
       };
     }
 
     this.sessionTitleBySessionId.set(sessionId, nextTitle);
     return {
       didChangeSnapshot: !haveSameTerminalSessionSnapshot(previousSnapshot, nextSnapshot),
-      presentationChange:
-        haveSameTerminalSessionPresentation(previousSnapshot, previousTitle, nextSnapshot, nextTitle)
-          ? undefined
-          : {
-              sessionId,
-              title: nextTitle,
-            },
+      presentationChange: haveSameTerminalSessionPresentation(
+        previousSnapshot,
+        previousTitle,
+        nextSnapshot,
+        nextTitle,
+      )
+        ? undefined
+        : {
+            sessionId,
+            title: nextTitle,
+          },
       titleChange:
         nextTitle !== previousTitle
           ? {
@@ -1638,7 +1664,9 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
       return undefined;
     }
 
-    return getActiveTerminalTabLocation() === "editor" ? this.getActiveEditorGroupIndex() : undefined;
+    return getActiveTerminalTabLocation() === "editor"
+      ? this.getActiveEditorGroupIndex()
+      : undefined;
   }
 
   private async logState(tag: string, message: string, details?: unknown): Promise<void> {

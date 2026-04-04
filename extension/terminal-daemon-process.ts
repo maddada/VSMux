@@ -1,14 +1,12 @@
 import { createServer } from "node:http";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import * as pty from "@lydell/node-pty";
-import {
-  createManagedTerminalEnvironment,
-} from "./native-managed-terminal";
+import { createManagedTerminalEnvironment } from "./native-managed-terminal";
 import {
   createPendingAttachQueue,
-  createTerminalReplaySnapshot,
+  createTerminalReplayChunks,
   type PendingAttachQueue,
   queuePendingAttachChunk,
   serializeTerminalReplayHistory,
@@ -39,6 +37,7 @@ import type {
   TerminalHostWriteRequest,
   TerminalHostResizeRequest,
   TerminalInputMessage,
+  TerminalReadyMessage,
   TerminalResizeMessage,
   TerminalSessionSnapshot,
 } from "../shared/terminal-host-protocol";
@@ -76,15 +75,28 @@ type ControlClient = {
   socket: WebSocket;
 };
 
+type PendingSessionAttachment = {
+  activated: boolean;
+  initialCols?: number;
+  initialRows?: number;
+  pendingAttachQueue?: PendingAttachQueue;
+  readyTimeout?: NodeJS.Timeout;
+};
+
 const DEFAULT_IDLE_SHUTDOWN_TIMEOUT_MS = 5 * 60_000;
 const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
+const SESSION_ATTACH_READY_TIMEOUT_MS = 15_000;
+const REPLAY_CHUNK_BYTES = 128 * 1024;
 const INFO_FILE_NAME = "daemon-info.json";
+const DAEMON_DEBUG_LOG_FILE_NAME = "terminal-daemon-debug.log";
 
 const stateDir = getStateDirFromArgs();
 const infoFilePath = path.join(stateDir, INFO_FILE_NAME);
+const daemonDebugLogFilePath = path.join(stateDir, DAEMON_DEBUG_LOG_FILE_NAME);
 
 const sessions = new Map<string, ManagedSession>();
 const controlClients = new Set<ControlClient>();
+const pendingSessionAttachmentSockets = new Set<WebSocket>();
 const sessionSocketsBySessionKey = new Map<string, WebSocket>();
 
 let idleShutdownTimeoutMs: number | null = DEFAULT_IDLE_SHUTDOWN_TIMEOUT_MS;
@@ -122,6 +134,22 @@ server.listen(0, "127.0.0.1", async () => {
     process.exit(1);
   }
 
+  await mkdir(stateDir, { recursive: true });
+  const existingDaemon = await findReachableExistingDaemonInfo();
+  if (existingDaemon) {
+    void logDaemonDebug("daemon.startSkippedExisting", {
+      existingPid: existingDaemon.pid,
+      existingPort: existingDaemon.port,
+      existingProtocolVersion: existingDaemon.protocolVersion,
+      existingStartedAt: existingDaemon.startedAt,
+      pid: process.pid,
+    });
+    server.close(() => {
+      process.exit(0);
+    });
+    return;
+  }
+
   daemonInfo = {
     pid: process.pid,
     port: address.port,
@@ -130,16 +158,21 @@ server.listen(0, "127.0.0.1", async () => {
     token: randomToken(),
   };
 
-  await mkdir(stateDir, { recursive: true });
   await writeJsonAtomically(infoFilePath, daemonInfo);
+  void logDaemonDebug("daemon.start", {
+    pid: daemonInfo.pid,
+    port: daemonInfo.port,
+    protocolVersion: daemonInfo.protocolVersion,
+    startedAt: daemonInfo.startedAt,
+  });
 });
 
 process.on("SIGTERM", () => {
-  void shutdown();
+  void shutdown("SIGTERM");
 });
 
 process.on("SIGINT", () => {
-  void shutdown();
+  void shutdown("SIGINT");
 });
 
 function attachControlSocket(socket: WebSocket): void {
@@ -239,6 +272,7 @@ async function handleCreateOrAttachRequest(
 ): Promise<void> {
   const sessionKey = createTerminalDaemonSessionKey(request.workspaceId, request.sessionId);
   const existingSession = sessions.get(sessionKey);
+  const didCreateSession = !existingSession || existingSession.snapshot.status === "exited";
   const session =
     existingSession && existingSession.snapshot.status !== "exited"
       ? existingSession
@@ -250,7 +284,9 @@ async function handleCreateOrAttachRequest(
 
   sessions.set(sessionKey, session);
   const snapshot = await buildSnapshot(session, false);
-  socket.send(JSON.stringify(okResponse(request.requestId, { session: snapshot })));
+  socket.send(
+    JSON.stringify(okResponse(request.requestId, { didCreateSession, session: snapshot })),
+  );
   broadcastControlSessionState(snapshot);
 }
 
@@ -266,7 +302,10 @@ async function handleListSessionsRequest(
   socket.send(JSON.stringify(okResponse(request.requestId, { sessions: sessionSnapshots })));
 }
 
-async function handleWriteRequest(socket: WebSocket, request: TerminalHostWriteRequest): Promise<void> {
+async function handleWriteRequest(
+  socket: WebSocket,
+  request: TerminalHostWriteRequest,
+): Promise<void> {
   const session = sessions.get(
     createTerminalDaemonSessionKey(request.workspaceId, request.sessionId),
   );
@@ -291,7 +330,10 @@ async function handleResizeRequest(
   socket.send(JSON.stringify(okResponse(undefined, undefined, request)));
 }
 
-async function handleKillRequest(socket: WebSocket, request: TerminalHostKillRequest): Promise<void> {
+async function handleKillRequest(
+  socket: WebSocket,
+  request: TerminalHostKillRequest,
+): Promise<void> {
   const sessionKey = createTerminalDaemonSessionKey(request.workspaceId, request.sessionId);
   const session = sessions.get(sessionKey);
   if (session) {
@@ -330,11 +372,7 @@ function createSession(request: TerminalHostCreateOrAttachRequest): ManagedSessi
     cols: request.cols,
     cwd: request.cwd,
     encoding: null,
-    env: createPtyEnvironment(
-      request.workspaceId,
-      request.sessionId,
-      request.sessionStateFilePath,
-    ),
+    env: createPtyEnvironment(request.workspaceId, request.sessionId, request.sessionStateFilePath),
     name: "xterm-256color",
     rows: request.rows,
   });
@@ -425,8 +463,7 @@ async function buildSnapshot(
     agentName: session.titleActivity?.agentName ?? persistedState.agentName,
     agentStatus: session.titleActivity?.activity ?? persistedState.agentStatus,
     history: includeHistory ? serializeTerminalReplayHistory(session.historyBuffer) : undefined,
-    isAttached:
-      sessionSocketsBySessionKey.get(session.sessionKey)?.readyState === WebSocket.OPEN,
+    isAttached: sessionSocketsBySessionKey.get(session.sessionKey)?.readyState === WebSocket.OPEN,
     title: session.liveTitle ?? persistedState.title,
   };
   return session.snapshot;
@@ -451,40 +488,65 @@ function broadcastSessionMessage(sessionKey: string, message: Buffer | string): 
   }
 }
 
-async function handleSessionMessage(sessionKey: string, rawMessage: string): Promise<void> {
-  const session = sessions.get(sessionKey);
-  if (!session) {
-    return;
-  }
-
+async function handleSessionSocketMessage(
+  session: ManagedSession,
+  sessionKey: string,
+  socket: WebSocket,
+  attachment: PendingSessionAttachment,
+  rawMessage: string,
+): Promise<void> {
   if (!rawMessage.trimStart().startsWith("{")) {
-    session.pty.write(rawMessage);
+    if (attachment.activated) {
+      session.pty.write(rawMessage);
+    }
     return;
   }
 
-  let message: TerminalInputMessage | TerminalResizeMessage | undefined;
+  let message: TerminalInputMessage | TerminalResizeMessage | TerminalReadyMessage | undefined;
   try {
-    message = JSON.parse(rawMessage) as TerminalInputMessage | TerminalResizeMessage;
+    message = JSON.parse(rawMessage) as
+      | TerminalInputMessage
+      | TerminalResizeMessage
+      | TerminalReadyMessage;
   } catch {
-    session.pty.write(rawMessage);
+    if (attachment.activated) {
+      session.pty.write(rawMessage);
+    }
     return;
   }
 
-  if (message.type !== "terminalInput" && message.type !== "terminalResize") {
-    session.pty.write(rawMessage);
+  if (
+    message.type !== "terminalInput" &&
+    message.type !== "terminalResize" &&
+    message.type !== "terminalReady"
+  ) {
+    if (attachment.activated) {
+      session.pty.write(rawMessage);
+    }
     return;
   }
 
   if (message.type === "terminalInput") {
-    session.pty.write(message.data);
+    if (attachment.activated) {
+      session.pty.write(message.data);
+    }
     return;
   }
 
   if (message.type === "terminalResize") {
+    attachment.initialCols = message.cols;
+    attachment.initialRows = message.rows;
     resizeSession(session, message.cols, message.rows);
-    const snapshot = await buildSnapshot(session, false);
-    broadcastControlSessionState(snapshot);
+    if (attachment.activated) {
+      const snapshot = await buildSnapshot(session, false);
+      broadcastControlSessionState(snapshot);
+    }
+    return;
   }
+
+  attachment.initialCols = message.cols;
+  attachment.initialRows = message.rows;
+  await activatePendingSessionAttachment(session, sessionKey, socket, attachment);
 }
 
 function okResponse(
@@ -497,7 +559,7 @@ function okResponse(
       ok: true,
       requestId,
       type: "response",
-      ...(payload ?? {}),
+      ...payload,
     } as TerminalHostResponse;
   }
 
@@ -508,7 +570,7 @@ function okResponse(
         ? request.sessionId
         : "ok",
     type: "response",
-    ...(payload ?? {}),
+    ...payload,
   } as TerminalHostResponse;
 }
 
@@ -552,6 +614,38 @@ async function persistSessionLiveTitle(session: ManagedSession, title: string): 
       return {
         ...currentState,
         title,
+      };
+    },
+  ).catch(() => undefined);
+
+  if (!persistedState) {
+    return;
+  }
+
+  session.lastKnownPersistedTitle = persistedState.title;
+}
+
+async function persistSessionPresentationState(session: ManagedSession): Promise<void> {
+  const nextAgentName = session.titleActivity?.agentName;
+  const nextAgentStatus = session.titleActivity?.activity ?? "idle";
+  const nextTitle = session.liveTitle ?? session.lastKnownPersistedTitle;
+
+  const persistedState = await updatePersistedSessionStateFile(
+    session.sessionStateFilePath,
+    (currentState) => {
+      if (
+        currentState.agentName === nextAgentName &&
+        currentState.agentStatus === nextAgentStatus &&
+        currentState.title === nextTitle
+      ) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        agentName: nextAgentName,
+        agentStatus: nextAgentStatus,
+        title: nextTitle,
       };
     },
   ).catch(() => undefined);
@@ -615,6 +709,7 @@ function applySessionTitleActivity(session: ManagedSession): void {
     agentStatus: session.titleActivity.activity,
     title: session.liveTitle ?? session.lastKnownPersistedTitle,
   };
+  void persistSessionPresentationState(session);
 }
 
 function scheduleIdleShutdownIfNeeded(): void {
@@ -626,7 +721,7 @@ function scheduleIdleShutdownIfNeeded(): void {
   }
   clearIdleShutdownTimer();
   idleShutdownTimer = setTimeout(() => {
-    void shutdown();
+    void shutdown("idle-timeout");
   }, idleShutdownTimeoutMs);
 }
 
@@ -638,11 +733,18 @@ function clearIdleShutdownTimer(): void {
 }
 
 function getConnectedClientCount(): number {
-  return controlClients.size + sessionSocketsBySessionKey.size;
+  return (
+    controlClients.size + sessionSocketsBySessionKey.size + pendingSessionAttachmentSockets.size
+  );
 }
 
-async function shutdown(): Promise<void> {
+async function shutdown(reason = "unknown"): Promise<void> {
   clearIdleShutdownTimer();
+  void logDaemonDebug("daemon.shutdown", {
+    pid: process.pid,
+    reason,
+    sessionCount: sessions.size,
+  });
   for (const session of sessions.values()) {
     try {
       session.pty.kill();
@@ -655,6 +757,27 @@ async function shutdown(): Promise<void> {
     server.close(() => resolve());
   });
   process.exit(0);
+}
+
+async function logDaemonDebug(event: string, details?: unknown): Promise<void> {
+  const line = `${new Date().toISOString()} ${event}${details ? ` ${safeSerialize(details)}` : ""}\n`;
+  try {
+    await mkdir(stateDir, { recursive: true });
+    await appendFile(daemonDebugLogFilePath, line, "utf8");
+  } catch {
+    // Logging must never break the daemon.
+  }
+}
+
+function safeSerialize(details: unknown): string {
+  try {
+    return JSON.stringify(details);
+  } catch (error) {
+    return JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      unserializable: true,
+    });
+  }
 }
 
 function getStateDirFromArgs(): string {
@@ -679,6 +802,60 @@ function resolveRequestUrl(requestUrl: string | undefined): URL | undefined {
 function parsePositiveNumber(value: string | null): number | undefined {
   const parsedValue = value ? Number.parseInt(value, 10) : Number.NaN;
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : undefined;
+}
+
+async function findReachableExistingDaemonInfo(): Promise<DaemonInfo | undefined> {
+  try {
+    const rawInfo = await readFile(infoFilePath, "utf8");
+    const existingInfo = JSON.parse(rawInfo) as DaemonInfo;
+    if (
+      !existingInfo ||
+      existingInfo.pid === process.pid ||
+      existingInfo.protocolVersion !== TERMINAL_HOST_PROTOCOL_VERSION
+    ) {
+      return undefined;
+    }
+
+    if (await canReachDaemon(existingInfo)) {
+      return existingInfo;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+async function canReachDaemon(daemon: DaemonInfo): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new WebSocket(
+      `ws://127.0.0.1:${String(daemon.port)}/control?token=${encodeURIComponent(daemon.token)}`,
+    );
+
+    const timeout = setTimeout(() => {
+      try {
+        socket.close();
+      } catch {
+        // Ignore socket close failures during daemon reachability checks.
+      }
+      resolve(false);
+    }, 1_500);
+
+    socket.once("open", () => {
+      clearTimeout(timeout);
+      socket.close();
+      resolve(true);
+    });
+
+    socket.once("error", () => {
+      clearTimeout(timeout);
+      resolve(false);
+    });
+
+    socket.once("close", () => {
+      clearTimeout(timeout);
+    });
+  });
 }
 
 function randomToken(): string {
@@ -719,48 +896,20 @@ async function attachSessionSocketWithReplay(
   initialCols: number | undefined,
   initialRows: number | undefined,
 ): Promise<void> {
-  const pendingAttachQueue = createPendingAttachQueue(session.historyBuffer.bytesWritten);
-  session.pendingAttachQueues.push(pendingAttachQueue);
+  const attachment: PendingSessionAttachment = {
+    activated: false,
+    initialCols,
+    initialRows,
+  };
+  pendingSessionAttachmentSockets.add(socket);
 
-  try {
-    if (initialCols && initialRows) {
-      resizeSession(session, initialCols, initialRows);
+  attachment.readyTimeout = setTimeout(() => {
+    if (!attachment.activated && socket.readyState === WebSocket.OPEN) {
+      socket.close();
     }
+  }, SESSION_ATTACH_READY_TIMEOUT_MS);
 
-    const previousSocket = sessionSocketsBySessionKey.get(sessionKey);
-    if (previousSocket && previousSocket !== socket) {
-      sessionSocketsBySessionKey.delete(sessionKey);
-      previousSocket.close();
-    }
-
-    const replaySnapshot = createTerminalReplaySnapshot(
-      session.historyBuffer,
-      pendingAttachQueue.replayCursor,
-    );
-    if (replaySnapshot.length > 0) {
-      socket.send(replaySnapshot);
-    }
-    if (socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    flushPendingAttachQueue(socket, pendingAttachQueue);
-    if (socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    removePendingAttachQueue(session, pendingAttachQueue);
-    sessionSocketsBySessionKey.set(sessionKey, socket);
-
-    bindSessionSocket(session, sessionKey, socket);
-    const snapshot = await buildSnapshot(session, false);
-    broadcastControlSessionState(snapshot);
-  } catch {
-    socket.close();
-    scheduleIdleShutdownIfNeeded();
-  } finally {
-    removePendingAttachQueue(session, pendingAttachQueue);
-  }
+  bindSessionSocket(session, sessionKey, socket, attachment);
 }
 
 function flushPendingAttachQueue(socket: WebSocket, pendingAttachQueue: PendingAttachQueue): void {
@@ -778,32 +927,116 @@ function flushPendingAttachQueue(socket: WebSocket, pendingAttachQueue: PendingA
   }
 }
 
+function sendReplayChunks(socket: WebSocket, replayChunks: Buffer[]): void {
+  for (const replayChunk of replayChunks) {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    socket.send(replayChunk);
+  }
+}
+
 function bindSessionSocket(
   session: ManagedSession,
   sessionKey: string,
   socket: WebSocket,
+  attachment: PendingSessionAttachment,
 ): void {
   socket.on("message", (buffer: Buffer) => {
-    void handleSessionMessage(sessionKey, buffer.toString());
+    void handleSessionSocketMessage(session, sessionKey, socket, attachment, buffer.toString());
   });
   socket.on("close", () => {
-    if (sessionSocketsBySessionKey.get(sessionKey) === socket) {
-      sessionSocketsBySessionKey.delete(sessionKey);
-    }
-    void buildSnapshot(session, false).then((snapshot) => {
-      broadcastControlSessionState(snapshot);
-    });
-    scheduleIdleShutdownIfNeeded();
+    handleSessionSocketEnd(session, sessionKey, socket, attachment);
   });
   socket.on("error", () => {
+    handleSessionSocketEnd(session, sessionKey, socket, attachment);
+  });
+}
+
+async function activatePendingSessionAttachment(
+  session: ManagedSession,
+  sessionKey: string,
+  socket: WebSocket,
+  attachment: PendingSessionAttachment,
+): Promise<void> {
+  if (attachment.activated || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  attachment.activated = true;
+  clearPendingSessionAttachmentTimeout(attachment);
+
+  if (attachment.initialCols && attachment.initialRows) {
+    resizeSession(session, attachment.initialCols, attachment.initialRows);
+  }
+
+  const pendingAttachQueue = createPendingAttachQueue(session.historyBuffer.bytesWritten);
+  attachment.pendingAttachQueue = pendingAttachQueue;
+  session.pendingAttachQueues.push(pendingAttachQueue);
+
+  const previousSocket = sessionSocketsBySessionKey.get(sessionKey);
+  if (previousSocket && previousSocket !== socket) {
+    sessionSocketsBySessionKey.delete(sessionKey);
+    previousSocket.close();
+  }
+
+  const replayChunks = createTerminalReplayChunks(
+    session.historyBuffer,
+    pendingAttachQueue.replayCursor,
+    REPLAY_CHUNK_BYTES,
+  );
+  if (replayChunks.length > 0) {
+    sendReplayChunks(socket, replayChunks);
+  }
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  flushPendingAttachQueue(socket, pendingAttachQueue);
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  pendingSessionAttachmentSockets.delete(socket);
+  removePendingAttachQueue(session, pendingAttachQueue);
+  attachment.pendingAttachQueue = undefined;
+  sessionSocketsBySessionKey.set(sessionKey, socket);
+
+  const snapshot = await buildSnapshot(session, false);
+  broadcastControlSessionState(snapshot);
+}
+
+function handleSessionSocketEnd(
+  session: ManagedSession,
+  sessionKey: string,
+  socket: WebSocket,
+  attachment: PendingSessionAttachment,
+): void {
+  clearPendingSessionAttachmentTimeout(attachment);
+  pendingSessionAttachmentSockets.delete(socket);
+  if (attachment.pendingAttachQueue) {
+    removePendingAttachQueue(session, attachment.pendingAttachQueue);
+    attachment.pendingAttachQueue = undefined;
+  }
+  if (attachment.activated) {
     if (sessionSocketsBySessionKey.get(sessionKey) === socket) {
       sessionSocketsBySessionKey.delete(sessionKey);
     }
     void buildSnapshot(session, false).then((snapshot) => {
       broadcastControlSessionState(snapshot);
     });
-    scheduleIdleShutdownIfNeeded();
-  });
+  }
+  scheduleIdleShutdownIfNeeded();
+}
+
+function clearPendingSessionAttachmentTimeout(attachment: PendingSessionAttachment): void {
+  if (!attachment.readyTimeout) {
+    return;
+  }
+
+  clearTimeout(attachment.readyTimeout);
+  attachment.readyTimeout = undefined;
 }
 
 function removePendingAttachQueue(
