@@ -355,25 +355,6 @@
           "default": false,
           "description": "Show debugging UI such as the active terminal backend indicator in the status bar."
         },
-        "VSmux.matchVisibleTerminalOrderInSessionsArea": {
-          "title": "Match Visible Terminal Order In Sessions Area",
-          "type": "boolean",
-          "default": false,
-          "description": "Keep editor terminals in the same order as the Sessions list. This can add extra layout jitter when switching sessions."
-        },
-        "VSmux.nativeTerminalActionDelayMs": {
-          "title": "Native Terminal Action Delay Ms",
-          "type": "number",
-          "minimum": 0,
-          "default": 0,
-          "description": "Delay native terminal move actions for debugging so you can watch layout changes more clearly."
-        },
-        "VSmux.keepSessionGroupsUnlocked": {
-          "title": "Keep Session Groups Unlocked",
-          "type": "boolean",
-          "default": true,
-          "description": "Keep editor groups that contain VSmux session terminals unlocked after native moves complete."
-        },
         "VSmux.showCloseButtonOnSessionCards": {
           "title": "Show Close Button On Session Cards",
           "type": "boolean",

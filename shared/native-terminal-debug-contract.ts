@@ -48,9 +48,7 @@ export type NativeTerminalDebugBackendState = {
   currentMoveAction?: NativeTerminalDebugMoveAction;
   lastVisibleSnapshot?: unknown;
   layout: NativeTerminalDebugLayout;
-  matchVisibleTerminalOrder: boolean;
   moveHistory: NativeTerminalDebugMoveAction[];
-  nativeTerminalActionDelayMs: number;
   observedAt: string;
   workspaceId: string;
 };

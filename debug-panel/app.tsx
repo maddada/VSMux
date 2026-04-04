@@ -36,9 +36,7 @@ const EMPTY_STATE: NativeTerminalDebugPanelState = {
       terminalNames: [],
       trackedSessionIds: [],
     },
-    matchVisibleTerminalOrder: false,
     moveHistory: [],
-    nativeTerminalActionDelayMs: 0,
     observedAt: "",
     workspaceId: "",
   },
@@ -168,14 +166,6 @@ export function DebugPanelApp({ clearUrl, stateUrl, vscode }: DebugPanelAppProps
           </p>
         </div>
         <div className="summary-grid">
-          <SummaryCard
-            label="Delay"
-            value={`${String(state.backend.nativeTerminalActionDelayMs)} ms`}
-          />
-          <SummaryCard
-            label="Order Mode"
-            value={state.backend.matchVisibleTerminalOrder ? "Match sidebar" : "Stable placement"}
-          />
           <SummaryCard label="View" value={state.sidebar.hud.viewMode} />
           <SummaryCard label="Shown" value={String(state.sidebar.hud.visibleCount)} />
           <SummaryCard label="Observed" value={formatTimestamp(state.observedAt)} />

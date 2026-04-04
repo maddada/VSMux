@@ -103,7 +103,11 @@ describe("focusSessionInSimpleWorkspace", () => {
             snapshot: {
               focusedSessionId: sessionIdForDisplay(0),
               fullscreenRestoreVisibleCount: undefined,
-              sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1), createSessionRecord(3, 2)],
+              sessions: [
+                createSessionRecord(1, 0),
+                createSessionRecord(2, 1),
+                createSessionRecord(3, 2),
+              ],
               viewMode: "grid",
               visibleCount: 2,
               visibleSessionIds: [sessionIdForDisplay(0), sessionIdForDisplay(1)],
@@ -131,30 +135,30 @@ describe("focusGroupInSimpleWorkspace", () => {
     const snapshot = createWorkspaceSnapshot({
       activeGroupId: DEFAULT_MAIN_GROUP_ID,
       groups: [
-          {
-            groupId: DEFAULT_MAIN_GROUP_ID,
-            snapshot: {
-              focusedSessionId: sessionIdForDisplay(0),
-              fullscreenRestoreVisibleCount: undefined,
-              sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
-              viewMode: "grid",
-              visibleCount: 2,
-              visibleSessionIds: [sessionIdForDisplay(1), sessionIdForDisplay(0)],
-            },
-            title: "Main",
+        {
+          groupId: DEFAULT_MAIN_GROUP_ID,
+          snapshot: {
+            focusedSessionId: sessionIdForDisplay(0),
+            fullscreenRestoreVisibleCount: undefined,
+            sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
+            viewMode: "grid",
+            visibleCount: 2,
+            visibleSessionIds: [sessionIdForDisplay(1), sessionIdForDisplay(0)],
           },
-          {
-            groupId: "group-2",
-            snapshot: {
-              focusedSessionId: sessionIdForDisplay(2),
-              fullscreenRestoreVisibleCount: undefined,
-              sessions: [createSessionRecord(3, 0), createSessionRecord(4, 1)],
-              viewMode: "grid",
-              visibleCount: 2,
-              visibleSessionIds: [sessionIdForDisplay(2), sessionIdForDisplay(3)],
-            },
-            title: "Design",
+          title: "Main",
+        },
+        {
+          groupId: "group-2",
+          snapshot: {
+            focusedSessionId: sessionIdForDisplay(2),
+            fullscreenRestoreVisibleCount: undefined,
+            sessions: [createSessionRecord(3, 0), createSessionRecord(4, 1)],
+            viewMode: "grid",
+            visibleCount: 2,
+            visibleSessionIds: [sessionIdForDisplay(2), sessionIdForDisplay(3)],
           },
+          title: "Design",
+        },
       ],
       nextGroupNumber: 3,
       nextSessionDisplayId: 4,
@@ -249,16 +253,17 @@ describe("syncSessionOrderInSimpleWorkspace", () => {
     );
 
     expect(result.changed).toBe(true);
-    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay(1), sessionIdForDisplay(0), sessionIdForDisplay(2)]);
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.slotIndex),
+    ).toEqual([0, 1, 2]);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([
       sessionIdForDisplay(1),
       sessionIdForDisplay(0),
-      sessionIdForDisplay(2),
     ]);
-    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.slotIndex)).toEqual([
-      0,
-      1,
-      2,
-    ]);
+    expect(result.snapshot.groups[0]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(0));
   });
 });
 
@@ -397,13 +402,13 @@ describe("createGroupFromSessionInSimpleWorkspace", () => {
     expect(result.snapshot.activeGroupId).toBe("group-2");
     expect(result.snapshot.groups).toHaveLength(2);
     expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(0)]);
-    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
-      sessionIdForDisplay(0),
-    ]);
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay(0)]);
     expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(1)]);
-    expect(result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
-      sessionIdForDisplay(1),
-    ]);
+    expect(
+      result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay(1)]);
   });
 
   test("should remove the canonicalized dragged session from the source group", () => {
@@ -437,14 +442,18 @@ describe("createGroupFromSessionInSimpleWorkspace", () => {
 
     expect(result.groupId).toBe("group-2");
     expect(result.snapshot.groups).toHaveLength(2);
-    expect(result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay("03")]);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([
       sessionIdForDisplay("03"),
     ]);
-    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay("03")]);
-    expect(result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId)).toEqual([
+    expect(
+      result.snapshot.groups[1]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay("04")]);
+    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([
       sessionIdForDisplay("04"),
     ]);
-    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay("04")]);
   });
 });
 

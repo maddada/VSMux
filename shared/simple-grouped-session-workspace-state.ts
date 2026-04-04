@@ -22,7 +22,7 @@ import {
   claimNextSessionDisplayId,
   normalizeWorkspaceSessionDisplayIds,
 } from "./grouped-session-workspace-state-helpers";
-import { reindexSessionsInOrder } from "./session-grid-state-helpers";
+import { syncSessionOrderInSnapshot } from "./session-grid-state";
 
 type WorkspaceMutationResult = {
   changed: boolean;
@@ -50,8 +50,12 @@ export function normalizeSimpleGroupedSessionWorkspaceSnapshot(
       ? preparedGroups
       : [createEmptyGroup(DEFAULT_MAIN_GROUP_ID, DEFAULT_MAIN_GROUP_TITLE)];
   const displayIdNormalization = normalizeWorkspaceSessionDisplayIds(groups);
-  const normalizedGroups = displayIdNormalization.groups.map((group, index) => normalizeGroup(group, index));
-  const activeGroupId = normalizedGroups.some((group) => group.groupId === baseSnapshot.activeGroupId)
+  const normalizedGroups = displayIdNormalization.groups.map((group, index) =>
+    normalizeGroup(group, index),
+  );
+  const activeGroupId = normalizedGroups.some(
+    (group) => group.groupId === baseSnapshot.activeGroupId,
+  )
     ? baseSnapshot.activeGroupId
     : normalizedGroups[0]!.groupId;
 
@@ -63,10 +67,7 @@ export function normalizeSimpleGroupedSessionWorkspaceSnapshot(
       baseSnapshot.nextGroupNumber,
       getNextGroupNumber(normalizedGroups),
     ),
-    nextSessionDisplayId: Math.max(
-      0,
-      displayIdNormalization.nextSessionDisplayId,
-    ),
+    nextSessionDisplayId: Math.max(0, displayIdNormalization.nextSessionDisplayId),
     nextSessionNumber: Math.max(
       1,
       baseSnapshot.nextSessionNumber,
@@ -112,7 +113,7 @@ export function createSessionInSimpleWorkspace(
     normalizedSnapshot.nextSessionNumber,
     activeGroup.snapshot.sessions.length,
     {
-      ...(options ?? {}),
+      ...options,
       displayId: nextDisplayId.displayId,
     } as CreateSessionRecordOptions & { displayId: string },
   );
@@ -149,7 +150,10 @@ export function focusGroupInSimpleWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   groupId: string,
 ): WorkspaceMutationResult {
-  if (!snapshot.groups.some((group) => group.groupId === groupId) || snapshot.activeGroupId === groupId) {
+  if (
+    !snapshot.groups.some((group) => group.groupId === groupId) ||
+    snapshot.activeGroupId === groupId
+  ) {
     return { changed: false, snapshot };
   }
 
@@ -418,23 +422,11 @@ export function syncSessionOrderInSimpleWorkspace(
     return { changed: false, snapshot };
   }
 
-  const sessionById = new Map(group.snapshot.sessions.map((session) => [session.sessionId, session]));
-  const orderedSessions = sessionIds
-    .map((sessionId) => sessionById.get(sessionId))
-    .filter((session): session is SessionRecord => session !== undefined);
-  for (const session of group.snapshot.sessions) {
-    if (!orderedSessions.some((candidate) => candidate.sessionId === session.sessionId)) {
-      orderedSessions.push(session);
-    }
-  }
-  const reindexedSessions = reindexSessionsInOrder(orderedSessions);
+  const result = syncSessionOrderInSnapshot(group.snapshot, sessionIds);
 
   const nextSnapshot = updateGroup(snapshot, groupId, (targetGroup) => ({
     ...targetGroup,
-    snapshot: normalizeGroupSnapshot({
-      ...targetGroup.snapshot,
-      sessions: reindexedSessions,
-    }),
+    snapshot: normalizeGroupSnapshot(result.snapshot),
   }));
 
   return {
@@ -479,7 +471,9 @@ export function moveSessionToGroupInSimpleWorkspace(
     return { changed: false, snapshot };
   }
 
-  const sessionToMove = sourceGroup.snapshot.sessions.find((session) => session.sessionId === sessionId);
+  const sessionToMove = sourceGroup.snapshot.sessions.find(
+    (session) => session.sessionId === sessionId,
+  );
   if (!sessionToMove) {
     return { changed: false, snapshot };
   }
@@ -492,7 +486,9 @@ export function moveSessionToGroupInSimpleWorkspace(
         sessions: group.snapshot.sessions.filter((session) => session.sessionId !== sessionId),
         visibleSessionIds: group.snapshot.visibleSessionIds.filter((id) => id !== sessionId),
         focusedSessionId:
-          group.snapshot.focusedSessionId === sessionId ? undefined : group.snapshot.focusedSessionId,
+          group.snapshot.focusedSessionId === sessionId
+            ? undefined
+            : group.snapshot.focusedSessionId,
       }),
     })),
     groupId,
@@ -541,7 +537,9 @@ export function createGroupFromSessionInSimpleWorkspace(
     return { changed: false, snapshot: normalizedSnapshot };
   }
 
-  const session = sourceGroup.snapshot.sessions.find((candidate) => candidate.sessionId === sessionId);
+  const session = sourceGroup.snapshot.sessions.find(
+    (candidate) => candidate.sessionId === sessionId,
+  );
   if (!session) {
     return { changed: false, snapshot: normalizedSnapshot };
   }
@@ -602,7 +600,10 @@ export function createGroupInSimpleWorkspace(
   const nextSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot({
     ...normalizedSnapshot,
     activeGroupId: nextGroupId,
-    groups: [...normalizedSnapshot.groups, createEmptyGroup(nextGroupId, `Group ${nextGroupNumber}`)],
+    groups: [
+      ...normalizedSnapshot.groups,
+      createEmptyGroup(nextGroupId, `Group ${nextGroupNumber}`),
+    ],
     nextGroupNumber: nextGroupNumber + 1,
   });
 
@@ -636,7 +637,9 @@ function prepareGroupForDisplayIdNormalization(
   };
 }
 
-function normalizeGroupSnapshot(snapshot: SessionGroupRecord["snapshot"]): SessionGroupRecord["snapshot"] {
+function normalizeGroupSnapshot(
+  snapshot: SessionGroupRecord["snapshot"],
+): SessionGroupRecord["snapshot"] {
   const sessionIdByLegacyId = new Map<string, string>();
   const sessions = getOrderedSessions({
     ...createDefaultSessionGridSnapshot(),
@@ -658,7 +661,8 @@ function normalizeGroupSnapshot(snapshot: SessionGroupRecord["snapshot"]): Sessi
   )
     ? sessionIdByLegacyId.get(snapshot.focusedSessionId ?? "")
     : sessions[0]?.sessionId;
-  const visibleCount = sessions.length === 0 ? 1 : clampSupportedVisibleCount(snapshot.visibleCount);
+  const visibleCount =
+    sessions.length === 0 ? 1 : clampSupportedVisibleCount(snapshot.visibleCount);
   const normalizedVisibleSessionIds = snapshot.visibleSessionIds.map(
     (sessionId) => sessionIdByLegacyId.get(sessionId) ?? sessionId,
   );
@@ -746,10 +750,7 @@ function getNextVisibleIdsForFocusedSession(
     );
   }
 
-  if (
-    currentFocusedSessionId &&
-    currentVisibleSessionIds.includes(currentFocusedSessionId)
-  ) {
+  if (currentFocusedSessionId && currentVisibleSessionIds.includes(currentFocusedSessionId)) {
     return getNormalizedVisibleIds(
       sessions,
       visibleCount,
@@ -761,16 +762,13 @@ function getNextVisibleIdsForFocusedSession(
   }
 
   const passiveVisibleIds = currentVisibleSessionIds.filter(
-    (sessionId) =>
-      sessionId !== nextFocusedSessionId && sessionId !== currentFocusedSessionId,
+    (sessionId) => sessionId !== nextFocusedSessionId && sessionId !== currentFocusedSessionId,
   );
   return getNormalizedVisibleIds(
     sessions,
     visibleCount,
     nextFocusedSessionId,
-    passiveVisibleIds
-      .slice(0, Math.max(0, visibleCount - 1))
-      .concat(nextFocusedSessionId),
+    passiveVisibleIds.slice(0, Math.max(0, visibleCount - 1)).concat(nextFocusedSessionId),
   );
 }
 
