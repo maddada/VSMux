@@ -1,20 +1,23 @@
-import { describe, expect, test, vi } from 'vite-plus/test';
+import { describe, expect, test, vi } from "vite-plus/test";
 import {
   createDefaultGroupedSessionWorkspaceSnapshot,
   createSessionRecord,
   type SidebarHydrateMessage,
   type SidebarSessionStateMessage,
-} from '../shared/session-grid-contract';
-import { buildSidebarMessage, createPreviousSessionEntry } from './native-terminal-workspace-sidebar-state';
+} from "../shared/session-grid-contract";
+import {
+  buildSidebarMessage,
+  createPreviousSessionEntry,
+} from "./native-terminal-workspace-sidebar-state";
 
-vi.mock('vscode', () => ({
+vi.mock("vscode", () => ({
   workspace: {
     workspaceFolders: undefined,
   },
 }));
 
-describe('buildSidebarMessage', () => {
-  test('should prepend a Browsers group when live browser tabs exist', () => {
+describe("buildSidebarMessage", () => {
+  test("should prepend a Browsers group when live browser tabs exist", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0);
     workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
@@ -25,62 +28,62 @@ describe('buildSidebarMessage', () => {
       buildSidebarMessage(
         createBuildSidebarMessageOptions(workspaceSnapshot, [
           {
-            detail: 'https://example.com/docs',
+            detail: "https://example.com/docs",
             isActive: true,
-            label: 'Docs',
-            sessionId: 'browser-tab:docs',
+            label: "Docs",
+            sessionId: "browser-tab:docs",
           },
-        ])
-      )
+        ]),
+      ),
     );
 
-    expect(message.type).toBe('sessionState');
+    expect(message.type).toBe("sessionState");
     expect(message.groups.map((group) => ({ kind: group.kind, title: group.title }))).toEqual([
-      { kind: 'browser', title: 'Browsers' },
-      { kind: 'workspace', title: 'Main' },
+      { kind: "browser", title: "Browsers" },
+      { kind: "workspace", title: "Main" },
     ]);
     expect(message.groups[0]?.sessions).toEqual([
       expect.objectContaining({
-        detail: 'https://example.com/docs',
+        detail: "https://example.com/docs",
         isFocused: true,
         isRunning: true,
         isVisible: true,
-        kind: 'browser',
-        primaryTitle: 'Docs',
-        sessionId: 'browser-tab:docs',
+        kind: "browser",
+        primaryTitle: "Docs",
+        sessionId: "browser-tab:docs",
       }),
     ]);
   });
 
-  test('should omit the Browsers group when there are no live browser tabs', () => {
+  test("should omit the Browsers group when there are no live browser tabs", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const message = getSidebarStateMessage(
-      buildSidebarMessage(createBuildSidebarMessageOptions(workspaceSnapshot, []))
+      buildSidebarMessage(createBuildSidebarMessageOptions(workspaceSnapshot, [])),
     );
 
     expect(message.groups).toHaveLength(2);
     expect(message.groups[0]).toEqual(
       expect.objectContaining({
-        kind: 'browser',
+        kind: "browser",
         sessions: [],
-        title: 'Browsers',
-      })
+        title: "Browsers",
+      }),
     );
-    expect(message.groups[1]?.title).toBe('Main');
-    expect(message.groups[1]?.kind).toBe('workspace');
+    expect(message.groups[1]?.title).toBe("Main");
+    expect(message.groups[1]?.kind).toBe("workspace");
   });
 
-  test('should show pending T3 sessions without a fake thread detail', () => {
+  test("should show pending T3 sessions without a fake thread detail", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0, {
-      kind: 't3',
+      kind: "t3",
       t3: {
-        projectId: 'pending-project',
-        serverOrigin: 'http://127.0.0.1:3773',
-        threadId: 'pending-thread',
-        workspaceRoot: '/tmp/project',
+        projectId: "pending-project",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "pending-thread",
+        workspaceRoot: "/tmp/project",
       },
-      title: 'T3 Code',
+      title: "T3 Code",
     });
     workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
     workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
@@ -90,25 +93,25 @@ describe('buildSidebarMessage', () => {
       buildSidebarMessage({
         ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
         getT3ActivityState: () => ({
-          activity: 'idle',
+          activity: "idle",
           detail: undefined,
           isRunning: true,
         }),
-      })
+      }),
     );
 
     expect(message.groups[1]?.sessions[0]).toEqual(
       expect.objectContaining({
-        activity: 'idle',
+        activity: "idle",
         detail: undefined,
         isRunning: true,
-        primaryTitle: 'T3 Code',
+        primaryTitle: "T3 Code",
         sessionId: sessionRecord.sessionId,
-      })
+      }),
     );
   });
 
-  test('should promote the terminal title to the primary title when the user did not rename the session', () => {
+  test("should promote the terminal title to the primary title when the user did not rename the session", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0);
     workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
@@ -118,22 +121,22 @@ describe('buildSidebarMessage', () => {
     const message = getSidebarStateMessage(
       buildSidebarMessage({
         ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
-        getTerminalTitle: () => 'Claude Code',
-      })
+        getTerminalTitle: () => "Claude Code",
+      }),
     );
 
     expect(message.groups[1]?.sessions[0]).toEqual(
       expect.objectContaining({
-        primaryTitle: 'Claude Code',
+        primaryTitle: "Claude Code",
         terminalTitle: undefined,
-      })
+      }),
     );
   });
 
-  test('should keep the user title authoritative over the terminal title', () => {
+  test("should keep the user title authoritative over the terminal title", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0, {
-      title: 'Bug Fix',
+      title: "Bug Fix",
     });
     workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
     workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
@@ -142,21 +145,84 @@ describe('buildSidebarMessage', () => {
     const message = getSidebarStateMessage(
       buildSidebarMessage({
         ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
-        getTerminalTitle: () => 'Claude Code',
-      })
+        getTerminalTitle: () => "Claude Code",
+      }),
     );
 
     expect(message.groups[1]?.sessions[0]).toEqual(
       expect.objectContaining({
-        primaryTitle: 'Bug Fix',
-        terminalTitle: 'Claude Code',
-      })
+        primaryTitle: "Bug Fix",
+        terminalTitle: "Claude Code",
+      }),
     );
   });
 });
 
-describe('createPreviousSessionEntry', () => {
-  test('should preserve the derived agent icon in previous session history', () => {
+describe("createPreviousSessionEntry", () => {
+  test("should skip unnamed terminal sessions when archiving previous sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = createSessionRecord(1, 0);
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry({
+      ...createPreviousSessionEntryOptions(group, sessionRecord),
+      getTerminalTitle: () => undefined,
+    });
+
+    expect(previousSession).toBeUndefined();
+  });
+
+  test("should keep unnamed t3 sessions when archiving previous sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = createSessionRecord(1, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/tmp/project",
+      },
+    });
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry(
+      createPreviousSessionEntryOptions(group, sessionRecord),
+    );
+
+    expect(previousSession).toEqual(
+      expect.objectContaining({
+        sessionRecord,
+      }),
+    );
+  });
+
+  test("should keep terminal sessions that have a terminal title when archiving previous sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = createSessionRecord(1, 0);
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry({
+      ...createPreviousSessionEntryOptions(group, sessionRecord),
+      getTerminalTitle: () => "Codex / recent sessions polish",
+    });
+
+    expect(previousSession).toEqual(
+      expect.objectContaining({
+        sessionRecord,
+      }),
+    );
+  });
+
+  test("should preserve the derived agent icon in previous session history", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const group = workspaceSnapshot.groups[0];
     const sessionRecord = createSessionRecord(1, 0);
@@ -168,42 +234,85 @@ describe('createPreviousSessionEntry', () => {
       browserHasLiveProjection: () => false,
       debuggingMode: false,
       getEffectiveSessionActivity: () => ({
-        activity: 'idle',
-        agentName: 'codex',
+        activity: "idle",
+        agentName: "codex",
       }),
       getSessionAgentLaunch: () => undefined,
       getSessionSnapshot: () => ({
-        agentName: 'codex',
-        agentStatus: 'idle',
+        agentName: "codex",
+        agentStatus: "idle",
         cols: 120,
-        cwd: '/workspace',
+        cwd: "/workspace",
         isAttached: true,
-        restoreState: 'live',
+        restoreState: "live",
         rows: 34,
         sessionId: sessionRecord.sessionId,
-        shell: '/bin/zsh',
-        startedAt: '2026-04-02T00:00:00.000Z',
-        status: 'running',
-        title: 'Codex',
-        workspaceId: 'workspace-1',
+        shell: "/bin/zsh",
+        startedAt: "2026-04-02T00:00:00.000Z",
+        status: "running",
+        title: "Codex",
+        workspaceId: "workspace-1",
       }),
-      getSidebarAgentIcon: (_sessionId, snapshotAgentName) => (snapshotAgentName === 'codex' ? 'codex' : undefined),
+      getSidebarAgentIcon: (_sessionId, snapshotAgentName) =>
+        snapshotAgentName === "codex" ? "codex" : undefined,
       getT3ActivityState: () => ({
-        activity: 'idle',
+        activity: "idle",
         isRunning: false,
       }),
-      getTerminalTitle: () => 'Codex',
+      getTerminalTitle: () => "Codex",
       group,
-      platform: 'default',
+      platform: "default",
       sessionRecord,
       terminalHasLiveProjection: () => false,
-      workspaceId: 'workspace-1',
+      workspaceId: "workspace-1",
     });
 
-    expect(previousSession?.agentIcon).toBe('codex');
-    expect(previousSession?.sidebarItem.agentIcon).toBe('codex');
+    expect(previousSession?.agentIcon).toBe("codex");
+    expect(previousSession?.sidebarItem.agentIcon).toBe("codex");
   });
 });
+
+function createPreviousSessionEntryOptions(
+  group: ReturnType<typeof createDefaultGroupedSessionWorkspaceSnapshot>["groups"][number],
+  sessionRecord: ReturnType<typeof createSessionRecord>,
+): Parameters<typeof createPreviousSessionEntry>[0] {
+  return {
+    browserHasLiveProjection: () => false,
+    debuggingMode: false,
+    getEffectiveSessionActivity: () => ({
+      activity: "idle",
+      agentName: "codex",
+    }),
+    getSessionAgentLaunch: () => undefined,
+    getSessionSnapshot: () => ({
+      agentName: "codex",
+      agentStatus: "idle",
+      cols: 120,
+      cwd: "/workspace",
+      isAttached: true,
+      restoreState: "live",
+      rows: 34,
+      sessionId: sessionRecord.sessionId,
+      shell: "/bin/zsh",
+      startedAt: "2026-04-02T00:00:00.000Z",
+      status: "running",
+      title: "Codex",
+      workspaceId: "workspace-1",
+    }),
+    getSidebarAgentIcon: (_sessionId, snapshotAgentName) =>
+      snapshotAgentName === "codex" ? "codex" : undefined,
+    getT3ActivityState: () => ({
+      activity: "idle",
+      isRunning: false,
+    }),
+    getTerminalTitle: () => "Codex",
+    group,
+    platform: "default",
+    sessionRecord,
+    terminalHasLiveProjection: () => false,
+    workspaceId: "workspace-1",
+  };
+}
 
 function createBuildSidebarMessageOptions(
   workspaceSnapshot: ReturnType<typeof createDefaultGroupedSessionWorkspaceSnapshot>,
@@ -212,7 +321,7 @@ function createBuildSidebarMessageOptions(
     isActive: boolean;
     label: string;
     sessionId: string;
-  }>
+  }>,
 ): Parameters<typeof buildSidebarMessage>[0] {
   return {
     activeSnapshot: workspaceSnapshot.groups[0].snapshot,
@@ -221,30 +330,30 @@ function createBuildSidebarMessageOptions(
     completionBellEnabled: false,
     debuggingMode: false,
     getEffectiveSessionActivity: () => ({
-      activity: 'idle',
+      activity: "idle",
       agentName: undefined,
     }),
     getSessionAgentLaunch: () => undefined,
     getSessionSnapshot: () => undefined,
     getSidebarAgentIcon: () => undefined,
     getT3ActivityState: () => ({
-      activity: 'idle',
+      activity: "idle",
       isRunning: false,
     }),
     getTerminalTitle: () => undefined,
     hud: createSidebarHudState(),
-    platform: 'default',
+    platform: "default",
     previousSessions: [],
     revision: 1,
-    scratchPadContent: '',
+    scratchPadContent: "",
     terminalHasLiveProjection: () => false,
-    type: 'sessionState',
-    workspaceId: 'workspace-1',
+    type: "sessionState",
+    workspaceId: "workspace-1",
     workspaceSnapshot,
   };
 }
 
-function createSidebarHudState(): SidebarHydrateMessage['hud'] {
+function createSidebarHudState(): SidebarHydrateMessage["hud"] {
   return {
     agentManagerZoomPercent: 100,
     agents: [],
@@ -254,8 +363,8 @@ function createSidebarHudState(): SidebarHydrateMessage['hud'] {
     },
     commands: [],
     completionBellEnabled: false,
-    completionSound: 'ping',
-    completionSoundLabel: 'Ping',
+    completionSound: "ping",
+    completionSoundLabel: "Ping",
     debuggingMode: false,
     focusedSessionTitle: undefined,
     git: {
@@ -271,7 +380,7 @@ function createSidebarHudState(): SidebarHydrateMessage['hud'] {
       isBusy: false,
       isRepo: false,
       pr: null,
-      primaryAction: 'commit',
+      primaryAction: "commit",
     },
     highlightedVisibleCount: 1,
     isFocusModeActive: false,
@@ -284,17 +393,17 @@ function createSidebarHudState(): SidebarHydrateMessage['hud'] {
     },
     showCloseButtonOnSessionCards: false,
     showHotkeysOnSessionCards: false,
-    theme: 'dark-blue',
-    viewMode: 'grid',
+    theme: "dark-blue",
+    viewMode: "grid",
     visibleCount: 1,
     visibleSlotLabels: [],
   };
 }
 
 function getSidebarStateMessage(
-  message: ReturnType<typeof buildSidebarMessage>
+  message: ReturnType<typeof buildSidebarMessage>,
 ): SidebarHydrateMessage | SidebarSessionStateMessage {
-  if (message.type !== 'hydrate' && message.type !== 'sessionState') {
+  if (message.type !== "hydrate" && message.type !== "sessionState") {
     throw new Error(`Expected sidebar state message, received ${message.type}.`);
   }
 

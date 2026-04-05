@@ -24,6 +24,9 @@ const TYPING_AUTO_SCROLL_BURST_WINDOW_MS = 450;
 const TYPING_AUTO_SCROLL_TRIGGER_COUNT = 4;
 const SCROLL_TO_BOTTOM_THRESHOLD_PX = 200;
 const SCROLL_TO_BOTTOM_HIDE_THRESHOLD_PX = 40;
+const SCHEDULER_PROBE_INTERVAL_MS = 50;
+const SCHEDULER_PROBE_WINDOW_MS = 5_000;
+const SCHEDULER_OVERSHOOT_WARN_MS = 250;
 const SEARCH_RESULTS_EMPTY = {
   resultCount: 0,
   resultIndex: -1,
@@ -491,9 +494,43 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     };
   };
 
+  const collectCanvasMetrics = () => {
+    const container = containerRef.current;
+    if (!container) {
+      return {
+        hiddenCanvasCount: 0,
+        visibleCanvasCount: 0,
+      };
+    }
+
+    let hiddenCanvasCount = 0;
+    let visibleCanvasCount = 0;
+    const canvases = container.querySelectorAll<HTMLCanvasElement>(
+      ".restty-native-scroll-canvas, .pane-canvas, canvas",
+    );
+    for (const canvas of canvases) {
+      const canvasStyle = window.getComputedStyle(canvas);
+      const isVisible =
+        canvasStyle.display !== "none" &&
+        canvasStyle.visibility !== "hidden" &&
+        canvasStyle.opacity !== "0";
+      if (isVisible) {
+        visibleCanvasCount += 1;
+      } else {
+        hiddenCanvasCount += 1;
+      }
+    }
+
+    return {
+      hiddenCanvasCount,
+      visibleCanvasCount,
+    };
+  };
+
   const logViewportMetrics = (event: string, payload?: Record<string, unknown>) => {
     reportDebug(event, {
       ...collectViewportMetrics(),
+      ...collectCanvasMetrics(),
       sessionId: pane.sessionId,
       ...payload,
     });
@@ -669,6 +706,151 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       // Clipboard access can fail outside a user gesture.
     }
   };
+
+  useEffect(() => {
+    if (!debuggingMode) {
+      return;
+    }
+
+    let didDispose = false;
+    let timerId: number | undefined;
+    let rafId = 0;
+    let flushTimeoutId: number | undefined;
+    let visibilityListener: (() => void) | undefined;
+    let focusListener: (() => void) | undefined;
+    let blurListener: (() => void) | undefined;
+    let expectedTimerAt = performance.now() + SCHEDULER_PROBE_INTERVAL_MS;
+    let previousRafAt = performance.now();
+    let timerTickCount = 0;
+    let timerOvershootTotalMs = 0;
+    let timerOvershootMaxMs = 0;
+    let timerOvershootWarnCount = 0;
+    let rafFrameCount = 0;
+    let rafGapTotalMs = 0;
+    let rafGapMaxMs = 0;
+    let startedAt = performance.now();
+
+    const flushWindow = (source: string) => {
+      const now = performance.now();
+      reportDebug("terminal.schedulerWindow", {
+        ...collectViewportMetrics(),
+        ...collectCanvasMetrics(),
+        documentHasFocus: document.hasFocus(),
+        hidden: document.hidden,
+        isVisible: isVisibleRef.current,
+        rafFrameCount,
+        rafGapAvgMs: rafFrameCount > 0 ? Math.round(rafGapTotalMs / rafFrameCount) : 0,
+        rafGapMaxMs: Math.round(rafGapMaxMs),
+        rendererMode: rendererModeRef.current,
+        sessionId: pane.sessionId,
+        source,
+        timerOvershootAvgMs:
+          timerTickCount > 0 ? Math.round(timerOvershootTotalMs / timerTickCount) : 0,
+        timerOvershootMaxMs: Math.round(timerOvershootMaxMs),
+        timerOvershootWarnCount,
+        timerTickCount,
+        visibilityState: document.visibilityState,
+        windowDurationMs: Math.round(now - startedAt),
+      });
+      startedAt = now;
+      timerTickCount = 0;
+      timerOvershootTotalMs = 0;
+      timerOvershootMaxMs = 0;
+      timerOvershootWarnCount = 0;
+      rafFrameCount = 0;
+      rafGapTotalMs = 0;
+      rafGapMaxMs = 0;
+    };
+
+    const sampleRaf = () => {
+      if (didDispose) {
+        return;
+      }
+
+      const now = performance.now();
+      const gapMs = now - previousRafAt;
+      previousRafAt = now;
+      rafFrameCount += 1;
+      rafGapTotalMs += gapMs;
+      rafGapMaxMs = Math.max(rafGapMaxMs, gapMs);
+      rafId = requestAnimationFrame(sampleRaf);
+    };
+
+    const sampleTimer = () => {
+      if (didDispose) {
+        return;
+      }
+
+      const now = performance.now();
+      const overshootMs = Math.max(0, now - expectedTimerAt);
+      expectedTimerAt += SCHEDULER_PROBE_INTERVAL_MS;
+      timerTickCount += 1;
+      timerOvershootTotalMs += overshootMs;
+      timerOvershootMaxMs = Math.max(timerOvershootMaxMs, overshootMs);
+      if (overshootMs >= SCHEDULER_OVERSHOOT_WARN_MS) {
+        timerOvershootWarnCount += 1;
+      }
+
+      timerId = window.setTimeout(sampleTimer, SCHEDULER_PROBE_INTERVAL_MS);
+    };
+
+    const scheduleFlush = () => {
+      flushTimeoutId = window.setTimeout(() => {
+        flushWindow("timer");
+        scheduleFlush();
+      }, SCHEDULER_PROBE_WINDOW_MS);
+    };
+
+    const logSchedulerState = (source: string) => {
+      reportDebug("terminal.schedulerState", {
+        ...collectViewportMetrics(),
+        ...collectCanvasMetrics(),
+        activeElementTagName: document.activeElement?.tagName,
+        documentHasFocus: document.hasFocus(),
+        hidden: document.hidden,
+        isVisible: isVisibleRef.current,
+        rendererMode: rendererModeRef.current,
+        sessionId: pane.sessionId,
+        source,
+        visibilityState: document.visibilityState,
+      });
+    };
+
+    visibilityListener = () => logSchedulerState("document.visibilitychange");
+    focusListener = () => logSchedulerState("window.focus");
+    blurListener = () => logSchedulerState("window.blur");
+
+    document.addEventListener("visibilitychange", visibilityListener);
+    window.addEventListener("focus", focusListener);
+    window.addEventListener("blur", blurListener);
+
+    logSchedulerState("mount");
+    sampleTimer();
+    rafId = requestAnimationFrame(sampleRaf);
+    scheduleFlush();
+
+    return () => {
+      didDispose = true;
+      if (timerId !== undefined) {
+        window.clearTimeout(timerId);
+      }
+      if (flushTimeoutId !== undefined) {
+        window.clearTimeout(flushTimeoutId);
+      }
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      if (visibilityListener) {
+        document.removeEventListener("visibilitychange", visibilityListener);
+      }
+      if (focusListener) {
+        window.removeEventListener("focus", focusListener);
+      }
+      if (blurListener) {
+        window.removeEventListener("blur", blurListener);
+      }
+    };
+  }, [debuggingMode, pane.sessionId]);
 
   useEffect(() => {
     const container = containerRef.current;

@@ -136,6 +136,14 @@ export function createPreviousSessionEntry(
     return undefined;
   }
 
+  const visiblePrimaryTitle = getVisiblePrimaryTitle(options.sessionRecord.title);
+  const visibleTerminalTitle = getVisibleTerminalTitle(
+    options.getTerminalTitle(options.sessionRecord.sessionId),
+  );
+  if (options.sessionRecord.kind === "terminal" && !visiblePrimaryTitle && !visibleTerminalTitle) {
+    return undefined;
+  }
+
   const sidebarItem = buildSidebarItem(
     options.group,
     options.group.snapshot,
@@ -243,13 +251,13 @@ function buildSidebarItem(
     | "debuggingMode"
     | "getEffectiveSessionActivity"
     | "getSessionAgentLaunch"
-  | "getSessionSnapshot"
-  | "getSidebarAgentIcon"
-  | "getT3ActivityState"
-  | "getTerminalTitle"
-  | "platform"
-  | "terminalHasLiveProjection"
-  | "workspaceId"
+    | "getSessionSnapshot"
+    | "getSidebarAgentIcon"
+    | "getT3ActivityState"
+    | "getTerminalTitle"
+    | "platform"
+    | "terminalHasLiveProjection"
+    | "workspaceId"
   > & { activeGroupId: string },
 ): SidebarSessionItem {
   const isActiveGroup = options.activeGroupId === group.groupId;
@@ -257,7 +265,9 @@ function buildSidebarItem(
     isActiveGroup && presentedSnapshot.visibleSessionIds.includes(sessionRecord.sessionId);
   const isFocused = isActiveGroup && presentedSnapshot.focusedSessionId === sessionRecord.sessionId;
   const visiblePrimaryTitle = getVisibleTerminalTitle(getVisiblePrimaryTitle(sessionRecord.title));
-  const visibleTerminalTitle = getVisibleTerminalTitle(options.getTerminalTitle(sessionRecord.sessionId));
+  const visibleTerminalTitle = getVisibleTerminalTitle(
+    options.getTerminalTitle(sessionRecord.sessionId),
+  );
 
   if (isBrowserSession(sessionRecord)) {
     return {

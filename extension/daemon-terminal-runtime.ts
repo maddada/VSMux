@@ -7,6 +7,7 @@ import type {
   TerminalHostAcknowledgeAttentionRequest,
   TerminalHostConfigureRequest,
   TerminalHostCreateOrAttachRequest,
+  TerminalHostHeartbeatOwnerRequest,
   TerminalHostEvent,
   TerminalHostListSessionsRequest,
   TerminalHostRequest,
@@ -54,6 +55,7 @@ type DaemonLaunchLock = {
 const CONTROL_CONNECT_TIMEOUT_MS = 3_000;
 const DAEMON_READY_TIMEOUT_MS = 10_000;
 const DAEMON_LAUNCH_LOCK_STALE_MS = 30_000;
+const DAEMON_OWNER_HEARTBEAT_INTERVAL_MS = 5_000;
 const DAEMON_STATE_DIR_NAME = "terminal-daemon";
 const INFO_FILE_NAME = "daemon-info.json";
 const LAUNCH_LOCK_FILE_NAME = "daemon-launch.lock";
@@ -74,6 +76,8 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
   private daemonInfo: DaemonInfo | undefined;
   private readonly onDidChangeSessionStateEmitter =
     new vscode.EventEmitter<TerminalSessionSnapshot>();
+  private ownerHeartbeatTimer: NodeJS.Timeout | undefined;
+  private readonly ownerId = `${process.pid}-${Math.random().toString(36).slice(2)}`;
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private requestNumber = 0;
 
@@ -85,6 +89,7 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
   ) {}
 
   public dispose(): void {
+    this.stopOwnerHeartbeat();
     this.controlSocket?.close();
     this.controlSocket = undefined;
     this.onDidChangeSessionStateEmitter.dispose();
@@ -562,14 +567,17 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
     );
     this.daemonInfo = daemonInfo;
     this.controlSocket = socket;
+    this.startOwnerHeartbeat();
 
     socket.on("message", (buffer: WebSocket.RawData) => {
       this.handleControlMessage(buffer.toString());
     });
     socket.on("close", () => {
+      this.stopOwnerHeartbeat();
       this.controlSocket = undefined;
     });
     socket.on("error", () => {
+      this.stopOwnerHeartbeat();
       this.controlSocket = undefined;
     });
 
@@ -644,6 +652,46 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
   private nextRequestId(): string {
     this.requestNumber += 1;
     return `request-${String(this.requestNumber)}`;
+  }
+
+  private startOwnerHeartbeat(): void {
+    this.stopOwnerHeartbeat();
+    void this.sendOwnerHeartbeat();
+    this.ownerHeartbeatTimer = setInterval(() => {
+      void this.sendOwnerHeartbeat();
+    }, DAEMON_OWNER_HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopOwnerHeartbeat(): void {
+    if (!this.ownerHeartbeatTimer) {
+      return;
+    }
+
+    clearInterval(this.ownerHeartbeatTimer);
+    this.ownerHeartbeatTimer = undefined;
+  }
+
+  private async sendOwnerHeartbeat(): Promise<void> {
+    if (!this.controlSocket || this.controlSocket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const request: TerminalHostHeartbeatOwnerRequest = {
+      ownerId: this.ownerId,
+      ownerPid: process.pid,
+      requestId: this.nextRequestId(),
+      type: "heartbeatOwner",
+      workspaceId: this.workspaceId,
+    };
+    try {
+      await this.sendRequest(request);
+    } catch (error) {
+      logVSmuxDebug("daemon.runtime.ownerHeartbeat.failed", {
+        error: error instanceof Error ? error.message : String(error),
+        ownerId: this.ownerId,
+        workspaceId: this.workspaceId,
+      });
+    }
   }
 }
 

@@ -18,8 +18,12 @@ describe("PreviousSessionHistory", () => {
     const history = new PreviousSessionHistory({
       workspaceState: {
         get: vi.fn(() => [
-          createHistoryEntry(generatedSession, "history-1"),
-          createHistoryEntry(renamedSession, "history-2"),
+          createHistoryEntry(generatedSession, "history-1", {
+            terminalTitle: "Codex / generated session",
+          }),
+          createHistoryEntry(renamedSession, "history-2", {
+            terminalTitle: "Codex / renamed session",
+          }),
         ]),
         update,
       },
@@ -44,7 +48,11 @@ describe("PreviousSessionHistory", () => {
     const update = vi.fn(async () => undefined);
     const history = new PreviousSessionHistory({
       workspaceState: {
-        get: vi.fn(() => [createHistoryEntry(legacyWordAliasSession, "history-1")]),
+        get: vi.fn(() => [
+          createHistoryEntry(legacyWordAliasSession, "history-1", {
+            terminalTitle: "Codex / legacy alias",
+          }),
+        ]),
         update,
       },
     } as never);
@@ -54,11 +62,72 @@ describe("PreviousSessionHistory", () => {
     expect(history.getItems()).toMatchObject([{ historyId: "history-1", isGeneratedName: false }]);
     expect(update).not.toHaveBeenCalled();
   });
+
+  test("should show the stored terminal title as the primary title for legacy auto-named sessions", () => {
+    const generatedSession = createSessionRecord(1, 0);
+    const history = new PreviousSessionHistory({
+      workspaceState: {
+        get: vi.fn(() => [
+          createHistoryEntry(generatedSession, "history-1", {
+            primaryTitle: undefined,
+            terminalTitle: "Codex / recent sessions polish",
+          }),
+        ]),
+        update: vi.fn(async () => undefined),
+      },
+    } as never);
+
+    expect(history.getItems()).toMatchObject([
+      {
+        historyId: "history-1",
+        primaryTitle: "Codex / recent sessions polish",
+        terminalTitle: undefined,
+      },
+    ]);
+  });
+
+  test("should preserve the user title while keeping the terminal title for legacy renamed sessions", () => {
+    const renamedSession = {
+      ...createSessionRecord(1, 0),
+      title: "Bug Fix",
+    };
+    const history = new PreviousSessionHistory({
+      workspaceState: {
+        get: vi.fn(() => [
+          createHistoryEntry(renamedSession, "history-1", {
+            primaryTitle: undefined,
+            terminalTitle: "Codex / recent sessions polish",
+          }),
+        ]),
+        update: vi.fn(async () => undefined),
+      },
+    } as never);
+
+    expect(history.getItems()).toMatchObject([
+      {
+        historyId: "history-1",
+        primaryTitle: "Bug Fix",
+        terminalTitle: "Codex / recent sessions polish",
+      },
+    ]);
+  });
+
+  test("should hide terminal history entries that have neither a user title nor a terminal title", () => {
+    const history = new PreviousSessionHistory({
+      workspaceState: {
+        get: vi.fn(() => [createHistoryEntry(createSessionRecord(1, 0), "history-1")]),
+        update: vi.fn(async () => undefined),
+      },
+    } as never);
+
+    expect(history.getItems()).toEqual([]);
+  });
 });
 
 function createHistoryEntry(
   sessionRecord: ReturnType<typeof createSessionRecord>,
   historyId: string,
+  sidebarItemOverrides: Partial<PreviousSessionHistoryEntry["sidebarItem"]> = {},
 ): PreviousSessionHistoryEntry {
   return {
     closedAt: "2026-03-24T10:00:00.000Z",
@@ -74,6 +143,7 @@ function createHistoryEntry(
       row: sessionRecord.row,
       sessionId: sessionRecord.sessionId,
       shortcutLabel: "⌘⌥1",
+      ...sidebarItemOverrides,
     },
   };
 }

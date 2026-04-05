@@ -33,7 +33,6 @@ export function SessionHistoryCard({
   return (
     <div
       className="session-frame session-history-frame"
-      data-activity={session.activity}
       data-focused="false"
       data-running="false"
       data-restorable={String(session.isRestorable)}
@@ -45,7 +44,6 @@ export function SessionHistoryCard({
         aria-pressed="false"
         aria-label={session.isRestorable ? `Restore ${displayTitle}` : displayTitle}
         className="session session-history-card"
-        data-activity={session.activity}
         data-has-agent-icon={String(Boolean(session.agentIcon))}
         data-dragging="false"
         data-focused="false"
@@ -106,7 +104,6 @@ export function SessionHistoryCard({
           showHotkeys={showHotkeys}
         />
       </article>
-      <div aria-hidden className="session-status-dot" />
     </div>
   );
 }

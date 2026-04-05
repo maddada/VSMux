@@ -4,7 +4,11 @@ import type {
   SidebarPreviousSessionItem,
   SidebarSessionItem,
 } from "../shared/session-grid-contract";
-import { isGeneratedSessionAlias } from "../shared/session-grid-contract";
+import {
+  getVisiblePrimaryTitle,
+  getVisibleTerminalTitle,
+  isGeneratedSessionAlias,
+} from "../shared/session-grid-contract";
 import type { SidebarAgentIcon } from "../shared/sidebar-agents";
 
 const PREVIOUS_SESSION_HISTORY_KEY = "VSmux.previousSessionHistory";
@@ -38,13 +42,24 @@ export class PreviousSessionHistory {
   }
 
   public getItems(): SidebarPreviousSessionItem[] {
-    return this.history.map((entry) => ({
-      ...entry.sidebarItem,
-      closedAt: entry.closedAt,
-      historyId: entry.historyId,
-      isGeneratedName: isGeneratedSessionAlias(entry.sessionRecord),
-      isRestorable: true,
-    }));
+    return this.history.flatMap((entry) => {
+      const sidebarItem = getNormalizedHistorySidebarItem(entry);
+      if (!shouldExposeHistorySidebarItem(entry, sidebarItem)) {
+        return [];
+      }
+
+      return [
+        {
+          ...sidebarItem,
+          activity: "idle",
+          activityLabel: undefined,
+          closedAt: entry.closedAt,
+          historyId: entry.historyId,
+          isGeneratedName: isGeneratedSessionAlias(entry.sessionRecord),
+          isRestorable: true,
+        },
+      ];
+    });
   }
 
   public async append(entries: readonly PreviousSessionHistoryEntry[]): Promise<void> {
@@ -83,6 +98,46 @@ export class PreviousSessionHistory {
   private async persist(): Promise<void> {
     await this.context.workspaceState.update(PREVIOUS_SESSION_HISTORY_KEY, this.history);
   }
+}
+
+function getNormalizedHistorySidebarItem(entry: PreviousSessionHistoryEntry): SidebarSessionItem {
+  const sessionPrimaryTitle = getVisiblePrimaryTitle(entry.sessionRecord.title);
+  const storedPrimaryTitle = getVisibleTerminalTitle(entry.sidebarItem.primaryTitle);
+  const storedTerminalTitle = getVisibleTerminalTitle(entry.sidebarItem.terminalTitle);
+
+  if (sessionPrimaryTitle) {
+    const fallbackTerminalTitle =
+      storedTerminalTitle ??
+      (storedPrimaryTitle && storedPrimaryTitle !== sessionPrimaryTitle
+        ? storedPrimaryTitle
+        : undefined);
+
+    return {
+      ...entry.sidebarItem,
+      primaryTitle: sessionPrimaryTitle,
+      terminalTitle:
+        fallbackTerminalTitle && fallbackTerminalTitle !== sessionPrimaryTitle
+          ? fallbackTerminalTitle
+          : undefined,
+    };
+  }
+
+  return {
+    ...entry.sidebarItem,
+    primaryTitle: storedPrimaryTitle ?? storedTerminalTitle,
+    terminalTitle: undefined,
+  };
+}
+
+function shouldExposeHistorySidebarItem(
+  entry: PreviousSessionHistoryEntry,
+  sidebarItem: SidebarSessionItem,
+): boolean {
+  if (entry.sessionRecord.kind !== "terminal") {
+    return true;
+  }
+
+  return Boolean(sidebarItem.primaryTitle?.trim() || sidebarItem.terminalTitle?.trim());
 }
 
 function normalizePreviousSessionHistory(

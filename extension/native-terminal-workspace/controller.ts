@@ -81,6 +81,7 @@ import {
   focusEditorGroupByIndex,
 } from "../terminal-workspace-environment";
 import { T3RuntimeManager } from "../t3-runtime-manager";
+import { T3ActivityMonitor } from "../t3-activity-monitor";
 import { disposeVSmuxDebugLog, logVSmuxDebug, resetVSmuxDebugLog } from "../vsmux-debug-log";
 import {
   findLiveBrowserTabBySessionId,
@@ -158,6 +159,7 @@ const COMPLETION_SOUND_CONFIRMATION_DELAY_MS = 1_000;
 const SIMPLE_BROWSER_OPEN_COMMAND = "simpleBrowser.api.open";
 const TERMINAL_SCROLL_TO_BOTTOM_COMMAND = "workbench.action.terminal.scrollToBottom";
 const TOGGLE_MAXIMIZE_EDITOR_GROUP_COMMAND = "workbench.action.toggleMaximizeEditorGroup";
+const DEFAULT_T3_ACTIVITY_WEBSOCKET_URL = "ws://127.0.0.1:3774/ws";
 
 export { SESSIONS_VIEW_ID } from "./settings";
 
@@ -201,6 +203,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private readonly pendingCompletionSoundTimeoutBySessionId = new Map<string, NodeJS.Timeout>();
   private readonly loggedTitleSymbolKeys = new Set<string>();
   private readonly pendingT3SessionIds = new Set<string>();
+  private readonly t3ActivityMonitor: T3ActivityMonitor;
   private nextSidebarRevision = 0;
   private nextWorkspaceAutoFocusRequestId = 0;
   private focusRequestSequence = 0;
@@ -233,6 +236,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       context,
       ensureShellSpawnAllowed: async () => vscode.workspace.isTrusted,
       workspaceId: this.workspaceId,
+    });
+    this.t3ActivityMonitor = new T3ActivityMonitor({
+      getWebSocketUrl: () => this.t3Runtime?.getWebSocketUrl() ?? DEFAULT_T3_ACTIVITY_WEBSOCKET_URL,
     });
     this.workspaceAssetServer = new WorkspaceAssetServer(context);
     this.workspacePanel = new WorkspacePanelManager({
@@ -269,6 +275,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
     this.disposables.push(
       this.backend,
+      this.t3ActivityMonitor,
       this.workspaceAssetServer,
       this.workspacePanel,
       this.sidebarProvider,
@@ -294,6 +301,14 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           this.terminalTitleBySessionId.delete(sessionId);
         }
         void this.postSessionPresentationMessage(sessionId);
+      }),
+      this.t3ActivityMonitor.onDidChange(() => {
+        void (async () => {
+          logVSmuxDebug("controller.t3ActivityMonitor.changed");
+          await this.syncKnownSessionActivities(true);
+          await this.refreshSidebar();
+          await this.refreshWorkspacePanel();
+        })();
       }),
       vscode.workspace.onDidChangeConfiguration(() => {
         void this.backend.syncConfiguration();
@@ -322,6 +337,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       sessionCount: this.getAllSessionRecords().length,
     });
     await this.backend.initialize(this.getAllSessionRecords());
+    await this.syncT3ActivityMonitor();
     await this.syncKnownSessionActivities(false);
     this.syncSurfaceManagers();
     await this.reconcileProjectedSessions();
@@ -419,7 +435,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       sessionRecord.kind === "terminal" &&
       !this.backend.hasAttachedTerminal(sessionRecord.sessionId);
     let terminalSurfaceEnsureResult: TerminalSurfaceEnsureResult = "non-terminal";
-    const acknowledgedAttention = await this.acknowledgeSessionAttentionIfNeeded(sessionId);
+    const acknowledgedAttention = await this.acknowledgeSessionAttentionIfNeeded(sessionRecord);
     logVSmuxDebug("controller.focusSession.afterAcknowledge", {
       acknowledgedAttention,
       durationMs: Date.now() - focusStartedAt,
@@ -1252,6 +1268,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     sidebarAlreadyRefreshed?: boolean;
     workspaceAlreadyRefreshed?: boolean;
   }): Promise<void> {
+    await this.syncT3ActivityMonitor();
     if (options?.sidebarAlreadyRefreshed) {
       this.clearObservedSidebarFocusState();
       this.syncSurfaceManagers();
@@ -1394,16 +1411,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         this.sidebarAgentIconBySessionId.get(sessionId) ??
         getSidebarAgentIconById(snapshotAgentName) ??
         getSidebarAgentIconById(derivedAgentName),
-      getT3ActivityState: (sessionRecord) => ({
-        activity: "idle",
-        detail:
-          !isT3Session(sessionRecord) || this.pendingT3SessionIds.has(sessionRecord.sessionId)
-            ? undefined
-            : `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`,
-        isRunning:
-          this.pendingT3SessionIds.has(sessionRecord.sessionId) ||
-          this.isSessionVisibleInWorkspace(sessionRecord.sessionId),
-      }),
+      getT3ActivityState: (sessionRecord) => this.getT3ActivityState(sessionRecord),
       getTerminalTitle: (sessionId) => this.terminalTitleBySessionId.get(sessionId),
       hud: createSidebarHudState(
         activeSnapshot,
@@ -1511,17 +1519,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         this.sidebarAgentIconBySessionId.get(candidateSessionId) ??
         getSidebarAgentIconById(snapshotAgentName) ??
         getSidebarAgentIconById(derivedAgentName),
-      getT3ActivityState: (candidateSessionRecord) => ({
-        activity: "idle",
-        detail:
-          !isT3Session(candidateSessionRecord) ||
-          this.pendingT3SessionIds.has(candidateSessionRecord.sessionId)
-            ? undefined
-            : `Thread ${candidateSessionRecord.t3.threadId.slice(0, 8)}`,
-        isRunning:
-          this.pendingT3SessionIds.has(candidateSessionRecord.sessionId) ||
-          this.isSessionVisibleInWorkspace(candidateSessionRecord.sessionId),
-      }),
+      getT3ActivityState: (candidateSessionRecord) =>
+        this.getT3ActivityState(candidateSessionRecord),
       getTerminalTitle: (candidateSessionId) =>
         this.terminalTitleBySessionId.get(candidateSessionId),
       platform: SHORTCUT_LABEL_PLATFORM,
@@ -1967,6 +1966,46 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     this.backend.syncSessions(sessions);
   }
 
+  private getT3ActivityState(sessionRecord: SessionRecord): {
+    activity: "idle" | "working" | "attention";
+    detail?: string;
+    isRunning: boolean;
+  } {
+    if (!isT3Session(sessionRecord)) {
+      return {
+        activity: "idle",
+        isRunning: false,
+      };
+    }
+
+    if (
+      this.pendingT3SessionIds.has(sessionRecord.sessionId) ||
+      isPendingT3Metadata(sessionRecord.t3)
+    ) {
+      return {
+        activity: "working",
+        isRunning: true,
+      };
+    }
+
+    const threadActivity = this.t3ActivityMonitor.getThreadActivity(sessionRecord.t3.threadId);
+    return {
+      activity: threadActivity?.activity ?? "idle",
+      detail:
+        threadActivity?.activity !== "working" && sessionRecord.t3.threadId.trim()
+          ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
+          : undefined,
+      isRunning: threadActivity?.isRunning ?? true,
+    };
+  }
+
+  private async syncT3ActivityMonitor(): Promise<void> {
+    const hasLiveT3Sessions = this.getAllSessionRecords().some(
+      (sessionRecord) => sessionRecord.kind === "t3" && !isPendingT3Metadata(sessionRecord.t3),
+    );
+    await this.t3ActivityMonitor.setEnabled(hasLiveT3Sessions);
+  }
+
   private clearSessionPresentationState(sessionId: string): void {
     this.pendingT3SessionIds.delete(sessionId);
     this.sidebarAgentIconBySessionId.delete(sessionId);
@@ -2039,10 +2078,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         this.sidebarAgentIconBySessionId.get(sessionId) ??
         getSidebarAgentIconById(snapshotAgentName) ??
         getSidebarAgentIconById(derivedAgentName),
-      getT3ActivityState: (candidateSessionRecord) => ({
-        activity: "idle",
-        isRunning: this.isSessionVisibleInWorkspace(candidateSessionRecord.sessionId),
-      }),
+      getT3ActivityState: (candidateSessionRecord) =>
+        this.getT3ActivityState(candidateSessionRecord),
       getTerminalTitle: (sessionId) => this.terminalTitleBySessionId.get(sessionId),
       group,
       platform: SHORTCUT_LABEL_PLATFORM,
@@ -2056,12 +2093,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     return {
       cancelPendingCompletionSound: (sessionId) => this.clearPendingCompletionSound(sessionId),
       getSessionSnapshot: (sessionId) => this.backend.getSessionSnapshot(sessionId),
-      getT3ActivityState: (sessionRecord) => ({
-        activity: this.pendingT3SessionIds.has(sessionRecord.sessionId) ? "working" : "idle",
-        isRunning:
-          this.pendingT3SessionIds.has(sessionRecord.sessionId) ||
-          this.isSessionVisibleInWorkspace(sessionRecord.sessionId),
-      }),
+      getT3ActivityState: (sessionRecord) => this.getT3ActivityState(sessionRecord),
       lastKnownActivityBySessionId: this.lastKnownActivityBySessionId,
       queueCompletionSound: (sessionId) => this.queueCompletionSound(sessionId),
       workingStartedAtBySessionId: this.workingStartedAtBySessionId,
@@ -2218,16 +2250,33 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     return true;
   }
 
-  private async acknowledgeSessionAttentionIfNeeded(sessionId: string): Promise<boolean> {
-    const sessionSnapshot = this.backend.getSessionSnapshot(sessionId);
+  private async acknowledgeSessionAttentionIfNeeded(
+    sessionRecord: SessionRecord,
+  ): Promise<boolean> {
+    if (isT3Session(sessionRecord)) {
+      const acknowledgedAttention = this.t3ActivityMonitor.acknowledgeThread(
+        sessionRecord.t3.threadId,
+      );
+      if (acknowledgedAttention) {
+        await this.syncKnownSessionActivities(false);
+      }
+      logVSmuxDebug("controller.acknowledgeSessionAttentionIfNeeded.t3", {
+        acknowledgedAttention,
+        sessionId: sessionRecord.sessionId,
+        threadId: sessionRecord.t3.threadId,
+      });
+      return acknowledgedAttention;
+    }
+
+    const sessionSnapshot = this.backend.getSessionSnapshot(sessionRecord.sessionId);
     if (sessionSnapshot?.agentStatus !== "attention") {
       return false;
     }
 
-    const acknowledgedAttention = await this.backend.acknowledgeAttention(sessionId);
+    const acknowledgedAttention = await this.backend.acknowledgeAttention(sessionRecord.sessionId);
     logVSmuxDebug("controller.acknowledgeSessionAttentionIfNeeded", {
       acknowledgedAttention,
-      sessionId,
+      sessionId: sessionRecord.sessionId,
     });
     return acknowledgedAttention;
   }

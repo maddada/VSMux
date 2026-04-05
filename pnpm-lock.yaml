@@ -8,6 +8,11 @@ overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
 
+patchedDependencies:
+  restty@0.1.35:
+    hash: a3387e22a7da6cd87b236e8a4511570ed0ada7aeb631d43876d4bc998b6a1a83
+    path: patches/restty@0.1.35.patch
+
 importers:
 
   .:
@@ -44,7 +49,7 @@ importers:
         version: 19.2.4(react@19.2.4)
       restty:
         specifier: 0.1.35
-        version: 0.1.35(typescript@5.9.3)
+        version: 0.1.35(patch_hash=a3387e22a7da6cd87b236e8a4511570ed0ada7aeb631d43876d4bc998b6a1a83)(typescript@5.9.3)
       ws:
         specifier: ^8.20.0
         version: 8.20.0
@@ -7581,7 +7586,7 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
-  restty@0.1.35(typescript@5.9.3):
+  restty@0.1.35(patch_hash=a3387e22a7da6cd87b236e8a4511570ed0ada7aeb631d43876d4bc998b6a1a83)(typescript@5.9.3):
     dependencies:
       text-shaper: 0.1.22(typescript@5.9.3)
     transitivePeerDependencies:

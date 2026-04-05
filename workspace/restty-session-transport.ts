@@ -66,6 +66,27 @@ export function createWorkspaceResttyTransport(
   let activeConnectionChunks = 0;
   let activeConnectionSummaryTimeoutId: number | undefined;
 
+  const scheduleDebugTimeout = (
+    timeoutType: string,
+    delayMs: number,
+    callback: () => void,
+    payload: Record<string, unknown> = {},
+  ) => {
+    const scheduledAt = performance.now();
+    return globalThis.setTimeout(() => {
+      const actualDelayMs = performance.now() - scheduledAt;
+      options.reportDebug?.("terminal.timeoutFired", {
+        actualDelayMs: Math.round(actualDelayMs),
+        delayMs,
+        overshootMs: Math.max(0, Math.round(actualDelayMs - delayMs)),
+        sessionId: options.sessionId,
+        timeoutType,
+        ...payload,
+      });
+      callback();
+    }, delayMs);
+  };
+
   const clearConnectionSummaryTimeout = () => {
     if (activeConnectionSummaryTimeoutId !== undefined) {
       globalThis.clearTimeout(activeConnectionSummaryTimeoutId);
@@ -158,10 +179,17 @@ export function createWorkspaceResttyTransport(
       delayMs,
       sessionId: options.sessionId,
     });
-    reconnectTimeoutId = globalThis.setTimeout(() => {
-      reconnectTimeoutId = undefined;
-      openSocket();
-    }, delayMs);
+    reconnectTimeoutId = scheduleDebugTimeout(
+      "socketReconnect",
+      delayMs,
+      () => {
+        reconnectTimeoutId = undefined;
+        openSocket();
+      },
+      {
+        attempt: reconnectAttempt,
+      },
+    );
   };
 
   const cleanupSocket = (targetSocket: WebSocket) => {
@@ -218,10 +246,17 @@ export function createWorkspaceResttyTransport(
       sendReadyIfPossible();
       callbacks?.onConnect?.();
       flushPendingMessages();
-      activeConnectionSummaryTimeoutId = globalThis.setTimeout(() => {
-        activeConnectionSummaryTimeoutId = undefined;
-        reportConnectionSummary(connectId, "window");
-      }, CONNECTION_SUMMARY_DELAY_MS);
+      activeConnectionSummaryTimeoutId = scheduleDebugTimeout(
+        "connectionSummary",
+        CONNECTION_SUMMARY_DELAY_MS,
+        () => {
+          activeConnectionSummaryTimeoutId = undefined;
+          reportConnectionSummary(connectId, "window");
+        },
+        {
+          connectionId: connectId,
+        },
+      );
     });
 
     nextSocket.addEventListener("message", (event) => {

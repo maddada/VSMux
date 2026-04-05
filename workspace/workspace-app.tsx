@@ -60,6 +60,20 @@ type WorkspaceAutoFocusGuard = {
 
 const AUTO_FOCUS_ACTIVATION_GUARD_MS = 400;
 
+const describeActiveElement = () => {
+  const activeElement = document.activeElement;
+  if (!activeElement) {
+    return null;
+  }
+
+  return {
+    className: activeElement.className || undefined,
+    id: activeElement.id || undefined,
+    role: activeElement.getAttribute("role") || undefined,
+    tagName: activeElement.tagName,
+  };
+};
+
 export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = window, vscode }) => {
   const [isWorkspaceFocused, setIsWorkspaceFocused] = useState(
     () =>
@@ -114,23 +128,38 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   };
 
   useEffect(() => {
-    const syncWorkspaceFocusState = () => {
-      setIsWorkspaceFocused(document.visibilityState === "visible" && document.hasFocus());
+    const syncWorkspaceFocusState = (source: string) => {
+      const nextIsWorkspaceFocused = document.visibilityState === "visible" && document.hasFocus();
+      setIsWorkspaceFocused(nextIsWorkspaceFocused);
+      postWorkspaceDebugLog(debuggingModeRef.current, "workspace.focusStateSync", {
+        activeElement: describeActiveElement(),
+        documentHasFocus: document.hasFocus(),
+        hidden: document.hidden,
+        isWorkspaceFocused: nextIsWorkspaceFocused,
+        source,
+        visibilityState: document.visibilityState,
+      });
     };
 
-    syncWorkspaceFocusState();
-    window.addEventListener("blur", syncWorkspaceFocusState);
-    window.addEventListener("focus", syncWorkspaceFocusState);
-    window.addEventListener("focusin", syncWorkspaceFocusState);
-    window.addEventListener("focusout", syncWorkspaceFocusState);
-    document.addEventListener("visibilitychange", syncWorkspaceFocusState);
+    const handleBlur = () => syncWorkspaceFocusState("window.blur");
+    const handleFocus = () => syncWorkspaceFocusState("window.focus");
+    const handleFocusIn = () => syncWorkspaceFocusState("window.focusin");
+    const handleFocusOut = () => syncWorkspaceFocusState("window.focusout");
+    const handleVisibilityChange = () => syncWorkspaceFocusState("document.visibilitychange");
+
+    syncWorkspaceFocusState("mount");
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("focusout", handleFocusOut);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("blur", syncWorkspaceFocusState);
-      window.removeEventListener("focus", syncWorkspaceFocusState);
-      window.removeEventListener("focusin", syncWorkspaceFocusState);
-      window.removeEventListener("focusout", syncWorkspaceFocusState);
-      document.removeEventListener("visibilitychange", syncWorkspaceFocusState);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focusin", handleFocusIn);
+      window.removeEventListener("focusout", handleFocusOut);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

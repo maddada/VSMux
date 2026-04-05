@@ -11,6 +11,7 @@ import {
 
 const TERMINAL_RUNTIME_HOST_CLASS_NAME = "terminal-pane-runtime-host";
 const TERMINAL_STARTUP_BACKGROUND = "#121212";
+const TERMINAL_PREFERRED_RENDERER = "webgl2";
 
 export type CachedTerminalRuntimeCallbacks = {
   onFirstData?: (connectionId: number) => void;
@@ -127,6 +128,7 @@ export const acquireCachedTerminalRuntime = (
       fontSize: options.terminalAppearance.fontSize,
       fontSources: getResttyFontSources(options.terminalAppearance.fontFamily),
       ptyTransport: transportController?.transport,
+      renderer: TERMINAL_PREFERRED_RENDERER,
     },
   });
   const activePane = restty.activePane();
@@ -135,6 +137,7 @@ export const acquireCachedTerminalRuntime = (
     restty.destroy();
     throw new Error(`Missing Restty active pane for session ${options.sessionId}`);
   }
+  activePane.setRenderer(TERMINAL_PREFERRED_RENDERER);
 
   runtime.activePane = activePane;
   runtime.appearancePromise = Promise.resolve();
@@ -153,6 +156,11 @@ export const acquireCachedTerminalRuntime = (
   runtime.restty = restty;
   runtime.sessionId = options.sessionId;
   runtime.transportController = transportController;
+
+  runtime.callbacks.reportDebug?.("terminal.rendererPreference", {
+    preferredRenderer: TERMINAL_PREFERRED_RENDERER,
+    sessionId: options.sessionId,
+  });
 
   cachedTerminalRuntimes.set(options.cacheKey, runtime);
   return runtime;

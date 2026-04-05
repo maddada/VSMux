@@ -30,6 +30,7 @@ import type {
   TerminalHostAcknowledgeAttentionRequest,
   TerminalHostConfigureRequest,
   TerminalHostCreateOrAttachRequest,
+  TerminalHostHeartbeatOwnerRequest,
   TerminalHostKillRequest,
   TerminalHostListSessionsRequest,
   TerminalHostRequest,
@@ -75,6 +76,9 @@ type ManagedSession = {
 };
 
 type ControlClient = {
+  lastHeartbeatAt?: number;
+  ownerId?: string;
+  ownerPid?: number;
   socket: WebSocket;
 };
 
@@ -87,6 +91,8 @@ type PendingSessionAttachment = {
 };
 
 const DEFAULT_IDLE_SHUTDOWN_TIMEOUT_MS = 5 * 60_000;
+const DAEMON_OWNER_HEARTBEAT_TIMEOUT_MS = 20_000;
+const DAEMON_OWNER_STARTUP_GRACE_MS = 30_000;
 const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
 const SESSION_ATTACH_READY_TIMEOUT_MS = 15_000;
 const REPLAY_CHUNK_BYTES = 128 * 1024;
@@ -104,6 +110,7 @@ const sessionSocketsBySessionKey = new Map<string, WebSocket>();
 
 let idleShutdownTimeoutMs: number | null = DEFAULT_IDLE_SHUTDOWN_TIMEOUT_MS;
 let lifecycleTimer: NodeJS.Timeout | undefined;
+let ownerAdoptionTimer: NodeJS.Timeout | undefined;
 let daemonInfo: DaemonInfo | undefined;
 
 const server = createServer();
@@ -162,6 +169,7 @@ server.listen(0, "127.0.0.1", async () => {
   };
 
   await writeJsonAtomically(infoFilePath, daemonInfo);
+  scheduleOwnerAdoptionTimeout();
   void logDaemonDebug("daemon.start", {
     pid: daemonInfo.pid,
     port: daemonInfo.port,
@@ -236,6 +244,9 @@ async function handleControlMessage(client: ControlClient, rawMessage: string): 
     case "configure":
       await handleConfigureRequest(client.socket, request);
       return;
+    case "heartbeatOwner":
+      await handleHeartbeatOwnerRequest(client, request);
+      return;
     case "syncSessionLeases":
       await handleSyncSessionLeasesRequest(client.socket, request);
       return;
@@ -291,6 +302,18 @@ async function handleSyncSessionLeasesRequest(
   clearLifecycleTimer();
   scheduleDaemonLifecycleCheckIfNeeded();
   socket.send(JSON.stringify(okResponse(request.requestId)));
+}
+
+async function handleHeartbeatOwnerRequest(
+  client: ControlClient,
+  request: TerminalHostHeartbeatOwnerRequest,
+): Promise<void> {
+  client.lastHeartbeatAt = Date.now();
+  client.ownerId = request.ownerId;
+  client.ownerPid = request.ownerPid;
+  clearOwnerAdoptionTimer();
+  scheduleDaemonLifecycleCheckIfNeeded();
+  client.socket.send(JSON.stringify(okResponse(request.requestId)));
 }
 
 async function handleCreateOrAttachRequest(
@@ -740,6 +763,7 @@ function applySessionTitleActivity(session: ManagedSession): void {
 }
 
 function scheduleDaemonLifecycleCheckIfNeeded(): void {
+  pruneStaleOwnerClients();
   if (getConnectedClientCount() > 0) {
     return;
   }
@@ -772,6 +796,56 @@ function clearLifecycleTimer(): void {
   }
 }
 
+function scheduleOwnerAdoptionTimeout(): void {
+  clearOwnerAdoptionTimer();
+  ownerAdoptionTimer = setTimeout(() => {
+    void shutdownIfUnownedAtStartup();
+  }, DAEMON_OWNER_STARTUP_GRACE_MS);
+}
+
+function clearOwnerAdoptionTimer(): void {
+  if (!ownerAdoptionTimer) {
+    return;
+  }
+
+  clearTimeout(ownerAdoptionTimer);
+  ownerAdoptionTimer = undefined;
+}
+
+function pruneStaleOwnerClients(): void {
+  const now = Date.now();
+  for (const client of [...controlClients]) {
+    if (!client.lastHeartbeatAt || !client.ownerId) {
+      continue;
+    }
+
+    if (now - client.lastHeartbeatAt <= DAEMON_OWNER_HEARTBEAT_TIMEOUT_MS) {
+      continue;
+    }
+
+    void logDaemonDebug("daemon.ownerHeartbeatExpired", {
+      ownerId: client.ownerId,
+      ownerPid: client.ownerPid,
+      pid: process.pid,
+    });
+    try {
+      client.socket.close();
+    } catch {
+      controlClients.delete(client);
+    }
+  }
+}
+
+async function shutdownIfUnownedAtStartup(): Promise<void> {
+  clearOwnerAdoptionTimer();
+  pruneStaleOwnerClients();
+  if (sessions.size > 0 || getConnectedClientCount() > 0) {
+    return;
+  }
+
+  await shutdown("owner-startup-timeout");
+}
+
 function getConnectedClientCount(): number {
   return (
     controlClients.size + sessionSocketsBySessionKey.size + pendingSessionAttachmentSockets.size
@@ -780,6 +854,7 @@ function getConnectedClientCount(): number {
 
 async function shutdown(reason = "unknown"): Promise<void> {
   clearLifecycleTimer();
+  clearOwnerAdoptionTimer();
   void logDaemonDebug("daemon.shutdown", {
     pid: process.pid,
     reason,
