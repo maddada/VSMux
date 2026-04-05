@@ -16,7 +16,7 @@ Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELO
 
 ---
 
-![VSmux v1.11 Screenshot](media/Screenshot.png)
+<img width="3322" alt="2026-04-05_Code_06-12-27@2x" src="https://github.com/user-attachments/assets/e97e339e-b139-44ca-806b-0fcabe764eb0" />
 
 ---
 
