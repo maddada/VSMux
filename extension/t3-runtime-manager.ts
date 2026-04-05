@@ -32,6 +32,8 @@ const T3_HOST = "127.0.0.1";
 const T3_PORT = 3774;
 const START_TIMEOUT_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const SOCKET_CONNECT_TIMEOUT_MS = 1_500;
+const SOCKET_CONNECT_RETRY_DELAY_MS = 250;
 const LEASE_HEARTBEAT_MS = 30_000;
 const LEASE_GRACE_MS = 180_000;
 const RUNTIME_STORAGE_DIR_NAME = "t3-runtime";
@@ -176,7 +178,8 @@ export class T3RuntimeManager implements vscode.Disposable {
           candidate.workspaceRoot === metadata.workspaceRoot,
       ) ??
       snapshot.projects.find(
-        (candidate) => candidate.deletedAt === null && candidate.workspaceRoot === metadata.workspaceRoot,
+        (candidate) =>
+          candidate.deletedAt === null && candidate.workspaceRoot === metadata.workspaceRoot,
       ) ??
       (await this.createProject(metadata.workspaceRoot));
     const existingThread = snapshot.threads.find(
@@ -246,8 +249,10 @@ export class T3RuntimeManager implements vscode.Disposable {
     const hasManagedSupervisor = await this.hasActiveManagedSupervisor(resolvedStartupCommand);
     if (await isOriginResponsive(origin)) {
       if (hasManagedSupervisor) {
-        await this.startLeaseHeartbeat();
-        return origin;
+        if (await isT3TransportResponsive(origin, this.getWebSocketUrl())) {
+          await this.startLeaseHeartbeat();
+          return origin;
+        }
       }
       if (isManagedStartupCommand(resolvedStartupCommand)) {
         await this.stopStaleManagedRuntime();
@@ -263,7 +268,7 @@ export class T3RuntimeManager implements vscode.Disposable {
 
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      if (await isOriginResponsive(origin)) {
+      if (await isT3TransportResponsive(origin, this.getWebSocketUrl())) {
         return origin;
       }
       await delay(250);
@@ -347,38 +352,38 @@ export class T3RuntimeManager implements vscode.Disposable {
       return this.socket;
     }
 
-    this.connectPromise ??= new Promise<WebSocket>((resolve, reject) => {
-      const socket = new WebSocket(this.getWebSocketUrl());
-      const handleMessage = (event: MessageEvent) => {
-        this.handleMessage(event.data);
-      };
-      const handleClose = () => {
-        if (this.socket === socket) {
-          this.socket = undefined;
-        }
-        this.connectPromise = undefined;
-      };
-      const handleError = () => {
-        this.connectPromise = undefined;
-        reject(new Error("Failed to connect to the T3 websocket."));
-      };
-
-      socket.addEventListener(
-        "open",
-        () => {
-          this.socket = socket;
-          socket.addEventListener("message", handleMessage);
-          socket.addEventListener("close", handleClose);
-          resolve(socket);
-        },
-        { once: true },
-      );
-      socket.addEventListener("error", handleError, { once: true });
-    }).finally(() => {
+    this.connectPromise ??= this.connectWithRetry().finally(() => {
       this.connectPromise = undefined;
     });
 
     return this.connectPromise;
+  }
+
+  private async connectWithRetry(): Promise<WebSocket> {
+    const deadline = Date.now() + START_TIMEOUT_MS;
+    let lastError: Error | undefined;
+    while (Date.now() < deadline) {
+      try {
+        const socket = await openWebSocket(this.getWebSocketUrl(), SOCKET_CONNECT_TIMEOUT_MS);
+        const handleMessage = (event: MessageEvent) => {
+          this.handleMessage(event.data);
+        };
+        const handleClose = () => {
+          if (this.socket === socket) {
+            this.socket = undefined;
+          }
+        };
+        this.socket = socket;
+        socket.addEventListener("message", handleMessage);
+        socket.addEventListener("close", handleClose);
+        return socket;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        await delay(SOCKET_CONNECT_RETRY_DELAY_MS);
+      }
+    }
+
+    throw lastError ?? new Error("Failed to connect to the T3 websocket.");
   }
 
   private handleMessage(raw: string | ArrayBuffer | Blob): void {
@@ -394,7 +399,10 @@ export class T3RuntimeManager implements vscode.Disposable {
 
     if (message._tag === "Defect") {
       const error = new Error(
-        formatT3RpcDefect(message.defect, "The T3 runtime reported an unexpected websocket defect."),
+        formatT3RpcDefect(
+          message.defect,
+          "The T3 runtime reported an unexpected websocket defect.",
+        ),
       );
       for (const pending of this.pendingRequests.values()) {
         clearTimeout(pending.timeout);
@@ -726,6 +734,70 @@ async function isOriginResponsive(origin: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function isT3TransportResponsive(origin: string, webSocketUrl: string): Promise<boolean> {
+  if (!(await isOriginResponsive(origin))) {
+    return false;
+  }
+
+  return openWebSocket(webSocketUrl, SOCKET_CONNECT_TIMEOUT_MS)
+    .then((socket) => {
+      socket.close();
+      return true;
+    })
+    .catch(() => false);
+}
+
+function openWebSocket(url: string, timeoutMs: number): Promise<WebSocket> {
+  return new Promise<WebSocket>((resolve, reject) => {
+    const socket = new WebSocket(url);
+    let settled = false;
+    const timeout = setTimeout(() => {
+      finalize(new Error("Failed to connect to the T3 websocket."));
+      socket.close();
+    }, timeoutMs);
+
+    const handleOpen = () => {
+      socket.removeEventListener("error", handleError);
+      socket.removeEventListener("close", handleClose);
+      finalize(undefined, socket);
+    };
+    const handleError = () => {
+      socket.removeEventListener("open", handleOpen);
+      socket.removeEventListener("close", handleClose);
+      finalize(new Error("Failed to connect to the T3 websocket."));
+    };
+    const handleClose = () => {
+      socket.removeEventListener("open", handleOpen);
+      socket.removeEventListener("error", handleError);
+      finalize(new Error("Failed to connect to the T3 websocket."));
+    };
+
+    const finalize = (error?: Error, value?: WebSocket) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      if (!value) {
+        reject(new Error("Failed to connect to the T3 websocket."));
+        return;
+      }
+
+      resolve(value);
+    };
+
+    socket.addEventListener("open", handleOpen, { once: true });
+    socket.addEventListener("error", handleError, { once: true });
+    socket.addEventListener("close", handleClose, { once: true });
+  });
 }
 
 function delay(ms: number): Promise<void> {

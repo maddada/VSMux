@@ -197,7 +197,11 @@ function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToEx
       (message.details === undefined || typeof message.details === "string")
     );
   }
-  if (message.type === "focusSession" || message.type === "closeSession") {
+  if (
+    message.type === "focusSession" ||
+    message.type === "closeSession" ||
+    message.type === "fullReloadSession"
+  ) {
     return typeof message.sessionId === "string" && message.sessionId.length > 0;
   }
   if (message.type === "syncPaneOrder" || message.type === "syncSessionOrder") {

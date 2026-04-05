@@ -41,6 +41,8 @@ type WorkspaceShellStyle = CSSProperties & {
   "--workspace-pane-gap": string;
 };
 
+type WorkspaceTerminalActivationSource = "focusin" | "pointer";
+
 type WorkspacePanePointerDragState = {
   isDragging: boolean;
   pointerId: number;
@@ -70,7 +72,6 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const [localPaneOrder, setLocalPaneOrder] = useState<string[] | undefined>();
   const [draggedPaneId, setDraggedPaneId] = useState<string | undefined>();
   const [dropTargetPaneId, setDropTargetPaneId] = useState<string | undefined>();
-  const [terminalRefreshRequestId, setTerminalRefreshRequestId] = useState(0);
   const focusRequestSequenceRef = useRef(0);
   const debuggingModeRef = useRef<boolean | undefined>(undefined);
   const autoFocusGuardRef = useRef<WorkspaceAutoFocusGuard | undefined>(undefined);
@@ -251,41 +252,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     () => (localPaneOrder ? sortPanesBySessionIds(panes, localPaneOrder) : panes),
     [localPaneOrder, panes],
   );
-  const activeGroupVisibleSessionIds = useMemo(() => {
-    if (!workspaceState) {
-      return [];
-    }
-
-    return (
-      workspaceState.workspaceSnapshot.groups.find(
-        (group) => group.groupId === workspaceState.activeGroupId,
-      )?.snapshot.visibleSessionIds ?? []
-    );
-  }, [workspaceState]);
-  const visiblePaneOrderIds = useMemo(() => {
-    if (!localPaneOrder || activeGroupVisibleSessionIds.length === 0) {
-      return activeGroupVisibleSessionIds;
-    }
-
-    const activeVisibleSessionIdSet = new Set(activeGroupVisibleSessionIds);
-    const reorderedVisiblePaneIds = localPaneOrder.filter((sessionId) =>
-      activeVisibleSessionIdSet.has(sessionId),
-    );
-    return reorderedVisiblePaneIds.length === activeGroupVisibleSessionIds.length
-      ? reorderedVisiblePaneIds
-      : activeGroupVisibleSessionIds;
-  }, [activeGroupVisibleSessionIds, localPaneOrder]);
   const visiblePanes = useMemo(() => {
-    if (visiblePaneOrderIds.length === 0) {
-      return orderedPanes.filter((pane) => pane.isVisible);
-    }
-
-    const visiblePaneIdSet = new Set(visiblePaneOrderIds);
-    return sortPanesBySessionIds(
-      panes.filter((pane) => pane.isVisible && visiblePaneIdSet.has(pane.sessionId)),
-      visiblePaneOrderIds,
-    );
-  }, [orderedPanes, panes, visiblePaneOrderIds]);
+    return orderedPanes.filter((pane) => pane.isVisible);
+  }, [orderedPanes]);
   const visiblePaneLayoutBySessionId = useMemo(() => {
     const resolvedViewMode = workspaceState?.viewMode ?? "grid";
     const rowLengths = createEditorLayoutPlan(
@@ -398,6 +367,13 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     });
   };
 
+  const applyLocalFocusVisual = (sessionId: string) => {
+    postWorkspaceDebugLog(workspaceState?.debuggingMode, "focus.localFocusVisual", {
+      sessionId,
+    });
+    setLocalFocusedSessionId(sessionId);
+  };
+
   const shouldIgnorePaneActivation = (sessionId: string): boolean => {
     const autoFocusGuard = autoFocusGuardRef.current;
     if (!autoFocusGuard) {
@@ -419,6 +395,49 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       sessionId,
     });
     return true;
+  };
+
+  const handleTerminalActivate = (sessionId: string, source: WorkspaceTerminalActivationSource) => {
+    if (pointerDragStateRef.current) {
+      postWorkspaceDebugLog(
+        workspaceState?.debuggingMode,
+        "focus.paneActivationIgnoredDuringHeaderDrag",
+        {
+          sessionId,
+          source,
+        },
+      );
+      return;
+    }
+
+    const ignored = shouldIgnorePaneActivation(sessionId);
+    const isFocused = presentedFocusedSessionId === sessionId;
+    postWorkspaceDebugLog(workspaceState?.debuggingMode, "focus.paneActivationReceived", {
+      ignored,
+      isFocused,
+      localFocusedSessionId: presentedFocusedSessionId,
+      serverFocusedSessionId: workspaceState?.focusedSessionId,
+      sessionId,
+      source,
+    });
+    if (ignored) {
+      return;
+    }
+
+    applyLocalFocusVisual(sessionId);
+    if (!isFocused) {
+      postWorkspaceDebugLog(workspaceState?.debuggingMode, "focus.paneActivationRequestsFocus", {
+        sessionId,
+        source,
+      });
+      requestFocusSession(sessionId);
+      return;
+    }
+
+    postWorkspaceDebugLog(workspaceState?.debuggingMode, "focus.paneActivationAlreadyFocused", {
+      sessionId,
+      source,
+    });
   };
 
   const requestPaneReorder = (sourcePaneId: string, targetPaneId: string) => {
@@ -595,21 +614,23 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           isWorkspaceFocused={isWorkspaceFocused}
           key={pane.kind === "terminal" ? `${pane.sessionId}:${pane.renderNonce}` : pane.sessionId}
           layoutStyle={visiblePaneLayoutBySessionId.get(pane.sessionId)}
-          onLocalFocus={() => {
-            postWorkspaceDebugLog(workspaceState.debuggingMode, "focus.localFocusVisual", {
-              sessionId: pane.sessionId,
-            });
-            setLocalFocusedSessionId(pane.sessionId);
-          }}
+          onLocalFocus={() => applyLocalFocusVisual(pane.sessionId)}
           onFocus={() => requestFocusSession(pane.sessionId)}
+          onTerminalActivate={handleTerminalActivate}
           onClose={() =>
             vscode.postMessage({
               sessionId: pane.sessionId,
               type: "closeSession",
             })
           }
+          onFullReload={() =>
+            vscode.postMessage({
+              sessionId: pane.sessionId,
+              type: "fullReloadSession",
+            })
+          }
           pane={pane}
-          refreshRequestId={terminalRefreshRequestId}
+          refreshRequestId={0}
           terminalAppearance={workspaceState.terminalAppearance}
           canDrag={pane.kind === "terminal" && pane.isVisible && reorderablePaneIds.length > 1}
           autoFocusRequest={
@@ -627,6 +648,17 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           }}
           onHeaderPointerDown={(event) => {
             if (pane.kind !== "terminal" || !pane.isVisible || event.button !== 0) {
+              return;
+            }
+
+            if (isWorkspacePaneHeaderInteractiveTarget(event.target)) {
+              postWorkspaceDebugLog(
+                workspaceState.debuggingMode,
+                "drag.pointerDownIgnoredForHeaderControl",
+                {
+                  sourcePaneId: pane.sessionId,
+                },
+              );
               return;
             }
 
@@ -649,9 +681,6 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
             };
             setDraggedPaneId(undefined);
             setCurrentDropTargetPaneId(undefined);
-          }}
-          onRefreshAllTerminals={() => {
-            setTerminalRefreshRequestId((currentValue) => currentValue + 1);
           }}
         />
       ))}
@@ -676,9 +705,10 @@ type WorkspacePaneViewProps = {
   onLocalFocus: () => void;
   onFocus: () => void;
   onClose: () => void;
+  onFullReload: () => void;
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onHeaderNativeDragStart: (event: ReactDragEvent<HTMLElement>) => void;
-  onRefreshAllTerminals: () => void;
+  onTerminalActivate: (sessionId: string, source: WorkspaceTerminalActivationSource) => void;
   pane: WorkspacePanelPane;
   refreshRequestId: number;
   terminalAppearance: WorkspacePanelHydrateMessage["terminalAppearance"];
@@ -698,9 +728,10 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onLocalFocus,
   onFocus,
   onClose,
+  onFullReload,
   onHeaderPointerDown,
   onHeaderNativeDragStart,
-  onRefreshAllTerminals,
+  onTerminalActivate,
   pane,
   refreshRequestId,
   terminalAppearance,
@@ -741,7 +772,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
         <div className="workspace-pane-title">{primaryTitle}</div>
         {pane.kind === "terminal" ? (
           <div className="workspace-pane-header-actions">
-            <WorkspacePaneRefreshButton onRefresh={onRefreshAllTerminals} />
+            <WorkspacePaneRefreshButton onRefresh={onFullReload} />
             <WorkspacePaneCloseButton onConfirmClose={onClose} />
           </div>
         ) : null}
@@ -755,16 +786,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
             debuggingMode={debuggingMode}
             isFocused={isFocused}
             isVisible={pane.isVisible}
-            onActivate={() => {
-              if (shouldIgnorePaneActivation(pane.sessionId)) {
-                return;
-              }
-
-              onLocalFocus();
-              if (!isFocused) {
-                onFocus();
-              }
-            }}
+            onActivate={(source) => onTerminalActivate(pane.sessionId, source)}
             pane={pane}
             refreshRequestId={refreshRequestId}
             terminalAppearance={terminalAppearance}
@@ -800,6 +822,18 @@ function getWorkspacePanePrimaryTitle(pane: WorkspacePanelPane): string {
 
 function preventWorkspacePaneNativeDrag(event: ReactDragEvent<HTMLElement>): void {
   event.preventDefault();
+}
+
+function isWorkspacePaneHeaderInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      "button, [role='button'], input, select, textarea, a, .workspace-pane-header-actions",
+    ),
+  );
 }
 
 function safeSerializeWorkspaceDebugDetails(details: Record<string, unknown>): string {

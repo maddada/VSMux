@@ -119,6 +119,31 @@ describe("WorkspacePanelManager", () => {
     manager.dispose();
   });
 
+  test("should forward full reload session messages from the workspace webview", async () => {
+    const onMessage = vi.fn();
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage,
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.webview.messageListeners[0]?.({
+      sessionId: "session-1",
+      type: "fullReloadSession",
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      type: "fullReloadSession",
+    });
+
+    manager.dispose();
+  });
+
   test("should forward pane reorder messages from the workspace webview", async () => {
     const onMessage = vi.fn();
     const manager = new WorkspacePanelManager({

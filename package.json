@@ -22,7 +22,8 @@
   ],
   "main": "./out/extension/extension.js",
   "scripts": {
-    "vscode:prepublish": "vp run sidebar:build && vp run debug-panel:build && vp run workspace:build && tsc -p ./tsconfig.extension.json && node ./scripts/vendor-runtime-deps.mjs",
+    "build:extension": "vp run sidebar:build && vp run debug-panel:build && vp run workspace:build && tsc -p ./tsconfig.extension.json && node ./scripts/vendor-runtime-deps.mjs",
+    "vscode:prepublish": "node ./scripts/vscode-prepublish.mjs",
     "sidebar:build": "vp build --config vite.sidebar.config.ts",
     "debug-panel:build": "vp build --config vite.debug-panel.config.ts",
     "workspace:build": "vp build --config vite.workspace.config.ts",
@@ -31,7 +32,7 @@
     "storybook:build": "vp exec storybook build",
     "storybook:test": "node ./scripts/storybook-test.mjs",
     "workspace:reconnect:harness": "node ./scripts/workspace-reconnect-harness.mjs",
-    "compile": "vp run sidebar:build && vp run debug-panel:build && vp run workspace:build && tsc -p ./tsconfig.extension.json && node ./scripts/vendor-runtime-deps.mjs",
+    "compile": "pnpm run build:extension",
     "watch": "tsc -w -p ./tsconfig.extension.json",
     "t3:embed:build": "node ./scripts/build-t3-embed.mjs",
     "lint": "vp lint",

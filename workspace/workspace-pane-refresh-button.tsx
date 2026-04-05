@@ -8,7 +8,7 @@ export const WorkspacePaneRefreshButton: React.FC<WorkspacePaneRefreshButtonProp
   onRefresh,
 }) => (
   <button
-    aria-label="Refresh terminal rendering"
+    aria-label="Full reload session"
     className="workspace-pane-refresh-button"
     draggable={false}
     onClick={(event) => {

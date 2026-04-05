@@ -47,7 +47,9 @@ pnpm run compile
 2. Runs `vp exec vsce package`
 3. Writes the artifact to `installer/<name>-<version>.vsix`
 
-For this repo, `compile` currently runs:
+For this repo, `compile` now delegates to `build:extension`, and `vscode:prepublish` uses the same build entrypoint. When `scripts/vsix.mjs` has already compiled the extension, it sets `VSMUX_SKIP_PREPUBLISH=1` so `vsce package` does not rebuild everything a second time.
+
+`build:extension` currently runs:
 
 ```bash
 vp run sidebar:build

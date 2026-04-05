@@ -9,10 +9,13 @@ import type {
 } from "../shared/workspace-panel-contract";
 import { logWorkspaceDebug } from "./workspace-debug";
 import { getResttyFontSources, getResttyTheme } from "./restty-terminal-config";
+import type { WorkspaceResttyTransportController } from "./restty-session-transport";
 import {
-  createWorkspaceResttyTransport,
-  type WorkspaceResttyTransportController,
-} from "./restty-session-transport";
+  acquireCachedTerminalRuntime,
+  getTerminalRuntimeCacheKey,
+  releaseCachedTerminalRuntime,
+  type CachedTerminalRuntime,
+} from "./terminal-runtime-cache";
 import "./terminal-pane.css";
 
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
@@ -33,7 +36,7 @@ export type TerminalPaneProps = {
   debuggingMode: boolean;
   isFocused: boolean;
   isVisible: boolean;
-  onActivate: () => void;
+  onActivate: (source: "focusin" | "pointer") => void;
   pane: WorkspacePanelTerminalPane;
   refreshRequestId: number;
   terminalAppearance: WorkspacePanelTerminalAppearance;
@@ -58,8 +61,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const runtimeRef = useRef<CachedTerminalRuntime | null>(null);
   const debugLogRef = useRef(debugLog);
   const debuggingModeRef = useRef(debuggingMode);
+  const isVisibleRef = useRef(isVisible);
   const handledAutoFocusRequestIdRef = useRef<number | undefined>(undefined);
   const handledRefreshRequestIdRef = useRef(refreshRequestId);
   const boundScrollHostRef = useRef<HTMLElement | null>(null);
@@ -81,6 +86,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultsState>(SEARCH_RESULTS_EMPTY);
+  const runtimeCacheKey = getTerminalRuntimeCacheKey(pane.sessionId);
 
   useEffect(() => {
     debugLogRef.current = debugLog;
@@ -90,9 +96,43 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     debuggingModeRef.current = debuggingMode;
   }, [debuggingMode]);
 
+  useEffect(() => {
+    isVisibleRef.current = isVisible;
+  }, [isVisible]);
+
   const reportDebug = (event: string, payload?: Record<string, unknown>) => {
     logWorkspaceDebug(debuggingModeRef.current, event, payload);
     debugLogRef.current?.(event, payload);
+  };
+
+  const syncRefsFromRuntime = (runtime: CachedTerminalRuntime) => {
+    activePaneRef.current = runtime.activePane;
+    appearancePromiseRef.current = runtime.appearancePromise;
+    appearanceRequestIdRef.current = runtime.appearanceRequestId;
+    appliedFontSourcesSignatureRef.current = runtime.appliedFontSourcesSignature;
+    canvasVisibleRef.current = runtime.canvasVisible;
+    connectPtyStartedRef.current = runtime.connectPtyStarted;
+    latestTermSizeRef.current = runtime.latestTermSize;
+    maintenanceProbeIdRef.current = runtime.maintenanceProbeId;
+    rendererModeRef.current = runtime.rendererMode;
+    resttyRef.current = runtime.restty;
+    transportRef.current = runtime.transportController;
+  };
+
+  const syncRuntimeFromRefs = () => {
+    const runtime = runtimeRef.current;
+    if (!runtime) {
+      return;
+    }
+
+    runtime.appearancePromise = appearancePromiseRef.current;
+    runtime.appearanceRequestId = appearanceRequestIdRef.current;
+    runtime.appliedFontSourcesSignature = appliedFontSourcesSignatureRef.current;
+    runtime.canvasVisible = canvasVisibleRef.current;
+    runtime.connectPtyStarted = connectPtyStartedRef.current;
+    runtime.latestTermSize = latestTermSizeRef.current;
+    runtime.maintenanceProbeId = maintenanceProbeIdRef.current;
+    runtime.rendererMode = rendererModeRef.current;
   };
 
   const focusSearchInput = () => {
@@ -215,6 +255,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         });
     });
     appearancePromiseRef.current = appearancePromise;
+    syncRuntimeFromRefs();
     return appearancePromise;
   };
 
@@ -233,6 +274,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     activePane.updateSize(true);
     return true;
   };
+
+  const shouldFreezeHiddenTerminal = () => !isVisible && connectPtyStartedRef.current;
 
   const runVisibleMaintenance = (
     sourceLabel: string,
@@ -276,11 +319,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   const setResttyCanvasVisibility = (visible: boolean) => {
     const container = containerRef.current;
+    canvasVisibleRef.current = visible;
+    syncRuntimeFromRefs();
     if (!container) {
       return;
     }
 
-    canvasVisibleRef.current = visible;
     const opacity = visible ? "1" : "0";
     for (const element of container.querySelectorAll<HTMLElement>(
       ".pane-canvas, .restty-native-scroll-canvas, canvas",
@@ -521,6 +565,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const startReconnectPerformanceProbe = (sourceLabel: string) => {
     const probeId = maintenanceProbeIdRef.current + 1;
     maintenanceProbeIdRef.current = probeId;
+    syncRuntimeFromRefs();
     const startedAt = performance.now();
     let previousFrameAt = startedAt;
     let maxFrameGapMs = 0;
@@ -579,6 +624,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       return;
     }
 
+    if (!isVisibleRef.current) {
+      return;
+    }
+
     const activePane = activePaneRef.current;
     const transportController = transportRef.current;
     if (!activePane || !transportController) {
@@ -594,6 +643,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     transportController.markTerminalReady(stableTerminalSize.cols, stableTerminalSize.rows);
     activePane.connectPty(buildSessionSocketUrl(connection, pane.sessionId));
     connectPtyStartedRef.current = true;
+    syncRuntimeFromRefs();
     startReconnectPerformanceProbe(sourceLabel);
     logViewportMetrics("terminal.connectWhenReady", {
       cols: stableTerminalSize.cols,
@@ -621,78 +671,54 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     container.style.backgroundColor = RESTTY_STARTUP_BACKGROUND;
     let didDispose = false;
-    setResttyCanvasVisibility(false);
-    const transportController = connection.mock
-      ? null
-      : createWorkspaceResttyTransport({
-          onFirstData: (connectionId) => {
-            schedulePostReplayViewportLogs(connectionId);
-          },
-          reportDebug,
-          sessionId: pane.sessionId,
-        });
-    transportRef.current = transportController;
-    const restty = new Restty({
-      createInitialPane: true,
-      defaultContextMenu: false,
-      paneStyles: {
-        paneBackground: RESTTY_STARTUP_BACKGROUND,
-        splitBackground: RESTTY_STARTUP_BACKGROUND,
-      },
-      root: container,
-      searchUi: false,
-      shortcuts: false,
-      appOptions: {
-        attachWindowEvents: true,
-        autoResize: false,
-        callbacks: {
-          onBackend: (backend) => {
-            rendererModeRef.current = backend;
-            reportDebug("terminal.rendererReady", {
-              rendererMode: backend,
-              sessionId: pane.sessionId,
-            });
-          },
-          onSearchState: (state) => {
-            if (didDispose) {
-              return;
-            }
-
-            setSearchResults({
-              resultCount: state.total,
-              resultIndex: state.selectedIndex ?? -1,
-            });
-          },
-          onTermSize: (cols, rows) => {
-            latestTermSizeRef.current = { cols, rows };
-            reportDebug("terminal.termSizeChanged", {
-              cols,
-              rows,
-              sessionId: pane.sessionId,
-            });
-          },
+    const runtime = acquireCachedTerminalRuntime({
+      cacheKey: runtimeCacheKey,
+      callbacks: {
+        onFirstData: (connectionId) => {
+          schedulePostReplayViewportLogs(connectionId);
         },
-        fontPreset: "none",
-        fontSize: terminalAppearance.fontSize,
-        fontSources: getResttyFontSources(terminalAppearance.fontFamily),
-        ptyTransport: transportController?.transport,
-      },
-    });
-    const activePane = restty.activePane();
-    if (!activePane) {
-      restty.destroy();
-      transportRef.current = null;
-      return;
-    }
+        onRendererMode: (rendererMode) => {
+          rendererModeRef.current = rendererMode;
+          syncRuntimeFromRefs();
+        },
+        onSearchState: (state) => {
+          if (didDispose) {
+            return;
+          }
 
-    resttyRef.current = restty;
-    activePaneRef.current = activePane;
+          setSearchResults({
+            resultCount: state.total,
+            resultIndex: state.selectedIndex ?? -1,
+          });
+        },
+        onTermSize: (cols, rows) => {
+          latestTermSizeRef.current = { cols, rows };
+          syncRuntimeFromRefs();
+          reportDebug("terminal.termSizeChanged", {
+            cols,
+            rows,
+            sessionId: pane.sessionId,
+          });
+        },
+        reportDebug,
+      },
+      connection,
+      renderNonce: pane.renderNonce,
+      sessionId: pane.sessionId,
+      terminalAppearance,
+    });
+    runtimeRef.current = runtime;
+    syncRefsFromRuntime(runtime);
+    container.replaceChildren(runtime.host);
     seedResttyBackgroundSurfaces();
-    setResttyCanvasVisibility(false);
+    setResttyCanvasVisibility(canvasVisibleRef.current);
     applyAppearance("mount-setup");
     ensureScrollHostListener();
 
     const onWindowFocus = () => {
+      if (!isVisibleRef.current) {
+        return;
+      }
       focusTerminal();
     };
     window.addEventListener("focus", onWindowFocus);
@@ -723,13 +749,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         updateTerminalSize();
         applyAppearance("mount-visible");
         runVisibleMaintenance("mount-visible");
-        if (document.hasFocus()) {
+        if (document.hasFocus() && isVisibleRef.current) {
           focusTerminal();
         }
 
         if (connection.mock) {
           if (pane.snapshot?.history) {
-            activePane.sendInput(pane.snapshot.history, "pty");
+            runtime.activePane.sendInput(pane.snapshot.history, "pty");
           }
           runVisibleMaintenance("mock-history");
           return;
@@ -746,19 +772,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       window.removeEventListener("focus", onWindowFocus);
       themeObserver.disconnect();
       boundScrollHostRef.current?.removeEventListener("scroll", updateScrollToBottomVisibility);
-      restty.destroy();
-      transportController?.transport.destroy?.();
+      syncRuntimeFromRefs();
+      runtime.callbacks = {};
+      if (runtime.host.parentElement === container) {
+        runtime.host.remove();
+      }
+      releaseCachedTerminalRuntime(runtimeCacheKey);
       boundScrollHostRef.current = null;
       activePaneRef.current = null;
       resttyRef.current = null;
       transportRef.current = null;
+      runtimeRef.current = null;
       canvasVisibleRef.current = false;
-      connectPtyStartedRef.current = false;
       maintenanceProbeIdRef.current += 1;
-      latestTermSizeRef.current = null;
       rapidTypingCountRef.current = 0;
       rapidTypingWindowStartedAtRef.current = 0;
-      rendererModeRef.current = null;
       setShowScrollToBottom(false);
       setSearchResults(SEARCH_RESULTS_EMPTY);
     };
@@ -767,7 +795,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     connection.mock,
     connection.token,
     connection.workspaceId,
+    pane.renderNonce,
     pane.sessionId,
+    runtimeCacheKey,
   ]);
 
   useEffect(() => {
@@ -810,7 +840,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       setShowScrollToBottom(false);
     }
 
-    runVisibleMaintenance("visible-effect");
+    if (!shouldFreezeHiddenTerminal()) {
+      runVisibleMaintenance("visible-effect");
+    }
 
     const handleCapturedScroll = () => {
       updateScrollToBottomVisibility();
@@ -826,8 +858,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           height: Math.round(container.getBoundingClientRect().height),
           width: Math.round(container.getBoundingClientRect().width),
         },
+        isVisible,
         sessionId: pane.sessionId,
       });
+      if (shouldFreezeHiddenTerminal()) {
+        return;
+      }
       runVisibleMaintenance("resize-observer", {
         updateSize: true,
       });
@@ -836,6 +872,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     resizeObserver.observe(container);
 
     const mutationObserver = new MutationObserver(() => {
+      if (shouldFreezeHiddenTerminal()) {
+        return;
+      }
       runVisibleMaintenance("mutation-observer");
     });
     mutationObserver.observe(container, {
@@ -908,7 +947,15 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
 
     const handleFocusIn = () => {
+      if (!isVisibleRef.current) {
+        return;
+      }
+
       requestAnimationFrame(() => {
+        if (!isVisibleRef.current) {
+          return;
+        }
+
         if (!root.matches(":focus-within")) {
           return;
         }
@@ -916,7 +963,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         reportDebug("terminal.focusActivate", {
           sessionId: pane.sessionId,
         });
-        onActivate();
+        onActivate("focusin");
       });
     };
 
@@ -931,6 +978,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       className={`terminal-pane-root ${isVisible ? "" : "terminal-pane-root-hidden"}`.trim()}
       ref={rootRef}
       onPointerDownCapture={(event) => {
+        if (!isVisible) {
+          return;
+        }
+
         if (event.button !== 0 && event.button !== -1) {
           return;
         }
@@ -939,7 +990,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           pointerType: event.pointerType,
           sessionId: pane.sessionId,
         });
-        onActivate();
+        onActivate("pointer");
       }}
       onKeyDownCapture={(event) => {
         const primaryModifier = IS_MAC ? event.metaKey : event.ctrlKey;

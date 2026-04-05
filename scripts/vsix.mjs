@@ -50,35 +50,6 @@ function run(command, args, options = {}) {
   }
 }
 
-function runCapture(command, args, options = {}) {
-  const useCmdShim = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
-  const result = useCmdShim
-    ? spawnSync(
-        process.env.ComSpec ?? "cmd.exe",
-        ["/d", "/s", "/c", [quoteCmdArg(command), ...args.map(quoteCmdArg)].join(" ")],
-        {
-          cwd: repoRoot,
-          encoding: "utf8",
-          shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
-          ...options,
-        },
-      )
-    : spawnSync(command, args, {
-        cwd: repoRoot,
-        encoding: "utf8",
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        ...options,
-      });
-
-  if (result.error) {
-    fail(result.error.message);
-  }
-
-  return result;
-}
-
 function commandExists(command) {
   const which = process.platform === "win32" ? "where.exe" : "which";
   const result = spawnSync(which, [command], {
@@ -155,44 +126,9 @@ function resolveCodeCli() {
           "codium",
           "windsurf",
         ]
-      : [
-          "code",
-          "code-insiders",
-          "cursor",
-          "cursor-insiders",
-          "codium",
-          "windsurf",
-        ];
+      : ["code", "code-insiders", "cursor", "cursor-insiders", "codium", "windsurf"];
 
   return findFirstAvailableCommand([...candidates, ...pathCandidates]);
-}
-
-function listInstalledExtensions(vscodeCli) {
-  const result = runCapture(vscodeCli, ["--list-extensions", "--show-versions"]);
-  if (result.status !== 0) {
-    return [];
-  }
-
-  return (result.stdout ?? "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-function uninstallIfInstalled(vscodeCli, extensionId) {
-  const installedExtensions = listInstalledExtensions(vscodeCli);
-  const normalizedExtensionId = extensionId.toLowerCase();
-  const isInstalled = installedExtensions.some((line) => {
-    const [installedId] = line.split("@", 1);
-    return installedId?.trim().toLowerCase() === normalizedExtensionId;
-  });
-
-  if (!isInstalled) {
-    return;
-  }
-
-  console.log(`Uninstalling existing ${extensionId} before reinstalling...`);
-  run(vscodeCli, ["--uninstall-extension", extensionId]);
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -209,7 +145,6 @@ const packageJson = await import(new URL("../package.json", import.meta.url), {
 const extensionName = packageJson.default.name;
 const extensionVersion = packageJson.default.version;
 const extensionPublisher = packageJson.default.publisher;
-const extensionId = `${extensionPublisher}.${extensionName}`;
 const installerDir = join(repoRoot, "installer");
 
 if (!existsSync(installerDir)) {
@@ -220,16 +155,25 @@ const vsixPath = resolveVsixPath(installerDir, extensionName, extensionVersion, 
 
 run("pnpm", ["run", "compile"]);
 
-run("vp", [
-  "exec",
-  "vsce",
-  "package",
-  "--no-dependencies",
-  "--skip-license",
-  "--allow-unused-files-pattern",
-  "--out",
-  vsixPath,
-]);
+run(
+  "vp",
+  [
+    "exec",
+    "vsce",
+    "package",
+    "--no-dependencies",
+    "--skip-license",
+    "--allow-unused-files-pattern",
+    "--out",
+    vsixPath,
+  ],
+  {
+    env: {
+      ...process.env,
+      VSMUX_SKIP_PREPUBLISH: "1",
+    },
+  },
+);
 
 console.log(`Packaged VSIX: ${vsixPath}`);
 
@@ -245,7 +189,6 @@ if (!vscodeCli) {
   );
 }
 
-uninstallIfInstalled(vscodeCli, extensionId);
 run(vscodeCli, ["--install-extension", vsixPath, "--force"]);
 
-console.log(`Installed ${extensionId} with ${vscodeCli} from ${vsixPath}`);
+console.log(`Installed ${extensionPublisher}.${extensionName} with ${vscodeCli} from ${vsixPath}`);

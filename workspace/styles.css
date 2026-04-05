@@ -158,6 +158,10 @@ body {
   transform: translateY(0);
 }
 
+.workspace-pane-header-actions svg {
+  pointer-events: none;
+}
+
 .workspace-pane-close-control {
   align-items: center;
   display: inline-flex;

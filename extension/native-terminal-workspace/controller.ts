@@ -253,6 +253,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           return;
         }
 
+        if (message.type === "fullReloadSession") {
+          await this.fullReloadSession(message.sessionId);
+          return;
+        }
+
         if (message.type === "syncPaneOrder" || message.type === "syncSessionOrder") {
           await this.syncWorkspacePaneOrder(message.groupId, message.sessionIds);
         }

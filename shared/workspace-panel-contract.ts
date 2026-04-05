@@ -101,6 +101,11 @@ export type WorkspacePanelCloseSessionMessage = {
   sessionId: string;
 };
 
+export type WorkspacePanelFullReloadSessionMessage = {
+  type: "fullReloadSession";
+  sessionId: string;
+};
+
 export type WorkspacePanelSyncSessionOrderMessage = {
   type: "syncSessionOrder";
   groupId: string;
@@ -123,6 +128,7 @@ export type WorkspacePanelToExtensionMessage =
   | WorkspacePanelReadyMessage
   | WorkspacePanelFocusSessionMessage
   | WorkspacePanelCloseSessionMessage
+  | WorkspacePanelFullReloadSessionMessage
   | WorkspacePanelSyncPaneOrderMessage
   | WorkspacePanelSyncSessionOrderMessage
   | WorkspacePanelDebugLogMessage;
