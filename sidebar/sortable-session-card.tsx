@@ -1,4 +1,4 @@
-import { IconCopy, IconPencil, IconRefresh, IconX } from "@tabler/icons-react";
+import { IconCopy, IconHash, IconPencil, IconRefresh, IconX } from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -102,7 +102,9 @@ export function SortableSessionCard({
   const menuRef = useRef<HTMLDivElement>(null);
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
   const debugInstanceIdRef = useRef(createSidebarDebugInstanceId());
-  const isBrowserSession = session?.kind === "browser";
+  const isBrowserSession = session?.sessionKind === "browser" || session?.kind === "browser";
+  const isT3Session = session?.sessionKind === "t3";
+  const canSetT3ThreadId = isT3Session;
   const canCopyResumeCommand = session
     ? !isBrowserSession && supportsResumeCommandCopy(session)
     : false;
@@ -222,7 +224,11 @@ export function SortableSessionCard({
       clampContextMenuPosition(
         clientX,
         clientY,
-        isBrowserSession ? 1 : 2 + Number(canCopyResumeCommand) + Number(canFullReloadSession),
+        Number(!isBrowserSession) +
+          Number(canSetT3ThreadId) +
+          Number(canCopyResumeCommand) +
+          Number(canFullReloadSession) +
+          1,
       ),
     );
   };
@@ -260,6 +266,14 @@ export function SortableSessionCard({
     vscode.postMessage({
       sessionId: session.sessionId,
       type: "fullReloadSession",
+    });
+  };
+
+  const requestSetT3ThreadId = () => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      sessionId: session.sessionId,
+      type: "setT3SessionThreadId",
     });
   };
 
@@ -426,6 +440,22 @@ export function SortableSessionCard({
                     stroke={1.8}
                   />
                   Rename
+                </button>
+              ) : null}
+              {canSetT3ThreadId ? (
+                <button
+                  className="session-context-menu-item"
+                  onClick={requestSetT3ThreadId}
+                  role="menuitem"
+                  type="button"
+                >
+                  <IconHash
+                    aria-hidden="true"
+                    className="session-context-menu-icon"
+                    size={16}
+                    stroke={1.8}
+                  />
+                  Set Thread ID
                 </button>
               ) : null}
               {canCopyResumeCommand ? (

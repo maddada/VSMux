@@ -183,7 +183,7 @@ function getNonce(): string {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMessage {
+export function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMessage {
   if (!candidate || typeof candidate !== "object") {
     return false;
   }
@@ -267,6 +267,7 @@ function isSidebarMessage(candidate: unknown): candidate is SidebarToExtensionMe
     case "closeSession":
     case "copyResumeCommand":
     case "fullReloadSession":
+    case "setT3SessionThreadId":
       return typeof message.sessionId === "string" && message.sessionId.length > 0;
 
     case "restorePreviousSession":

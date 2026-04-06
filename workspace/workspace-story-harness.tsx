@@ -1,11 +1,14 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  SidebarSessionItem,
   SidebarHydrateMessage,
   SidebarToExtensionMessage,
 } from "../shared/session-grid-contract";
 import type {
   ExtensionToWorkspacePanelMessage,
+  WorkspacePanelPane,
   WorkspacePanelTerminalPane,
+  WorkspacePanelT3Pane,
 } from "../shared/workspace-panel-contract";
 import type { TerminalSessionSnapshot } from "../shared/terminal-host-protocol";
 import { SidebarApp } from "../sidebar/sidebar-app";
@@ -30,6 +33,15 @@ const STORYBOOK_CONNECTION = {
   token: "storybook",
   workspaceId: "storybook-workspace",
 };
+const workspaceStoryMessages: unknown[] = [];
+
+export function getWorkspaceStoryMessages() {
+  return [...workspaceStoryMessages];
+}
+
+export function resetWorkspaceStoryMessages() {
+  workspaceStoryMessages.length = 0;
+}
 
 export function WorkspaceStoryHarness({
   debuggingMode = false,
@@ -63,6 +75,7 @@ export function WorkspaceStoryHarness({
   const workspaceVscode = useMemo(
     () => ({
       postMessage(nextMessage: unknown) {
+        workspaceStoryMessages.push(nextMessage);
         const focusMessage = getFocusSessionMessage(nextMessage);
         if (!focusMessage) {
           return;
@@ -151,25 +164,9 @@ function createWorkspaceStoryMessage(
       (session): session is NonNullable<typeof session> =>
         session !== undefined && session.isVisible,
     )
-    .map<WorkspacePanelTerminalPane>((session) => ({
-      isVisible: true,
-      kind: "terminal",
-      renderNonce: 0,
-      sessionId: session.sessionId,
-      sessionRecord: {
-        alias: session.alias,
-        column: session.column,
-        createdAt: new Date(0).toISOString(),
-        displayId: parseDisplayId(session.shortcutLabel),
-        kind: "terminal",
-        row: session.row,
-        sessionId: session.sessionId,
-        slotIndex: parseSlotIndex(session.shortcutLabel),
-        title: session.primaryTitle ?? session.alias,
-      },
-      snapshot: createTerminalSnapshot(session.sessionId),
-      terminalTitle: session.terminalTitle,
-    }));
+    .map<WorkspacePanelPane>((session) =>
+      session.sessionKind === "t3" ? createT3Pane(session) : createTerminalPane(session),
+    );
 
   return {
     activeGroupId: workspace.snapshot.activeGroupId,
@@ -194,6 +191,54 @@ function createWorkspaceStoryMessage(
     viewMode: activeGroup?.viewMode ?? "grid",
     visibleCount: activeGroup?.visibleCount ?? 1,
     workspaceSnapshot: workspace.snapshot,
+  };
+}
+
+function createTerminalPane(session: SidebarSessionItem): WorkspacePanelTerminalPane {
+  return {
+    isVisible: true,
+    kind: "terminal",
+    renderNonce: 0,
+    sessionId: session.sessionId,
+    sessionRecord: {
+      alias: session.alias,
+      column: session.column,
+      createdAt: new Date(0).toISOString(),
+      displayId: parseDisplayId(session.shortcutLabel),
+      kind: "terminal",
+      row: session.row,
+      sessionId: session.sessionId,
+      slotIndex: parseSlotIndex(session.shortcutLabel),
+      title: session.primaryTitle ?? session.alias,
+    },
+    snapshot: createTerminalSnapshot(session.sessionId),
+    terminalTitle: session.terminalTitle,
+  };
+}
+
+function createT3Pane(session: SidebarSessionItem): WorkspacePanelT3Pane {
+  return {
+    html: "<!doctype html><html><body><div id='root'>Storybook T3</div></body></html>",
+    isVisible: true,
+    kind: "t3",
+    sessionId: session.sessionId,
+    sessionRecord: {
+      alias: session.alias,
+      column: session.column,
+      createdAt: new Date(0).toISOString(),
+      displayId: parseDisplayId(session.shortcutLabel),
+      kind: "t3",
+      row: session.row,
+      sessionId: session.sessionId,
+      slotIndex: parseSlotIndex(session.shortcutLabel),
+      t3: {
+        projectId: `story-project-${session.sessionId}`,
+        serverOrigin: "http://127.0.0.1:3774",
+        threadId: "thread-1",
+        workspaceRoot: "/tmp/story-workspace",
+      },
+      title: session.primaryTitle ?? session.alias,
+    },
   };
 }
 

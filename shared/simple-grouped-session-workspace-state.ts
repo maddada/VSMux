@@ -267,12 +267,13 @@ export function removeSessionInSimpleWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   sessionId: string,
 ): WorkspaceMutationResult {
-  const owningGroup = getGroupForSession(snapshot, sessionId);
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  const owningGroup = getGroupForSession(normalizedSnapshot, sessionId);
   if (!owningGroup) {
-    return { changed: false, snapshot };
+    return { changed: false, snapshot: normalizedSnapshot };
   }
 
-  const nextSnapshot = updateGroup(snapshot, owningGroup.groupId, (group) => ({
+  const snapshotWithoutSession = updateGroup(normalizedSnapshot, owningGroup.groupId, (group) => ({
     ...group,
     snapshot: normalizeGroupSnapshot({
       ...group.snapshot,
@@ -282,9 +283,22 @@ export function removeSessionInSimpleWorkspace(
         group.snapshot.focusedSessionId === sessionId ? undefined : group.snapshot.focusedSessionId,
     }),
   }));
+  const shouldSwitchGroups =
+    normalizedSnapshot.activeGroupId === owningGroup.groupId &&
+    getGroupById(snapshotWithoutSession, owningGroup.groupId)?.snapshot.sessions.length === 0;
+  const fallbackActiveGroupId = shouldSwitchGroups
+    ? getFallbackActiveGroupId(snapshotWithoutSession, owningGroup.groupId)
+    : snapshotWithoutSession.activeGroupId;
+  const nextSnapshot =
+    fallbackActiveGroupId === snapshotWithoutSession.activeGroupId
+      ? snapshotWithoutSession
+      : normalizeSimpleGroupedSessionWorkspaceSnapshot({
+          ...snapshotWithoutSession,
+          activeGroupId: fallbackActiveGroupId,
+        });
 
   return {
-    changed: !areSnapshotsEqual(snapshot, nextSnapshot),
+    changed: !areSnapshotsEqual(normalizedSnapshot, nextSnapshot),
     snapshot: nextSnapshot,
   };
 }
@@ -786,6 +800,29 @@ function withCanonicalSessionId(session: SessionRecord): SessionRecord {
 
 function createCanonicalSessionId(displayId: string | number | undefined): string {
   return `session-${formatSessionDisplayId(displayId ?? 0)}`;
+}
+
+function getFallbackActiveGroupId(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+  emptiedGroupId: string,
+): string {
+  const emptiedGroupIndex = snapshot.groups.findIndex((group) => group.groupId === emptiedGroupId);
+  if (emptiedGroupIndex < 0) {
+    return snapshot.activeGroupId;
+  }
+
+  const previousNonEmptyGroup = snapshot.groups
+    .slice(0, emptiedGroupIndex)
+    .reverse()
+    .find((group) => group.snapshot.sessions.length > 0);
+  if (previousNonEmptyGroup) {
+    return previousNonEmptyGroup.groupId;
+  }
+
+  const nextNonEmptyGroup = snapshot.groups
+    .slice(emptiedGroupIndex + 1)
+    .find((group) => group.snapshot.sessions.length > 0);
+  return nextNonEmptyGroup?.groupId ?? emptiedGroupId;
 }
 
 function updateGroup(

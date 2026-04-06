@@ -924,12 +924,20 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
               type: "closeSession",
             })
           }
-          onFullReload={() =>
+          onReload={() => {
+            if (pane.kind === "terminal") {
+              vscode.postMessage({
+                sessionId: pane.sessionId,
+                type: "fullReloadSession",
+              });
+              return;
+            }
+
             vscode.postMessage({
               sessionId: pane.sessionId,
-              type: "fullReloadSession",
-            })
-          }
+              type: "reloadWorkspacePanel",
+            });
+          }}
           pane={pane}
           refreshRequestId={0}
           terminalAppearance={workspaceState.terminalAppearance}
@@ -1012,7 +1020,7 @@ type WorkspacePaneViewProps = {
   onLocalFocus: () => void;
   onFocus: () => void;
   onClose: () => void;
-  onFullReload: () => void;
+  onReload: () => void;
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onHeaderNativeDragStart: (event: ReactDragEvent<HTMLElement>) => void;
   onTerminalActivate: (sessionId: string, source: WorkspaceTerminalActivationSource) => void;
@@ -1037,7 +1045,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onLocalFocus,
   onFocus,
   onClose,
-  onFullReload,
+  onReload,
   onHeaderPointerDown,
   onHeaderNativeDragStart,
   onTerminalActivate,
@@ -1079,9 +1087,9 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
         onPointerDownCapture={canDrag ? onHeaderPointerDown : undefined}
       >
         <div className="workspace-pane-title">{primaryTitle}</div>
-        {pane.kind === "terminal" ? (
+        {pane.kind === "terminal" || pane.kind === "t3" ? (
           <div className="workspace-pane-header-actions">
-            <WorkspacePaneRefreshButton onRefresh={onFullReload} />
+            <WorkspacePaneRefreshButton onRefresh={onReload} />
             <WorkspacePaneCloseButton onConfirmClose={onClose} />
           </div>
         ) : null}

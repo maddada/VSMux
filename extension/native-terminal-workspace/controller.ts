@@ -770,6 +770,54 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.afterStateChange();
   }
 
+  public async promptSetT3SessionThreadId(sessionId: string): Promise<void> {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord || sessionRecord.kind !== "t3") {
+      return;
+    }
+
+    const nextThreadId = await vscode.window.showInputBox({
+      ignoreFocusOut: true,
+      placeHolder: "Paste a T3 thread id",
+      prompt: "Set Thread ID",
+      validateInput: (value) => (value.trim().length > 0 ? undefined : "Thread ID is required."),
+      value: sessionRecord.t3.threadId,
+      valueSelection: [0, sessionRecord.t3.threadId.length],
+    });
+    if (nextThreadId === undefined) {
+      return;
+    }
+
+    await this.setT3SessionThreadId(sessionId, nextThreadId);
+  }
+
+  public async setT3SessionThreadId(sessionId: string, threadId: string): Promise<void> {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord || sessionRecord.kind !== "t3") {
+      return;
+    }
+
+    const normalizedThreadId = threadId.trim();
+    if (!normalizedThreadId || normalizedThreadId === sessionRecord.t3.threadId) {
+      return;
+    }
+
+    const changed = await this.store.setT3SessionMetadata(sessionId, {
+      ...sessionRecord.t3,
+      threadId: normalizedThreadId,
+    });
+    if (!changed) {
+      return;
+    }
+
+    const refreshedSession = this.store.getSession(sessionId);
+    if (refreshedSession?.kind === "t3") {
+      await this.syncT3SessionTitleFromRuntime(refreshedSession);
+    }
+
+    await this.afterStateChange();
+  }
+
   public async setVisibleCount(visibleCount: VisibleSessionCount): Promise<void> {
     await this.store.setVisibleCount(visibleCount);
     await this.afterStateChange();
@@ -1329,6 +1377,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         this.confirmSidebarGitCommit(requestId, subject),
       copyResumeCommand: async (sessionId) => this.copyResumeCommand(sessionId),
       fullReloadSession: async (sessionId) => this.fullReloadSession(sessionId),
+      setT3SessionThreadId: async (sessionId) => this.promptSetT3SessionThreadId(sessionId),
       createGroup: async () => this.createGroup(),
       createGroupFromSession: async (sessionId) => this.createGroupFromSession(sessionId),
       createSession: async () => this.createSession(),

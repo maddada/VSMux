@@ -14,6 +14,7 @@ import {
   focusSessionInSimpleWorkspace,
   moveSessionToGroupInSimpleWorkspace,
   normalizeSimpleGroupedSessionWorkspaceSnapshot,
+  removeSessionInSimpleWorkspace,
   setT3SessionMetadataInSimpleWorkspace,
   setVisibleCountInSimpleWorkspace,
   syncSessionOrderInSimpleWorkspace,
@@ -218,6 +219,126 @@ describe("moveSessionToGroupInSimpleWorkspace", () => {
     expect(result.snapshot.activeGroupId).toBe("group-2");
     expect(result.snapshot.groups[1]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(1));
     expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(1)]);
+  });
+});
+
+describe("removeSessionInSimpleWorkspace", () => {
+  test("should switch to the previous non-empty group when closing the active group's last session", () => {
+    const result = removeSessionInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: "group-2",
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(1), sessionIdForDisplay(0)],
+            },
+            title: "Main",
+          },
+          {
+            groupId: "group-2",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(2),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(3, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(2)],
+            },
+            title: "Focused",
+          },
+          {
+            groupId: "group-3",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(3),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(4, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(3)],
+            },
+            title: "Later",
+          },
+        ],
+        nextGroupNumber: 4,
+        nextSessionDisplayId: 4,
+        nextSessionNumber: 5,
+      }),
+      sessionIdForDisplay(2),
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.activeGroupId).toBe(DEFAULT_MAIN_GROUP_ID);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([
+      sessionIdForDisplay(1),
+      sessionIdForDisplay(0),
+    ]);
+    expect(result.snapshot.groups[0]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(0));
+    expect(result.snapshot.groups[1]?.snapshot.sessions).toEqual([]);
+  });
+
+  test("should skip empty groups and switch to the next populated group", () => {
+    const result = removeSessionInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: "group-2",
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: undefined,
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [],
+            },
+            title: "Main",
+          },
+          {
+            groupId: "group-2",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(0)],
+            },
+            title: "Focused",
+          },
+          {
+            groupId: "group-3",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(1),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(2, 0), createSessionRecord(3, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(2), sessionIdForDisplay(1)],
+            },
+            title: "Next",
+          },
+        ],
+        nextGroupNumber: 4,
+        nextSessionDisplayId: 3,
+        nextSessionNumber: 4,
+      }),
+      sessionIdForDisplay(0),
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.activeGroupId).toBe("group-3");
+    expect(result.snapshot.groups[2]?.snapshot.visibleSessionIds).toEqual([
+      sessionIdForDisplay(2),
+      sessionIdForDisplay(1),
+    ]);
+    expect(result.snapshot.groups[2]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(1));
+    expect(result.snapshot.groups[1]?.snapshot.sessions).toEqual([]);
   });
 });
 

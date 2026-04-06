@@ -40,6 +40,7 @@ export function createDefaultSidebarSectionCollapseState(): SidebarSectionCollap
 
 export type SidebarSessionItem = {
   kind?: "browser" | "workspace";
+  sessionKind?: "browser" | "terminal" | "t3";
   activity: "idle" | "working" | "attention";
   activityLabel?: string;
   agentIcon?: SidebarAgentIcon;
@@ -269,6 +270,10 @@ export type SidebarToExtensionMessage =
     }
   | {
       type: "fullReloadSession";
+      sessionId: string;
+    }
+  | {
+      type: "setT3SessionThreadId";
       sessionId: string;
     }
   | {
