@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildSessionTitleTooltip } from "./session-card-content";
+import { buildSessionTitleTooltip, getSessionTitleTooltipOptions } from "./session-card-content";
 
 describe("buildSessionTitleTooltip", () => {
   test("should collapse duplicate heading and secondary lines", () => {
@@ -29,5 +29,33 @@ describe("buildSessionTitleTooltip", () => {
         secondaryText: "Browser ignore",
       }),
     ).toBe("Browser ignore\nSession number: 02");
+  });
+});
+
+describe("getSessionTitleTooltipOptions", () => {
+  test("should force the same title tooltip content to appear when requested", () => {
+    expect(
+      getSessionTitleTooltipOptions({
+        alwaysShowTitleTooltip: true,
+        headingText: "A very long session title",
+        titleTooltip: "A very long session title",
+      }),
+    ).toEqual({
+      tooltip: "A very long session title",
+      tooltipWhen: "always",
+    });
+  });
+
+  test("should keep plain title-only tooltips overflow-triggered by default", () => {
+    expect(
+      getSessionTitleTooltipOptions({
+        alwaysShowTitleTooltip: false,
+        headingText: "A very long session title",
+        titleTooltip: "A very long session title",
+      }),
+    ).toEqual({
+      tooltip: undefined,
+      tooltipWhen: "overflow",
+    });
   });
 });

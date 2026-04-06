@@ -111,6 +111,80 @@ describe("buildSidebarMessage", () => {
     );
   });
 
+  test("should promote the T3 runtime title when the session is auto-named", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/tmp/project",
+      },
+      title: "T3 Code",
+    });
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getT3ActivityState: () => ({
+          activity: "idle",
+          detail: undefined,
+          isRunning: true,
+        }),
+        getTerminalTitle: () =>
+          sessionRecord.sessionId === "session-1" ? "Implement release checks" : undefined,
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        primaryTitle: "Implement release checks",
+        terminalTitle: undefined,
+      }),
+    );
+  });
+
+  test("should show the T3 runtime title as secondary when the user renamed the session", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/tmp/project",
+      },
+      title: "Review findings",
+    });
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getT3ActivityState: () => ({
+          activity: "working",
+          detail: undefined,
+          isRunning: true,
+        }),
+        getTerminalTitle: () =>
+          sessionRecord.sessionId === "session-1" ? "Run regression suite" : undefined,
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        primaryTitle: "Review findings",
+        terminalTitle: "Run regression suite",
+      }),
+    );
+  });
+
   test("should promote the terminal title to the primary title when the user did not rename the session", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0);

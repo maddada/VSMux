@@ -291,6 +291,10 @@ function buildSidebarItem(
   }
 
   if (isT3Session(sessionRecord)) {
+    const hasCustomTitle = !isDefaultT3SessionTitle(sessionRecord.title);
+    const visibleT3Title = getVisibleTerminalTitle(
+      options.getTerminalTitle(sessionRecord.sessionId),
+    );
     const activityState = options.getT3ActivityState(sessionRecord);
     return {
       activity: activityState.activity,
@@ -309,12 +313,13 @@ function buildSidebarItem(
       isRunning: activityState.isRunning,
       isVisible,
       kind: "workspace",
-      primaryTitle: getVisiblePrimaryTitle(sessionRecord.title) ?? "T3 Code",
+      primaryTitle:
+        (hasCustomTitle ? visiblePrimaryTitle : undefined) ?? visibleT3Title ?? "T3 Code",
       row: sessionRecord.row,
       sessionId: sessionRecord.sessionId,
       sessionNumber: getDebuggingSessionNumber(sessionRecord, options.debuggingMode),
       shortcutLabel: getSessionShortcutLabel(sessionRecord.slotIndex, options.platform),
-      terminalTitle: undefined,
+      terminalTitle: hasCustomTitle ? visibleT3Title : undefined,
     };
   }
 
@@ -362,4 +367,8 @@ function getDebuggingSessionNumber(
 
 function isPendingT3ThreadId(threadId: string): boolean {
   return threadId.startsWith("pending-");
+}
+
+function isDefaultT3SessionTitle(title: string): boolean {
+  return title.trim() === "" || title.trim().toLowerCase() === "t3 code";
 }

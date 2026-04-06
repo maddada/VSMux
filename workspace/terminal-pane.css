@@ -5,10 +5,6 @@
   width: 100%;
 }
 
-.terminal-pane-root-hidden {
-  visibility: hidden;
-}
-
 .terminal-pane-canvas {
   background: #121212;
   height: 100%;

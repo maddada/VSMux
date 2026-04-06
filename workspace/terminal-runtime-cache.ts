@@ -26,6 +26,7 @@ export type CachedTerminalRuntime = {
   appearancePromise: Promise<void>;
   appearanceRequestId: number;
   appliedFontSourcesSignature: string;
+  bootstrapVisualsComplete: boolean;
   cacheKey: string;
   callbacks: CachedTerminalRuntimeCallbacks;
   canvasVisible: boolean;
@@ -143,6 +144,7 @@ export const acquireCachedTerminalRuntime = (
   runtime.appearancePromise = Promise.resolve();
   runtime.appearanceRequestId = 0;
   runtime.appliedFontSourcesSignature = "";
+  runtime.bootstrapVisualsComplete = false;
   runtime.cacheKey = options.cacheKey;
   runtime.callbacks = options.callbacks;
   runtime.canvasVisible = false;

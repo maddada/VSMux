@@ -6,15 +6,10 @@ import type {
 export function getWorkspacePaneSessionRecords(
   workspaceSnapshot: GroupedSessionWorkspaceSnapshot,
 ): SessionRecord[] {
-  const activeGroup = workspaceSnapshot.groups.find(
-    (group) => group.groupId === workspaceSnapshot.activeGroupId,
-  );
-  if (!activeGroup) {
-    return [];
-  }
-
-  return activeGroup.snapshot.sessions.filter(
-    (sessionRecord): sessionRecord is SessionRecord => sessionRecord !== undefined,
+  return workspaceSnapshot.groups.flatMap((group) =>
+    group.snapshot.sessions.filter(
+      (sessionRecord): sessionRecord is SessionRecord => sessionRecord !== undefined,
+    ),
   );
 }
 

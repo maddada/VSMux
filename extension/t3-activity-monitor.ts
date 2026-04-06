@@ -34,6 +34,7 @@ export class T3ActivityMonitor implements vscode.Disposable {
   private readonly acknowledgedCompletionMarkerByThreadId = new Map<string, string>();
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private readonly threadStateByThreadId = new Map<string, T3ThreadActivityState>();
+  private readonly threadTitleByThreadId = new Map<string, string>();
   private socket: WebSocket | undefined;
   private enabled = false;
   private reconnectTimer: NodeJS.Timeout | undefined;
@@ -92,6 +93,10 @@ export class T3ActivityMonitor implements vscode.Disposable {
     return this.threadStateByThreadId.get(threadId);
   }
 
+  public getThreadTitle(threadId: string): string | undefined {
+    return this.threadTitleByThreadId.get(threadId);
+  }
+
   public acknowledgeThread(threadId: string): boolean {
     const state = this.threadStateByThreadId.get(threadId);
     if (!state?.completionMarker || state.activity !== "attention") {
@@ -147,7 +152,9 @@ export class T3ActivityMonitor implements vscode.Disposable {
       };
 
       try {
-        socket.send(JSON.stringify(createT3RpcRequestMessage(requestId, "orchestration.getSnapshot")));
+        socket.send(
+          JSON.stringify(createT3RpcRequestMessage(requestId, "orchestration.getSnapshot")),
+        );
       } catch (error) {
         clearTimeout(timeout);
         this.pendingSnapshotRequest = undefined;
@@ -215,7 +222,10 @@ export class T3ActivityMonitor implements vscode.Disposable {
     if (message._tag === "Defect") {
       this.rejectPendingSnapshotRequest(
         new Error(
-          formatT3RpcDefect(message.defect, "The T3 activity websocket reported an unexpected defect."),
+          formatT3RpcDefect(
+            message.defect,
+            "The T3 activity websocket reported an unexpected defect.",
+          ),
         ),
       );
       this.scheduleReconnect();
@@ -243,7 +253,10 @@ export class T3ActivityMonitor implements vscode.Disposable {
       return;
     }
 
-    if (!this.pendingSnapshotRequest || message.requestId !== this.pendingSnapshotRequest.requestId) {
+    if (
+      !this.pendingSnapshotRequest ||
+      message.requestId !== this.pendingSnapshotRequest.requestId
+    ) {
       return;
     }
 
@@ -252,9 +265,7 @@ export class T3ActivityMonitor implements vscode.Disposable {
     clearTimeout(pendingRequest.timeout);
     if (message.exit._tag === "Failure") {
       pendingRequest.reject(
-        new Error(
-          formatT3RpcFailure(message.exit, "The T3 activity snapshot request failed."),
-        ),
+        new Error(formatT3RpcFailure(message.exit, "The T3 activity snapshot request failed.")),
       );
       return;
     }
@@ -264,10 +275,15 @@ export class T3ActivityMonitor implements vscode.Disposable {
 
   private applySnapshot(snapshot: SnapshotResponse): void {
     const nextStateByThreadId = new Map<string, T3ThreadActivityState>();
+    const nextTitleByThreadId = new Map<string, string>();
 
     for (const thread of snapshot.threads ?? []) {
       if (!thread.id || thread.deletedAt) {
         continue;
+      }
+
+      if (thread.title?.trim()) {
+        nextTitleByThreadId.set(thread.id, thread.title);
       }
 
       const previousState = this.threadStateByThreadId.get(thread.id);
@@ -287,17 +303,31 @@ export class T3ActivityMonitor implements vscode.Disposable {
       nextStateByThreadId.set(thread.id, nextState);
     }
 
-    if (!haveSameThreadStateMaps(this.threadStateByThreadId, nextStateByThreadId)) {
+    const activityChanged = !haveSameThreadStateMaps(
+      this.threadStateByThreadId,
+      nextStateByThreadId,
+    );
+    const titlesChanged = !haveSameThreadTitleMaps(this.threadTitleByThreadId, nextTitleByThreadId);
+
+    if (activityChanged) {
       this.threadStateByThreadId.clear();
       for (const [threadId, state] of nextStateByThreadId) {
         this.threadStateByThreadId.set(threadId, state);
       }
-      this.changeEmitter.fire();
     } else {
       this.threadStateByThreadId.clear();
       for (const [threadId, state] of nextStateByThreadId) {
         this.threadStateByThreadId.set(threadId, state);
       }
+    }
+
+    this.threadTitleByThreadId.clear();
+    for (const [threadId, title] of nextTitleByThreadId) {
+      this.threadTitleByThreadId.set(threadId, title);
+    }
+
+    if (activityChanged || titlesChanged) {
+      this.changeEmitter.fire();
     }
   }
 
@@ -358,7 +388,11 @@ export class T3ActivityMonitor implements vscode.Disposable {
   }
 
   private subscribeToDomainEvents(): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || this.subscribedToDomainEvents) {
+    if (
+      !this.socket ||
+      this.socket.readyState !== WebSocket.OPEN ||
+      this.subscribedToDomainEvents
+    ) {
       return;
     }
 
@@ -367,13 +401,28 @@ export class T3ActivityMonitor implements vscode.Disposable {
     this.subscribedToDomainEvents = true;
     try {
       this.socket.send(
-        JSON.stringify(
-          createT3RpcRequestMessage(requestId, "subscribeOrchestrationDomainEvents"),
-        ),
+        JSON.stringify(createT3RpcRequestMessage(requestId, "subscribeOrchestrationDomainEvents")),
       );
     } catch {
       this.domainEventsRequestId = undefined;
       this.subscribedToDomainEvents = false;
     }
   }
+}
+
+function haveSameThreadTitleMaps(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>,
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const [threadId, title] of left) {
+    if (right.get(threadId) !== title) {
+      return false;
+    }
+  }
+
+  return true;
 }

@@ -3,6 +3,7 @@ import type { TerminalAgentStatus } from "../shared/terminal-host-protocol";
 export type SnapshotThread = {
   deletedAt?: string | null;
   id?: string;
+  title?: string | null;
   latestTurn?: {
     completedAt?: string | null;
     state?: string | null;

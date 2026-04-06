@@ -97,6 +97,7 @@ export function SessionHistoryCard({
           <IconTrash aria-hidden="true" size={12} stroke={1.9} />
         </button>
         <SessionCardContent
+          alwaysShowTitleTooltip
           aliasHeadingRef={aliasHeadingRef}
           session={displaySession}
           showDebugSessionNumbers={showDebugSessionNumbers}

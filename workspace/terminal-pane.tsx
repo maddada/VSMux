@@ -86,6 +86,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     scrollVisibilityUpdaterRef.current();
   });
   const scrollVisibilityUpdaterRef = useRef<() => void>(() => {});
+  const bootstrapVisualsCompleteRef = useRef(false);
   const canvasVisibleRef = useRef(false);
   const appearanceRequestIdRef = useRef(0);
   const appearancePromiseRef = useRef<Promise<void>>(Promise.resolve());
@@ -99,6 +100,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const rendererModeRef = useRef<string | null>(null);
   const resttyRef = useRef<Restty | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const lastMeasuredBoundsRef = useRef<{ height: number; width: number } | null>(null);
   const transportRef = useRef<WorkspaceResttyTransportController | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -136,6 +138,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     appearancePromiseRef.current = runtime.appearancePromise;
     appearanceRequestIdRef.current = runtime.appearanceRequestId;
     appliedFontSourcesSignatureRef.current = runtime.appliedFontSourcesSignature;
+    bootstrapVisualsCompleteRef.current = runtime.bootstrapVisualsComplete;
     canvasVisibleRef.current = runtime.canvasVisible;
     connectPtyStartedRef.current = runtime.connectPtyStarted;
     latestTermSizeRef.current = runtime.latestTermSize;
@@ -154,6 +157,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     runtime.appearancePromise = appearancePromiseRef.current;
     runtime.appearanceRequestId = appearanceRequestIdRef.current;
     runtime.appliedFontSourcesSignature = appliedFontSourcesSignatureRef.current;
+    runtime.bootstrapVisualsComplete = bootstrapVisualsCompleteRef.current;
     runtime.canvasVisible = canvasVisibleRef.current;
     runtime.connectPtyStarted = connectPtyStartedRef.current;
     runtime.latestTermSize = latestTermSizeRef.current;
@@ -297,6 +301,19 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       return false;
     }
 
+    const roundedBounds = {
+      height: Math.round(bounds.height),
+      width: Math.round(bounds.width),
+    };
+    const previousBounds = lastMeasuredBoundsRef.current;
+    const boundsUnchanged =
+      previousBounds?.width === roundedBounds.width &&
+      previousBounds?.height === roundedBounds.height;
+    if (boundsUnchanged && connectPtyStartedRef.current && latestTermSizeRef.current) {
+      return false;
+    }
+
+    lastMeasuredBoundsRef.current = roundedBounds;
     activePane.updateSize(true);
     return true;
   };
@@ -312,8 +329,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     if (options.updateSize) {
       updateTerminalSize();
     }
-    seedResttyBackgroundSurfaces();
-    maybeRevealResttyCanvas(sourceLabel);
+    if (!bootstrapVisualsCompleteRef.current) {
+      seedResttyBackgroundSurfaces();
+      if (maybeRevealResttyCanvas(sourceLabel)) {
+        bootstrapVisualsCompleteRef.current = true;
+        syncRuntimeFromRefs();
+      }
+    }
     ensureScrollHostListener();
     updateScrollToBottomVisibility();
   };
@@ -687,10 +709,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       return;
     }
 
-    if (!isVisibleRef.current) {
-      return;
-    }
-
     const activePane = activePaneRef.current;
     const transportController = transportRef.current;
     if (!activePane || !transportController) {
@@ -957,7 +975,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     runtimeRef.current = runtime;
     syncRefsFromRuntime(runtime);
     container.replaceChildren(runtime.host);
-    seedResttyBackgroundSurfaces();
+    if (!bootstrapVisualsCompleteRef.current) {
+      seedResttyBackgroundSurfaces();
+    }
     setResttyCanvasVisibility(canvasVisibleRef.current);
     applyAppearance("mount-setup");
     ensureScrollHostListener();
@@ -1087,8 +1107,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       setShowScrollToBottom(false);
     }
 
-    if (!shouldFreezeHiddenTerminal()) {
+    if (!isVisible) {
+      // Hidden panes stay painted behind the active pane; don't redraw them on visibility flips.
+    } else if (!connectPtyStartedRef.current || !bootstrapVisualsCompleteRef.current) {
       runVisibleMaintenance("visible-effect");
+    } else {
+      ensureScrollHostListener();
+      updateScrollToBottomVisibility();
     }
 
     const handleCapturedScroll = () => {
@@ -1222,7 +1247,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
-      className={`terminal-pane-root ${isVisible ? "" : "terminal-pane-root-hidden"}`.trim()}
+      className="terminal-pane-root"
       ref={rootRef}
       onPointerDownCapture={(event) => {
         if (!isVisible) {

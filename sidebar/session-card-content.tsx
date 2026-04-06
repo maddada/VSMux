@@ -20,6 +20,7 @@ let activeOverflowTooltipId: symbol | undefined;
 let activeOverflowTooltipClose: (() => void) | undefined;
 
 export type SessionCardContentProps = {
+  alwaysShowTitleTooltip?: boolean;
   aliasHeadingRef?: RefObject<HTMLDivElement | null>;
   onClose?: () => void;
   onRename?: () => void;
@@ -30,6 +31,7 @@ export type SessionCardContentProps = {
 };
 
 export function SessionCardContent({
+  alwaysShowTitleTooltip = false,
   aliasHeadingRef,
   onClose,
   onRename,
@@ -54,7 +56,11 @@ export function SessionCardContent({
     headingText,
     secondaryText,
   });
-  const hasTooltipMetadata = titleTooltip !== headingText;
+  const titleTooltipOptions = getSessionTitleTooltipOptions({
+    alwaysShowTitleTooltip,
+    headingText,
+    titleTooltip,
+  });
   const showMeta = showHotkeys;
 
   return (
@@ -64,8 +70,8 @@ export function SessionCardContent({
           className="session-alias-heading"
           textRef={aliasHeadingRef}
           text={headingText}
-          tooltip={hasTooltipMetadata ? titleTooltip : undefined}
-          tooltipWhen={hasTooltipMetadata ? "always" : "overflow"}
+          tooltip={titleTooltipOptions.tooltip}
+          tooltipWhen={titleTooltipOptions.tooltipWhen}
         />
         <div className="session-head-actions">
           <div className="session-meta" data-visible={String(showMeta)}>
@@ -129,6 +135,32 @@ export function buildSessionTitleTooltip({
   );
 
   return uniqueLines.join("\n");
+}
+
+export function getSessionTitleTooltipOptions({
+  alwaysShowTitleTooltip,
+  headingText,
+  titleTooltip,
+}: {
+  alwaysShowTitleTooltip: boolean;
+  headingText: string;
+  titleTooltip: string;
+}): {
+  tooltip?: string;
+  tooltipWhen: "always" | "overflow";
+} {
+  const hasTooltipMetadata = titleTooltip !== headingText;
+  if (alwaysShowTitleTooltip || hasTooltipMetadata) {
+    return {
+      tooltip: titleTooltip,
+      tooltipWhen: "always",
+    };
+  }
+
+  return {
+    tooltip: undefined,
+    tooltipWhen: "overflow",
+  };
 }
 
 type SessionAgentIconProps = {

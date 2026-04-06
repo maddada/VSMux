@@ -310,7 +310,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       this.t3ActivityMonitor.onDidChange(() => {
         void (async () => {
           logVSmuxDebug("controller.t3ActivityMonitor.changed");
+          const titlesChanged = this.syncT3SessionTitlesFromMonitor();
           await this.syncKnownSessionActivities(true);
+          if (titlesChanged) {
+            logVSmuxDebug("controller.t3ActivityMonitor.titlesChanged");
+          }
           await this.refreshSidebar();
           await this.refreshWorkspacePanel();
         })();
@@ -1948,9 +1952,21 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     const runtime = this.t3Runtime ?? new T3RuntimeManager(this.context);
     this.t3Runtime = runtime;
     const nextMetadata = await runtime.ensureThreadSession(sessionRecord.t3, sessionRecord.title);
-    if (!haveSameT3SessionMetadata(sessionRecord.t3, nextMetadata)) {
+    const metadataChanged = !haveSameT3SessionMetadata(sessionRecord.t3, nextMetadata);
+    let resolvedSessionRecord: T3SessionRecord = sessionRecord;
+    if (metadataChanged) {
       await this.store.setT3SessionMetadata(sessionRecord.sessionId, nextMetadata);
+      const refreshedSession = this.store.getSession(sessionRecord.sessionId);
+      if (refreshedSession && isT3Session(refreshedSession)) {
+        resolvedSessionRecord = refreshedSession;
+      }
       await this.afterStateChange();
+    }
+
+    const updatedTitle = await this.syncT3SessionTitleFromRuntime(resolvedSessionRecord, runtime);
+    if (updatedTitle && !metadataChanged) {
+      await this.refreshSidebar();
+      await this.refreshWorkspacePanel();
     }
   }
 
@@ -2746,6 +2762,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
       this.pendingT3SessionIds.delete(sessionId);
       await this.store.setT3SessionMetadata(sessionId, sessionMetadata);
+      const refreshedSession = this.store.getSession(sessionId);
+      if (refreshedSession && isT3Session(refreshedSession)) {
+        await this.syncT3SessionTitleFromRuntime(refreshedSession, runtime);
+      }
       await this.afterStateChange();
     } catch (error) {
       const hadPendingSession = this.pendingT3SessionIds.delete(sessionId);
@@ -2801,6 +2821,63 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       ...snapshot,
       groups: nextGroups,
     });
+  }
+
+  private applyT3SessionTitle(sessionId: string, title: string | undefined): boolean {
+    const normalizedTitle = title?.trim();
+    if (!normalizedTitle) {
+      if (this.terminalTitleBySessionId.delete(sessionId)) {
+        return true;
+      }
+      return false;
+    }
+
+    if (this.terminalTitleBySessionId.get(sessionId) === normalizedTitle) {
+      return false;
+    }
+
+    this.terminalTitleBySessionId.set(sessionId, normalizedTitle);
+    return true;
+  }
+
+  private async syncT3SessionTitleFromRuntime(
+    sessionRecord: T3SessionRecord,
+    runtime?: T3RuntimeManager,
+  ): Promise<boolean> {
+    if (isPendingT3Metadata(sessionRecord.t3)) {
+      return false;
+    }
+
+    const activeRuntime = runtime ?? this.t3Runtime ?? new T3RuntimeManager(this.context);
+    this.t3Runtime = activeRuntime;
+
+    try {
+      const threadTitle = await activeRuntime.getThreadTitle(sessionRecord.t3.threadId);
+      return this.applyT3SessionTitle(sessionRecord.sessionId, threadTitle);
+    } catch (error) {
+      logVSmuxDebug("controller.syncT3SessionTitleFromRuntime.error", {
+        error: getErrorMessage(error),
+        sessionId: sessionRecord.sessionId,
+        threadId: sessionRecord.t3.threadId,
+      });
+      return false;
+    }
+  }
+
+  private syncT3SessionTitlesFromMonitor(): boolean {
+    let mutated = false;
+    for (const sessionRecord of this.getAllSessionRecords()) {
+      if (!isT3Session(sessionRecord) || isPendingT3Metadata(sessionRecord.t3)) {
+        continue;
+      }
+
+      const threadTitle = this.t3ActivityMonitor.getThreadTitle(sessionRecord.t3.threadId);
+      if (this.applyT3SessionTitle(sessionRecord.sessionId, threadTitle)) {
+        mutated = true;
+      }
+    }
+
+    return mutated;
   }
 }
 

@@ -425,8 +425,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const visiblePaneIds = useMemo(() => visiblePanes.map((pane) => pane.sessionId), [visiblePanes]);
   const visiblePaneIdsKey = visiblePaneIds.join("|");
   const reorderablePaneIds = useMemo(
-    () => orderedPanes.filter((pane) => pane.kind === "terminal").map((pane) => pane.sessionId),
-    [orderedPanes],
+    () => visiblePanes.filter((pane) => pane.kind === "terminal").map((pane) => pane.sessionId),
+    [visiblePanes],
   );
   const workspaceShellStyle = useMemo(() => {
     const nextStyle: WorkspaceShellStyle = {

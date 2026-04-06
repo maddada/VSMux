@@ -226,6 +226,13 @@ export class T3RuntimeManager implements vscode.Disposable {
     };
   }
 
+  public async getThreadTitle(threadId: string): Promise<string | undefined> {
+    const snapshot = await this.getSnapshot();
+    return snapshot.threads?.find(
+      (candidate) => candidate.id === threadId && candidate.deletedAt === null,
+    )?.title;
+  }
+
   public async ensureRunning(
     workspaceRoot = getDefaultWorkspaceCwd(),
     startupCommand = DEFAULT_T3_COMMAND,
