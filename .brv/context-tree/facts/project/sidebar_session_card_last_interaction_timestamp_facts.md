@@ -3,31 +3,30 @@ title: Sidebar Session Card Last Interaction Timestamp Facts
 tags: []
 related: [architecture/terminal_workspace/sidebar_session_card_last_interaction_timestamps.md]
 keywords: []
-importance: 55
+importance: 60
 recency: 1
 maturity: draft
-updateCount: 1
+updateCount: 2
 createdAt: "2026-04-06T03:48:19.302Z"
-updatedAt: "2026-04-06T04:11:26.417Z"
+updatedAt: "2026-04-06T16:48:18.621Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Record factual project knowledge from the sidebar session card HUD selector regression fix
+Capture project facts for sidebar session card timestamp alignment tweak
 
 **Changes:**
 
-- Added runtime regression fact for direct state.hud render access
-- Added selector convention for new HUD booleans
-- Added verification evidence for the fix
+- Updated timestamp text alignment to right
+- Kept session card row structure unchanged
 
 **Files:**
 
-- sidebar/sortable-session-card.tsx
+- sidebar/styles/session-cards.css
 
 **Flow:**
-identify regression -> move HUD flag into sidebar selector -> pass selected local prop -> validate via typecheck and vp tests
+edit CSS selector -> update text alignment -> preserve existing row layout
 
 **Timestamp:** 2026-04-06
 
@@ -35,18 +34,17 @@ identify regression -> move HUD flag into sidebar selector -> pass selected loca
 
 ### Structure
 
-This facts entry captures the concrete regression, the implementation rule that prevents similar issues, and the verification methods used after the fix.
+This fact entry records a narrow CSS change affecting the timestamp presentation within sidebar session cards. The targeted selector remains .session-last-interaction-time in the sidebar stylesheet.
 
 ### Dependencies
 
-The facts depend on the sidebar store selector pattern in sortable-session-card.tsx and the project verification workflow using extension typechecks and focused vp coverage.
+The fact depends on the existing session card markup already rendering the timestamp in a separate row under the title. Because only text alignment changed, downstream layout behavior should remain stable.
 
 ### Highlights
 
-The key operational rule is that render paths must only use store values that were explicitly selected into local scope.
+Key fact: timestamp text is now right-aligned, and the change is intentionally limited to presentation rather than card structure.
 
 ## Facts
 
-- **sidebar_last_interaction_runtime_regression**: sidebar/sortable-session-card.tsx had a runtime regression caused by referencing state.hud.showLastInteractionTimeOnSessionCards directly inside render instead of using a selected local store value. [project]
-- **hud_boolean_selector_requirement**: New HUD booleans in sortable session cards must be added to the existing useSidebarStore(useShallow(...)) selector before being passed to child components. [convention]
-- **sidebar_fix_verification**: Verification for the fix used tsconfig.extension typecheck and targeted vp tests. [project]
+- **session_last_interaction_text_align**: The .session-last-interaction-time CSS rule now uses text-align: right instead of text-align: left. [project]
+- **session_card_timestamp_layout_scope**: The alignment tweak preserves the separate row under the session title and does not alter the rest of the card layout. [project]

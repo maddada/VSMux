@@ -1,21 +1,45 @@
 {
   "active_context": [
     {
-      "importance": 55,
+      "order": 1,
+      "path": "architecture/chat_history/_index.md",
+      "tokens": 1163,
+      "type": "summary"
+    },
+    {
+      "importance": 60,
       "path": "architecture/terminal_workspace/sidebar_session_card_last_interaction_timestamps.md",
-      "tokens": 616,
+      "tokens": 445,
+      "type": "context"
+    },
+    {
+      "importance": 60,
+      "path": "facts/project/sidebar_session_card_last_interaction_timestamp_facts.md",
+      "tokens": 403,
       "type": "context"
     },
     {
       "importance": 55,
-      "path": "architecture/terminal_workspace/terminal_persistence_across_vs_code_reloads.md",
-      "tokens": 1827,
+      "path": "architecture/terminal_workspace/session_rename_title_auto_summarization.md",
+      "tokens": 1282,
       "type": "context"
     },
     {
       "importance": 55,
-      "path": "architecture/terminal_workspace/workspace_session_sleep_wake_support.md",
-      "tokens": 1166,
+      "path": "architecture/terminal_workspace/sidebar_browsers_empty_state.md",
+      "tokens": 1139,
+      "type": "context"
+    },
+    {
+      "importance": 55,
+      "path": "facts/project/sidebar_browsers_empty_state_facts.md",
+      "tokens": 384,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/chat_history/context.md",
+      "tokens": 142,
       "type": "context"
     },
     {
@@ -23,27 +47,15 @@
       "path": "architecture/context.md",
       "tokens": 182,
       "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "architecture/terminal_workspace/context.md",
-      "tokens": 112,
-      "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "facts/project/context.md",
-      "tokens": 55,
-      "type": "context"
     }
   ],
-  "generated_at": "2026-04-06T04:17:21.960Z",
+  "generated_at": "2026-04-06T17:09:24.790Z",
   "lane_tokens": {
-    "contexts": 3958,
+    "contexts": 3977,
     "stubs": 0,
-    "summaries": 0
+    "summaries": 1163
   },
-  "source_fingerprint": "68f66a38ed91f3129d605dd8d333de83e73d0a73cde9dcaeedaf419580926b74",
-  "total_tokens": 3958,
+  "source_fingerprint": "4b638acd7c15a29269369ffd68da147dfc209a87dc020afbeaebbb15d3de6389",
+  "total_tokens": 5140,
   "version": 1
 }

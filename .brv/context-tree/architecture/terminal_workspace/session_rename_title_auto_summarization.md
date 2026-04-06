@@ -3,84 +3,87 @@ title: Session Rename Title Auto Summarization
 tags: []
 related: [architecture/terminal_workspace/current_state.md]
 keywords: []
-importance: 50
+importance: 55
 recency: 1
 maturity: draft
+updateCount: 1
 createdAt: "2026-04-06T03:46:46.154Z"
-updatedAt: "2026-04-06T03:46:46.154Z"
+updatedAt: "2026-04-06T04:22:39.099Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Document automatic session rename title summarization for long user-provided titles in the native terminal workspace
+Document session rename title auto-summarization thresholds, provider prompt rules, sanitization, and runtime behavior
 
 **Changes:**
 
-- Added auto-summarization for long session rename input
-- Reused existing git text-generation provider stack for session title generation
-- Preserved terminal rename command dispatch after resolved title is applied
-- Added trimming, threshold gating, sanitization, and provider configuration checks
+- Added 25-character threshold for deciding when rename titles need summarization
+- Added 24-character clamp for generated session titles
+- Documented provider-specific command construction and output handling for session title generation
+- Documented sanitization and whole-word truncation rules for generated session titles
 
 **Files:**
 
-- extension/native-terminal-workspace/controller.ts
 - extension/native-terminal-workspace/session-title-generation.ts
-- extension/native-terminal-workspace/session-title-generation.test.ts
 - extension/git/text-generation.ts
 - extension/git/text-generation-utils.ts
+- extension/git/text-generation.test.ts
 
 **Flow:**
-user enters rename title -> trim input -> if length <= 25 apply directly -> else validate git text-generation provider -> show progress notification -> generate session title -> sanitize generated output -> set session title -> for terminal sessions send /rename {resolvedTitle}
+trim rename title -> compare against threshold 25 -> if short return trimmed title -> if long build session title prompt -> run provider command with timeout -> resolve stdout or output file -> parse first non-empty line -> sanitize quotes whitespace and punctuation -> clamp to 24 chars
 
 **Timestamp:** 2026-04-06
-
-**Patterns:**
-
-- `title\.trim\(\)\.length > 25` - Determines whether a session rename title should be summarized before rename is applied
-- `^["'0]+|["'0]+$` - Removes wrapping quotes and backticks from generated session titles
-- `\s+` - Collapses repeated whitespace in generated session titles
-- `[.]+$` - Removes trailing periods from generated session titles
-- `^```(?:[a-z0-9_-]+)?\n([\s\S]*?)\n```$` (flags: i) - Unwraps fenced generated text before parsing the session title
 
 ## Narrative
 
 ### Structure
 
-Session rename summarization is initiated in native-terminal-workspace/controller.ts inside renameSessionFromUserInput. The controller trims the user input, skips empty values, and checks shouldSummarizeSessionRenameTitle before deciding whether to call resolveSessionRenameTitle. The resolution module in session-title-generation.ts delegates long-title summarization to generateSessionTitle in extension/git/text-generation.ts, which uses the shared git text-generation execution path also used for commit messages and PR content.
+Session rename summarization is split between native-terminal-workspace/session-title-generation.ts, which decides whether summarization is required, and git/text-generation.ts plus git/text-generation-utils.ts, which build provider prompts, run shell commands, normalize provider output, and sanitize the final title. The pipeline reuses the generic git text generation subsystem but applies session-title-specific prompt and length constraints.
 
 ### Dependencies
 
-Long-title rename generation depends on getGitTextGenerationSettings, hasConfiguredGitTextGenerationProvider, resolveSessionRenameTitle, and the shared runGitTextGenerationText shell execution path. The default provider uses Codex gpt-5.4-mini with high reasoning effort, Claude uses Haiku with high effort, and the custom provider requires VSmux.gitTextGenerationCustomCommand to be configured. Shell execution may use stdin for codex, may write output to a temporary sessiontitle.txt file, and always cleans up the temporary directory after execution.
+Session title generation depends on GitTextGenerationSettings provider configuration, runShellCommand execution, temporary output-file handling for custom providers, and shared sanitization helpers in text-generation-utils.ts. The maximum title length constant is shared between the thresholding layer and sanitization layer so prompt instructions and post-processing remain aligned.
 
 ### Highlights
 
-Summarization is triggered only when the trimmed title length exceeds 25 characters, while shorter titles are preserved except for trimming. VS Code surfaces progress with title "VSmux" and message "Generating session name...", and generation failures abort the rename after showing getErrorMessage(error). Generated titles are sanitized to plain text by selecting the first non-empty line, stripping quotes or backticks, collapsing whitespace, trimming, and removing trailing periods. Terminal sessions preserve existing backend rename behavior by still issuing /rename {resolvedTitle} after the stored title changes.
+Titles at 25 characters or fewer are returned trimmed and unchanged. Longer titles are summarized with prompt instructions that require fewer than 25 characters, specificity, scannability, 2 to 4 words when possible, no quotes or markdown, and no ending punctuation. Final parsing uses the first non-empty line, strips code fences when the whole response is fenced, removes wrapping quotes, collapses whitespace, strips trailing periods, and clamps to 24 characters with whole-word preference before falling back to a raw slice.
 
 ### Rules
 
-Rules:
+Generated session rename titles must stay under 25 characters.
+Titles are summarized only when title.trim().length > 25.
+Titles at 25 characters or fewer are returned trimmed, unchanged.
+Return plain text only.
 
 - keep it specific and scannable
-- prefer 2 to 6 words when possible
-- target <= 40 characters
+- prefer 2 to 4 words when possible
+- must be fewer than 25 characters
 - do not use quotes, markdown, or commentary
 - do not end with punctuation
 - focus on the task, bug, feature, or topic
+- Produce only the final session title.
+- Do not wrap the result in backticks.
+- Print only the final result to stdout.
 
 ### Examples
 
-Example threshold behavior: a title whose trimmed length is exactly SESSION_RENAME_SUMMARY_THRESHOLD is not summarized, while a trimmed title with threshold + 1 characters is summarized. Example generation call: resolveSessionRenameTitle({ cwd: "/workspace", settings: { customCommand: "", provider: "claude" }, title: "Paste this whole paragraph about the bug and the intended fix please" }) resolves to "Fix sidebar rename" in tests. Example provider errors include "Git text generation returned an empty session title." and "VSmux.gitTextGenerationCustomCommand must be configured when the Git text generation provider is custom."
+"Polish sidebar rename flow" becomes "Polish sidebar rename".
+"Fix pasted rename summaries." becomes "Fix pasted rename".
+"supercalifragilisticexpialidocious" becomes "supercalifragilisticexp".
+End-to-end flow: trim incoming rename title -> if length <= 25 return as-is -> else build session-title prompt -> run provider command -> resolve output -> sanitize -> clamp to 24 chars.
 
 ## Facts
 
-- **session_rename_summary_threshold**: Session rename titles are summarized only when title.trim().length > 25. [project]
-- **session_rename_short_title_behavior**: Short session rename titles are applied directly after trimming without generation. [project]
-- **session_rename_progress_ui**: During session name generation, VS Code shows progress title "VSmux" with message "Generating session name...". [project]
-- **session_rename_custom_provider_requirement**: If the git text generation provider is custom and VSmux.gitTextGenerationCustomCommand is empty, rename aborts with a configuration error. [project]
-- **terminal_session_rename_command**: Terminal session renames still send /rename {title} after storing the resolved title. [project]
-- **git_text_generation_timeout_ms**: Git text generation commands time out after 180000 ms. [project]
-- **git_text_generation_default_provider**: The default provider shell command uses codex -m gpt-5.4-mini -c model_reasoning_effort="high" exec -. [project]
-- **git_text_generation_claude_provider**: The Claude provider shell command uses claude --model haiku --effort high -p <prompt>. [project]
-- **git_text_generation_custom_placeholders**: Custom git text generation commands support {prompt} and {outputFile} placeholders. [project]
-- **session_title_sanitization**: Generated session titles are sanitized by taking the first non-empty line, removing wrapping quotes or backticks, collapsing whitespace, trimming, and removing trailing periods. [project]
+- **session_title_length_limit**: Generated session rename titles must stay under 25 characters. [project]
+- **session_rename_summary_threshold**: SESSION_RENAME_SUMMARY_THRESHOLD is 25. [project]
+- **generated_session_title_max_length**: GENERATED_SESSION_TITLE_MAX_LENGTH is 24. [project]
+- **session_rename_summary_condition**: Session rename titles are summarized only when title.trim().length is greater than 25. [project]
+- **session_title_sanitization_limit**: Generated session titles are sanitized and clamped to 24 characters. [project]
+- **session_title_truncation_strategy**: Truncation prefers whole words and falls back to slicing to 24 characters when needed. [project]
+- **git_text_generation_timeout_ms**: Git text generation uses a timeout of 180000 milliseconds. [project]
+- **provider_prompt_delivery_modes**: Codex provider uses stdin prompt delivery while non-codex providers use interactive shell. [project]
+- **session_title_prompt_output_rules**: The session title prompt requires plain text only, no quotes, markdown, commentary, or ending punctuation. [convention]
+- **session_title_prompt_word_preference**: The session title prompt prefers 2 to 4 words when possible. [convention]
+- **codex_session_title_model**: Codex session title generation is pinned to model gpt-5.4-mini with high reasoning effort. [project]
+- **claude_session_title_model**: Claude session title generation is pinned to model haiku with high effort. [project]

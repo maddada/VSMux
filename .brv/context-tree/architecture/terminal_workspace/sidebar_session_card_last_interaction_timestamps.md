@@ -1,32 +1,33 @@
 ---
 title: Sidebar Session Card Last Interaction Timestamps
 tags: []
+related: [facts/project/sidebar_session_card_last_interaction_timestamp_facts.md]
 keywords: []
-importance: 55
+importance: 60
 recency: 1
 maturity: draft
-updateCount: 1
+updateCount: 2
 createdAt: "2026-04-06T03:48:19.300Z"
-updatedAt: "2026-04-06T04:11:26.415Z"
+updatedAt: "2026-04-06T16:48:18.618Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Document the sortable session card runtime regression and the required store selector pattern for HUD flags
+Document sidebar session card last-interaction timestamp alignment adjustment
 
 **Changes:**
 
-- Fixed a runtime regression in sidebar/sortable-session-card.tsx
-- Documented that showLastInteractionTime must come from selected sidebar store fields rather than direct state access in render
-- Recorded verification using tsconfig.extension typecheck and targeted vp tests
+- Changed .session-last-interaction-time from text-align: left to text-align: right
+- Preserved the separate timestamp row below the title
+- Left the rest of the session card layout unchanged
 
 **Files:**
 
-- sidebar/sortable-session-card.tsx
+- sidebar/styles/session-cards.css
 
 **Flow:**
-add HUD boolean -> include it in useSidebarStore(useShallow(...)) selector -> bind selected local variable -> pass local variable to child component -> verify with typecheck and targeted tests
+render session card -> place timestamp on separate row -> right-align timestamp text
 
 **Timestamp:** 2026-04-06
 
@@ -34,18 +35,17 @@ add HUD boolean -> include it in useSidebarStore(useShallow(...)) selector -> bi
 
 ### Structure
 
-The sortable session card reads sidebar state through an existing useSidebarStore(useShallow(...)) selector. New HUD display flags must be added to that selector so render logic only references locally selected values rather than reaching back into state paths that are not in scope.
+The sidebar session card keeps the last-interaction timestamp on its own row beneath the title. Only the text alignment of that row changed, so the visual structure of title above timestamp remains intact.
 
 ### Dependencies
 
-This pattern depends on the sidebar store selection contract in sortable-session-card.tsx and on child component props receiving already-selected values. Validation relied on tsconfig.extension typecheck plus targeted vp tests covering the sidebar card behavior.
+This tweak depends on the existing sidebar session card CSS structure and specifically targets the .session-last-interaction-time rule in sidebar/styles/session-cards.css. No related card layout or component structure changes were introduced.
 
 ### Highlights
 
-The regression came from passing showLastInteractionTime: state.hud.showLastInteractionTimeOnSessionCards inside render while only selected store fields were available. The documented fix is to select new HUD booleans alongside the existing fields, then pass the resulting local variable to children.
+This was an alignment-only UX adjustment: the timestamp now aligns to the right while preserving spacing, row separation, and the rest of the card layout behavior.
 
 ## Facts
 
-- **sortable_session_card_hud_selector_regression**: sidebar/sortable-session-card.tsx had a runtime regression when showLastInteractionTime was passed from state.hud.showLastInteractionTimeOnSessionCards inside render without selecting that field from the sidebar store. [project]
-- **sidebar_store_selector_pattern**: The correct pattern is to add new HUD booleans to the existing useSidebarStore(useShallow(...)) selector and pass the selected local variable to child components. [convention]
-- **verification_for_sidebar_hud_fix**: The fix was verified with tsconfig.extension typecheck and targeted vp tests. [project]
+- **sidebar_last_interaction_alignment**: The sidebar session card last-interaction timestamp was changed from left-aligned to right-aligned. [project]
+- **sidebar_last_interaction_alignment_file**: The change was made in sidebar/styles/session-cards.css on the .session-last-interaction-time selector. [project]
