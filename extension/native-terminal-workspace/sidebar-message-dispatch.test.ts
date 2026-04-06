@@ -11,6 +11,7 @@ function createHandlers(): SidebarMessageHandlers {
     closeSession: vi.fn(async () => undefined),
     confirmSidebarGitCommit: vi.fn(async () => undefined),
     copyResumeCommand: vi.fn(async () => undefined),
+    forkSession: vi.fn(async () => undefined),
     createGroup: vi.fn(async () => undefined),
     createGroupFromSession: vi.fn(async () => undefined),
     createSession: vi.fn(async () => undefined),
@@ -44,6 +45,8 @@ function createHandlers(): SidebarMessageHandlers {
     setSidebarGitCommitConfirmationEnabled: vi.fn(async () => undefined),
     setSidebarGitPrimaryAction: vi.fn(async () => undefined),
     setSidebarSectionCollapsed: vi.fn(async () => undefined),
+    setGroupSleeping: vi.fn(async () => undefined),
+    setSessionSleeping: vi.fn(async () => undefined),
     setT3SessionThreadId: vi.fn(async () => undefined),
     setViewMode: vi.fn(async () => undefined),
     setVisibleCount: vi.fn(async () => undefined),
@@ -57,6 +60,21 @@ function createHandlers(): SidebarMessageHandlers {
 }
 
 describe("dispatchSidebarMessage", () => {
+  test("should route forkSession to the matching handler", async () => {
+    const handlers = createHandlers();
+
+    await dispatchSidebarMessage(
+      {
+        sessionId: "session-3",
+        type: "forkSession",
+      },
+      handlers,
+    );
+
+    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
+    expect(handlers.forkSession).toHaveBeenCalledWith("session-3");
+  });
+
   test("should route setT3SessionThreadId to the matching handler", async () => {
     const handlers = createHandlers();
 
@@ -70,5 +88,37 @@ describe("dispatchSidebarMessage", () => {
 
     expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
     expect(handlers.setT3SessionThreadId).toHaveBeenCalledWith("session-3");
+  });
+
+  test("should route setSessionSleeping to the matching handler", async () => {
+    const handlers = createHandlers();
+
+    await dispatchSidebarMessage(
+      {
+        sessionId: "session-3",
+        sleeping: true,
+        type: "setSessionSleeping",
+      },
+      handlers,
+    );
+
+    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
+    expect(handlers.setSessionSleeping).toHaveBeenCalledWith("session-3", true);
+  });
+
+  test("should route setGroupSleeping to the matching handler", async () => {
+    const handlers = createHandlers();
+
+    await dispatchSidebarMessage(
+      {
+        groupId: "group-2",
+        sleeping: true,
+        type: "setGroupSleeping",
+      },
+      handlers,
+    );
+
+    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
+    expect(handlers.setGroupSleeping).toHaveBeenCalledWith("group-2", true);
   });
 });

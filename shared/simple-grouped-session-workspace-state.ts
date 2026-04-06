@@ -188,6 +188,10 @@ export function focusSessionInSimpleWorkspace(
     return { changed: false, snapshot: normalizedSnapshot };
   }
 
+  const nextSessions = owningGroup.snapshot.sessions.map((session) =>
+    session.sessionId === sessionId ? { ...session, isSleeping: false } : session,
+  );
+
   const nextSnapshot = updateGroup(
     {
       ...normalizedSnapshot,
@@ -199,8 +203,9 @@ export function focusSessionInSimpleWorkspace(
       snapshot: normalizeGroupSnapshot({
         ...group.snapshot,
         focusedSessionId: sessionId,
+        sessions: nextSessions,
         visibleSessionIds: getNextVisibleIdsForFocusedSession(
-          group.snapshot.sessions,
+          getAwakeSessions(nextSessions),
           group.snapshot.visibleCount,
           sessionId,
           group.snapshot.visibleSessionIds,
@@ -285,7 +290,7 @@ export function removeSessionInSimpleWorkspace(
   }));
   const shouldSwitchGroups =
     normalizedSnapshot.activeGroupId === owningGroup.groupId &&
-    getGroupById(snapshotWithoutSession, owningGroup.groupId)?.snapshot.sessions.length === 0;
+    getActiveSessionCount(getGroupById(snapshotWithoutSession, owningGroup.groupId)) === 0;
   const fallbackActiveGroupId = shouldSwitchGroups
     ? getFallbackActiveGroupId(snapshotWithoutSession, owningGroup.groupId)
     : snapshotWithoutSession.activeGroupId;
@@ -294,6 +299,101 @@ export function removeSessionInSimpleWorkspace(
       ? snapshotWithoutSession
       : normalizeSimpleGroupedSessionWorkspaceSnapshot({
           ...snapshotWithoutSession,
+          activeGroupId: fallbackActiveGroupId,
+        });
+
+  return {
+    changed: !areSnapshotsEqual(normalizedSnapshot, nextSnapshot),
+    snapshot: nextSnapshot,
+  };
+}
+
+export function setSessionSleepingInSimpleWorkspace(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+  sessionId: string,
+  sleeping: boolean,
+): WorkspaceMutationResult {
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  const owningGroup = getGroupForSession(normalizedSnapshot, sessionId);
+  if (!owningGroup) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const currentSession = owningGroup.snapshot.sessions.find(
+    (session) => session.sessionId === sessionId,
+  );
+  if (!currentSession || currentSession.isSleeping === sleeping) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const snapshotWithSleepState = updateGroup(normalizedSnapshot, owningGroup.groupId, (group) => ({
+    ...group,
+    snapshot: normalizeGroupSnapshot({
+      ...group.snapshot,
+      sessions: group.snapshot.sessions.map((session) =>
+        session.sessionId === sessionId ? { ...session, isSleeping: sleeping } : session,
+      ),
+    }),
+  }));
+  const shouldSwitchGroups =
+    sleeping &&
+    normalizedSnapshot.activeGroupId === owningGroup.groupId &&
+    getActiveSessionCount(getGroupById(snapshotWithSleepState, owningGroup.groupId)) === 0;
+  const fallbackActiveGroupId = shouldSwitchGroups
+    ? getFallbackActiveGroupId(snapshotWithSleepState, owningGroup.groupId)
+    : snapshotWithSleepState.activeGroupId;
+  const nextSnapshot =
+    fallbackActiveGroupId === snapshotWithSleepState.activeGroupId
+      ? snapshotWithSleepState
+      : normalizeSimpleGroupedSessionWorkspaceSnapshot({
+          ...snapshotWithSleepState,
+          activeGroupId: fallbackActiveGroupId,
+        });
+
+  return {
+    changed: !areSnapshotsEqual(normalizedSnapshot, nextSnapshot),
+    snapshot: nextSnapshot,
+  };
+}
+
+export function setGroupSleepingInSimpleWorkspace(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+  groupId: string,
+  sleeping: boolean,
+): WorkspaceMutationResult {
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  const group = getGroupById(normalizedSnapshot, groupId);
+  if (!group) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const hasChange = group.snapshot.sessions.some((session) => session.isSleeping !== sleeping);
+  if (!hasChange) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const snapshotWithSleepState = updateGroup(normalizedSnapshot, groupId, (targetGroup) => ({
+    ...targetGroup,
+    snapshot: normalizeGroupSnapshot({
+      ...targetGroup.snapshot,
+      sessions: targetGroup.snapshot.sessions.map((session) => ({
+        ...session,
+        isSleeping: sleeping,
+      })),
+    }),
+  }));
+  const shouldSwitchGroups =
+    sleeping &&
+    normalizedSnapshot.activeGroupId === groupId &&
+    getActiveSessionCount(getGroupById(snapshotWithSleepState, groupId)) === 0;
+  const fallbackActiveGroupId = shouldSwitchGroups
+    ? getFallbackActiveGroupId(snapshotWithSleepState, groupId)
+    : snapshotWithSleepState.activeGroupId;
+  const nextSnapshot =
+    fallbackActiveGroupId === snapshotWithSleepState.activeGroupId
+      ? snapshotWithSleepState
+      : normalizeSimpleGroupedSessionWorkspaceSnapshot({
+          ...snapshotWithSleepState,
           activeGroupId: fallbackActiveGroupId,
         });
 
@@ -481,7 +581,7 @@ export function moveSessionToGroupInSimpleWorkspace(
 ): WorkspaceMutationResult {
   const sourceGroup = getGroupForSession(snapshot, sessionId);
   const targetGroup = getGroupById(snapshot, groupId);
-  if (!sourceGroup || !targetGroup || sourceGroup.groupId === groupId) {
+  if (!sourceGroup || !targetGroup) {
     return { changed: false, snapshot };
   }
 
@@ -490,6 +590,45 @@ export function moveSessionToGroupInSimpleWorkspace(
   );
   if (!sessionToMove) {
     return { changed: false, snapshot };
+  }
+
+  if (sourceGroup.groupId === groupId) {
+    const nextSessions = sourceGroup.snapshot.sessions.filter(
+      (session) => session.sessionId !== sessionId,
+    );
+    const insertIndex =
+      typeof targetIndex === "number"
+        ? Math.max(0, Math.min(targetIndex, nextSessions.length))
+        : nextSessions.length;
+    nextSessions.splice(insertIndex, 0, sessionToMove);
+    const reorderedSessions = nextSessions.map((session, index) => ({
+      ...session,
+      slotIndex: index,
+    }));
+
+    const nextSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot({
+      ...updateGroup(snapshot, groupId, (group) => ({
+        ...group,
+        snapshot: normalizeGroupSnapshot({
+          ...group.snapshot,
+          focusedSessionId: sessionId,
+          sessions: reorderedSessions,
+          visibleSessionIds: getNextVisibleIdsForFocusedSession(
+            reorderedSessions,
+            group.snapshot.visibleCount,
+            sessionId,
+            group.snapshot.visibleSessionIds,
+            group.snapshot.focusedSessionId,
+          ),
+        }),
+      })),
+      activeGroupId: groupId,
+    });
+
+    return {
+      changed: !areSnapshotsEqual(snapshot, nextSnapshot),
+      snapshot: nextSnapshot,
+    };
   }
 
   const strippedSnapshot = updateGroup(
@@ -513,14 +652,18 @@ export function moveSessionToGroupInSimpleWorkspace(
           ? Math.max(0, Math.min(targetIndex, nextSessions.length))
           : nextSessions.length;
       nextSessions.splice(insertIndex, 0, sessionToMove);
+      const reorderedSessions = nextSessions.map((session, index) => ({
+        ...session,
+        slotIndex: index,
+      }));
       return {
         ...group,
         snapshot: normalizeGroupSnapshot({
           ...group.snapshot,
           focusedSessionId: sessionId,
-          sessions: nextSessions,
+          sessions: reorderedSessions,
           visibleSessionIds: getNextVisibleIdsForFocusedSession(
-            nextSessions,
+            reorderedSessions,
             group.snapshot.visibleCount,
             sessionId,
             group.snapshot.visibleSessionIds,
@@ -670,13 +813,14 @@ function normalizeGroupSnapshot(
       slotIndex: index,
     };
   });
-  const focusedSessionId = sessions.some(
+  const awakeSessions = getAwakeSessions(sessions);
+  const focusedSessionId = awakeSessions.some(
     (session) => session.sessionId === sessionIdByLegacyId.get(snapshot.focusedSessionId ?? ""),
   )
     ? sessionIdByLegacyId.get(snapshot.focusedSessionId ?? "")
-    : sessions[0]?.sessionId;
+    : awakeSessions[0]?.sessionId;
   const visibleCount =
-    sessions.length === 0 ? 1 : clampSupportedVisibleCount(snapshot.visibleCount);
+    awakeSessions.length === 0 ? 1 : clampSupportedVisibleCount(snapshot.visibleCount);
   const normalizedVisibleSessionIds = snapshot.visibleSessionIds.map(
     (sessionId) => sessionIdByLegacyId.get(sessionId) ?? sessionId,
   );
@@ -691,7 +835,7 @@ function normalizeGroupSnapshot(
     viewMode: snapshot.viewMode ?? "grid",
     visibleCount,
     visibleSessionIds: getNormalizedVisibleIds(
-      sessions,
+      awakeSessions,
       visibleCount,
       focusedSessionId,
       normalizedVisibleSessionIds,
@@ -814,15 +958,27 @@ function getFallbackActiveGroupId(
   const previousNonEmptyGroup = snapshot.groups
     .slice(0, emptiedGroupIndex)
     .reverse()
-    .find((group) => group.snapshot.sessions.length > 0);
+    .find((group) => getActiveSessionCount(group) > 0);
   if (previousNonEmptyGroup) {
     return previousNonEmptyGroup.groupId;
   }
 
   const nextNonEmptyGroup = snapshot.groups
     .slice(emptiedGroupIndex + 1)
-    .find((group) => group.snapshot.sessions.length > 0);
+    .find((group) => getActiveSessionCount(group) > 0);
   return nextNonEmptyGroup?.groupId ?? emptiedGroupId;
+}
+
+function getAwakeSessions(sessions: readonly SessionRecord[]): SessionRecord[] {
+  return sessions.filter((session) => !session.isSleeping);
+}
+
+function getActiveSessionCount(group: SessionGroupRecord | undefined): number {
+  if (!group) {
+    return 0;
+  }
+
+  return getAwakeSessions(group.snapshot.sessions).length;
 }
 
 function updateGroup(

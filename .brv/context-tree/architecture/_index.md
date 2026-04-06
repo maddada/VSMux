@@ -1,311 +1,391 @@
 ---
-children_hash: a8021e19bf06b400213715fb2a3b182eaad06ee319c09a4f95b233247fe048c2
-compression_ratio: 0.6903313049357674
+children_hash: 02ae471586985bfea0cfaee38891f63f11b6c248507cb6685511e04d76833b8b
+compression_ratio: 0.7963468402267478
 condensation_order: 2
 covers: [context.md, terminal_workspace/_index.md]
-covers_token_total: 4437
+covers_token_total: 4763
 summary_level: d2
-token_count: 3063
+token_count: 3793
 type: summary
 ---
 
-# architecture → terminal_workspace
+# architecture / terminal_workspace
 
-## Domain purpose
+## Scope and role
 
-Architectural knowledge for the VSmux terminal workspace stack: frontend terminal rendering, pane/runtime lifecycle, workspace projection and ordering, sidebar interaction semantics, daemon-backed session behavior, and embedded T3 integration. Canonical topic baseline lives in `terminal_workspace/current_state.md`; `context.md` defines the domain scope.
+This topic covers the VSmux terminal workspace architecture: frontend pane rendering, grouped workspace projection, sidebar session operations, per-workspace backend daemon behavior, reload persistence, and T3/browser integration. The domain contract is established in `context.md`, while `terminal_workspace/_index.md` is the main structural map and `current_state.md` is the primary source for current behavior.
 
-## Topic structure
+## System shape
 
-Use these entries for drill-down:
+The current design centers on a few stable architectural choices referenced across `current_state.md` and most child entries:
 
-- Foundational: `context.md`, `current_state.md`
-- Runtime behavior: `terminal_pane_runtime_thresholds_and_behaviors.md`, `workspace_sidebar_interaction_state.md`
-- Focus / ordering / drag: `workspace_focus_debugging.md`, `workspace_focus_and_sidebar_drag_semantics.md`, `terminal_titles_activity_and_sidebar_runtime.md`
-- Title/activity/audio: `terminal_titles_activity_and_completion_sounds.md`, `title_activity_and_sidebar_runtime.md`
-- T3 / browser / packaging: `workspace_browser_t3_integration.md`, `t3_managed_runtime_upgrade_and_recovery.md`, `vsix_packaging_and_t3_embed_validation.md`
+- **Restty** is the terminal renderer.
+- Terminal runtime identity is keyed by **`sessionId`**.
+- Runtime reuse is **per session**, while daemon ownership is **per workspace**.
+- Hidden connected panes stay **mounted and painted** rather than being recreated.
+- `WorkspaceApp` owns **authoritative focus state**; panes report activation intent only.
+- Visible pane order is derived from **`activeGroup.snapshot.visibleSessionIds`**.
+- High-frequency UI state changes favor **targeted patch updates** over full rehydrates.
+- Recovery after reload combines:
+  - persisted grouped snapshot state,
+  - detached daemon-held PTYs,
+  - replay + reattach,
+  - persisted disconnected metadata fallback.
 
-## Core architecture
+Relevant core files repeatedly cited:
 
-### Frontend runtime model
+- `workspace/terminal-runtime-cache.ts`
+- `workspace/terminal-pane.tsx`
+- `workspace/workspace-app.tsx`
+- `extension/native-terminal-workspace/controller.ts`
+- `extension/daemon-terminal-workspace-backend.ts`
 
-From `current_state.md`:
+## Frontend runtime and pane lifecycle
 
-- Terminal renderer is **Restty**.
-- Runtime cache identity is stable per `sessionId` in `workspace/terminal-runtime-cache.ts`.
-- Runtimes survive mount/visibility changes and are recreated only when `renderNonce` changes.
-- `releaseCachedTerminalRuntime` does not fully destroy the runtime; teardown is reserved for `destroyCachedTerminalRuntime`.
-- PTY startup sequence is: appearance applied → stable size confirmed → connect or reattach.
+`current_state.md`, `terminal_pane_runtime_thresholds_and_behaviors.md`, `workspace_sidebar_interaction_state.md`, and `terminal_titles_activity_and_sidebar_runtime.md` describe the runtime lifecycle:
 
-### Hidden pane strategy
+- PTY connect is delayed until appearance is applied, size is stable, and ready/connect sequencing completes.
+- Stable size resolution waits up to **20 attempts** and requires **2 identical measurements**.
+- Hidden panes skip redraw/maintenance after startup but remain alive.
+- Bootstrap visuals end after the first successful canvas reveal.
+- `releaseCachedTerminalRuntime()` detaches and decrements refs without destroying runtime state.
+- `destroyCachedTerminalRuntime()` fully tears down transport, Restty, and cache entry.
 
-Across `current_state.md`, `terminal_pane_runtime_thresholds_and_behaviors.md`, `terminal_titles_activity_and_sidebar_runtime.md`, `workspace_focus_and_sidebar_drag_semantics.md`, and `workspace_sidebar_interaction_state.md`:
+Important thresholds:
 
-- Hidden connected panes remain mounted and painted behind the active pane.
-- Visibility flips should not trigger repaint/reconnect after startup.
-- This is a deliberate stability/performance contract to avoid churn during pane switching.
+- Auto-focus guard: **400 ms**
+- Typing autoscroll: **4 printable keys within 450 ms**
+- Scroll hysteresis: show **200 px**, hide **40 px**
+- Scheduler probe: **50 ms** interval, **5000 ms** window
+- Lag detection: overshoot **>= 1000 ms** within **10000 ms**
+- Reconnect performance probe: **5000 ms**
 
-### Stable sizing / readiness
-
-From `current_state.md` and `terminal_pane_runtime_thresholds_and_behaviors.md`:
-
-- Size stabilization waits up to **20 attempts** and resolves after **2 identical measurements**.
-- `transportController.markTerminalReady(cols, rows)` is sent before PTY connection.
-- Reattach is preferred when a live daemon PTY exists; `didCreateSession` distinguishes recreation.
-
-## Workspace projection, ordering, and focus
-
-### Session projection
-
-From `current_state.md`:
-
-- Projection now flattens all group session arrays, not just active panes.
-- Visible layout is derived from projected session records across groups.
-
-### Pane order contract
-
-Primary detail: `terminal_titles_activity_and_sidebar_runtime.md`, `workspace_focus_and_sidebar_drag_semantics.md`, `workspace_sidebar_interaction_state.md`
-
-- Split-pane order comes from `activeGroup.snapshot.visibleSessionIds`.
-- `localPaneOrder` is only a temporary override within the currently visible set.
-- Message coordination includes `syncPaneOrder` and `focusSession`.
-- Goal: preserve slot stability when active session changes.
-
-### Focus ownership
-
-From `workspace_focus_debugging.md` and `workspace_focus_and_sidebar_drag_semantics.md`:
-
-- `TerminalPane` emits activation intent only via `onActivate("pointer")` and fallback `onActivate("focusin")`.
-- `WorkspaceApp` is authoritative for real focus changes and `vscode.postMessage({ sessionId, type: "focusSession" })`.
-- Pointer activation is primary; `focusin` is fallback after `:focus-within`.
-- Auto-focus guard window: **400 ms** (`AUTO_FOCUS_ACTIVATION_GUARD_MS`).
-- T3 iframe-originated focus uses `vsmuxT3Focus`.
-- Stale pending local focus is cleared if server-reported focus moves elsewhere.
-
-## Runtime thresholds and input behavior
-
-From `terminal_pane_runtime_thresholds_and_behaviors.md`:
-
-- Auto-scroll trigger: **4 printable keystrokes within 450 ms**
-- Scroll-to-bottom button:
-  - show if > **200 px** from bottom
-  - hide below **40 px**
-- Scheduler probe:
-  - every **50 ms**
-  - over **5000 ms**
-  - warning at **250 ms**
-- Lag monitor:
-  - over **10000 ms**
-  - lag when avg overshoot ≥ **1000 ms**
-  - only while pane is visible, document visible, and focused
-- Search close clears results to `SEARCH_RESULTS_EMPTY = { resultCount: 0, resultIndex: -1 }` and refocuses terminal on next animation frame.
-
-### Keyboard mappings
-
-Across `current_state.md`, `terminal_pane_runtime_thresholds_and_behaviors.md`, `workspace_sidebar_interaction_state.md`:
+Input mappings called out in `terminal_pane_runtime_thresholds_and_behaviors.md`:
 
 - `Shift+Enter` → `\x1b[13;2u`
-- macOS:
-  - `Meta+ArrowLeft` → `\x01`
-  - `Meta+ArrowRight` → `\x05`
-  - `Alt+ArrowLeft` → `\x1bb`
-  - `Alt+ArrowRight` → `\x1bf`
-- non-Mac:
-  - `Ctrl+ArrowLeft` → `\x1bb`
-  - `Ctrl+ArrowRight` → `\x1bf`
-- Platform detection regex: `/Mac|iPhone|iPad|iPod/`
+- macOS `Meta+ArrowLeft` → `\x01`
+- macOS `Meta+ArrowRight` → `\x05`
+- word navigation → `\x1bb` / `\x1bf`
 
-## Sidebar interaction and drag semantics
+## Focus, ordering, and drag semantics
 
-From `terminal_titles_activity_and_sidebar_runtime.md`, `workspace_focus_and_sidebar_drag_semantics.md`, `workspace_sidebar_interaction_state.md`:
+`workspace_focus_and_sidebar_drag_semantics.md`, `workspace_focus_debugging.md`, `workspace_sidebar_interaction_state.md`, and `terminal_titles_activity_and_sidebar_runtime.md` define focus and ordering rules:
 
-- Sidebar cards must not reorder from click-shaped interactions.
-- Reorder requires real pointer movement in the same interaction.
-- Ignore reorder if drag end occurs without meaningful motion, even if drop target resolves.
-- Movement threshold: **8 px**
+- `TerminalPane` emits focus intent from `pointer` / `focusin`.
+- `WorkspaceApp` resolves actual focus ownership.
+- `localPaneOrder` is only a temporary override within the current visible set.
+- Passive split slots should remain stable during focus/split transitions.
 
-### Drag timing / sensors
+Drag and reorder protections:
 
-From `terminal_titles_activity_and_sidebar_runtime.md`:
-
+- Sidebar reorder must not trigger from click-like interactions.
+- Actual reorder requires movement crossing **8 px**.
 - Startup interaction block: **1500 ms**
-- Non-touch activation distance: **6 px**
-- Touch activation: **250 ms** delay, **5 px** tolerance
-- Hold-to-drag on session cards: **130 ms** delay, **12 px** tolerance
+- Session-card drag hold: **130 ms** with **12 px** tolerance
+- Non-touch drag activation: **6 px**
+- Touch activation: **250 ms** delay with **5 px** tolerance
 
-### Session-card capabilities
+Debugging-specific notes from `workspace_focus_debugging.md`:
 
-From `workspace_sidebar_interaction_state.md`:
+- stale local pending focus is cleared when server focus disagrees,
+- T3 iframe focus event type is **`vsmuxT3Focus`**,
+- hidden panes and auto-focus-guarded panes ignore iframe focus,
+- header drag suppresses pane activation during drag.
 
-- Actions: `promptRenameSession`, `closeSession`, `copyResumeCommand`, `fullReloadSession`
-- Resume command copy supported for: **codex, claude, copilot, gemini, opencode**
-- Full reload supported only for: **codex, claude**
+## Grouped workspace state model
 
-## Titles, agent activity, and completion sounds
+`simple_grouped_session_workspace_state.md` is the base state-model entry, implemented in:
 
-### Title precedence / sanitization
+- `shared/simple-grouped-session-workspace-state.ts`
+- `shared/simple-grouped-session-workspace-state.test.ts`
 
-From `terminal_titles_activity_and_completion_sounds.md` and `title_activity_and_sidebar_runtime.md`:
+Canonical decisions:
 
-- Visible title precedence:
-  1. manual user title
+- Normalization always ensures at least one group.
+- Browser sessions are removed during normalization.
+- Session IDs are canonicalized as `session-${formatSessionDisplayId(...)}`
+- Duplicate display IDs are repaired before per-group normalization.
+- Group-local `visibleSessionIds` are preserved and restored when returning to a group.
+- New sessions use the **first free display ID**.
+- Removing the last session from the active group preserves the empty group and falls back to the nearest populated group, preferring previous groups.
+- Moving a session to another group activates the destination and focuses the moved session.
+- Fullscreen stores/restores previous visible-count state.
+- Group creation and “group from session” respect `MAX_GROUP_COUNT`.
+
+## Sleep/wake extension
+
+`workspace_session_sleep_wake_support.md` extends the grouped state model:
+
+- Session records persist **`isSleeping`**.
+- Sleeping sessions are excluded from awake focus and visible split calculations.
+- Focusing a sleeping session wakes it implicitly.
+- Group sleep/wake toggles affect all sessions in the group.
+- Sleeping terminal sessions dispose live runtime surfaces but keep resume metadata.
+- If the active group has no awake sessions after sleep, selection falls back to another non-empty group.
+
+Referenced implementation files:
+
+- `shared/simple-grouped-session-workspace-state.ts`
+- `extension/session-grid-store.ts`
+- `extension/native-terminal-workspace/controller.ts`
+- `sidebar/sortable-session-card.tsx`
+- `sidebar/session-group-section.tsx`
+
+## Sidebar interaction and session operations
+
+`workspace_sidebar_interaction_state.md` is the broad interaction contract. Workspace messages include:
+
+- `focusSession`
+- `syncPaneOrder`
+- `syncGroupOrder`
+- `syncSessionOrder`
+- `moveSessionToGroup`
+
+Session-card menus support rename, close, copy resume, and full reload, with capability gating based on agent/session type.
+
+### Fork / resume / reload
+
+`sidebar_session_fork_support.md` and `sidebar_fork_session_behavior.md` define the command matrix:
+
+- Copy resume: **codex, claude, copilot, gemini, opencode**
+- Fork: **codex, claude**
+- Full reload: **codex, claude**
+- Browser sessions support none of rename/fork/copy-resume/full-reload
+
+Fork flow:
+
+- UI posts `{ type: "forkSession", sessionId }`
+- shared contract: `shared/session-grid-contract-sidebar.ts`
+- dispatch: `extension/native-terminal-workspace/sidebar-message-dispatch.ts`
+- controller creates sibling terminal session in same group, preserves icon/launch metadata, inserts after source, attaches backend, writes fork command, then schedules delayed rename.
+
+Commands:
+
+- Codex: `codex fork <preferred title>`
+- Claude: `claude --fork-session -r <preferred title>`
+- Delayed rename after **4000 ms**: `/rename fork <preferred title>`
+
+Persisted launch metadata key:
+
+- **`VSmux.sessionAgentCommands`**
+
+Shell quoting rule:
+
+- single-quoted arguments with embedded single-quote escaping.
+
+### Rename title summarization
+
+`session_rename_title_auto_summarization.md` adds long-title summarization:
+
+- Direct apply only if `title.trim().length <= 25`
+- Longer input routes through shared git text generation:
+  - `extension/git/text-generation.ts`
+  - `extension/git/text-generation-utils.ts`
+- Progress UI:
+  - title: **`VSmux`**
+  - message: **`Generating session name...`**
+- Sanitization rules:
+  - first non-empty line,
+  - strip wrapping quotes/backticks,
+  - collapse whitespace,
+  - trim,
+  - remove trailing periods.
+- Terminal sessions still send `/rename {resolvedTitle}` after state update.
+
+Provider details:
+
+- default provider: **codex gpt-5.4-mini** with high reasoning
+- Claude provider: **Haiku** with high effort
+- custom provider via **`VSmux.gitTextGenerationCustomCommand`**
+- timeout: **180000 ms**
+
+### Sidebar HUD/store selection fix
+
+`sidebar_session_card_last_interaction_timestamps.md` captures a recurring UI-store rule:
+
+- new HUD booleans like `showLastInteractionTime` must be selected via `useSidebarStore(useShallow(...))`,
+- rendering must consume selected locals rather than direct store-path access,
+- validated with `tsconfig.extension` typecheck and targeted `vp` tests.
+
+## Titles, activity, and completion sounds
+
+`title_activity_and_sidebar_runtime.md` and `terminal_titles_activity_and_completion_sounds.md` define presentation state and activity inference:
+
+- terminal titles are first-class daemon snapshot state,
+- visible title precedence:
+  1. manual title
   2. terminal title
   3. alias
-- Generated `Session N` titles are not meaningful primary titles.
-- Path-like titles beginning with `~` or `/` are hidden.
-- Leading spinner/braille/bullet chars are stripped.
+- updates use targeted presentation patch messages.
 
-Important patterns:
+Activity markers:
 
-- `^Session \d+$`
-- `^(~|/)`
-- `^[\s\u2800-\u28ff·•⋅◦]+`
-- `^session-(\d+)$`
-- `^\d{2}$`
+- Claude working: `⠐`, `⠂`, `·`
+- Claude idle: `✳`, `*`
+- Codex working: `⠸ ⠴ ⠼ ⠧ ⠦ ⠏ ⠋ ⠇ ⠙ ⠹`
+- Gemini working: `✦`, idle: `◇`
+- Copilot working: `🤖`, idle/attention: `🔔`
 
-### Activity derivation
+Guardrails:
 
-Across both title/activity entries:
+- Claude/Codex require observed title transitions before spinner-only working state is trusted.
+- Claude/Codex stop counting as working if spinner stalls for **3 s**.
+- Gemini/Copilot skip stale-spinner guarding.
+- Attention appears only after at least **3 s** of prior working.
+- Completion sounds are delayed **1 s**.
 
-- CLI agent activity is title-derived.
-- Supported title models: **Claude, Codex, Gemini, GitHub Copilot**
-- Markers:
-  - Claude working: `⠐`, `⠂`, `·`; idle: `✳`, `*`
-  - Codex working: `⠸`, `⠴`, `⠼`, `⠧`, `⠦`, `⠏`, `⠋`, `⠇`, `⠙`, `⠹`
-  - Gemini: `✦` working, `◇` idle
-  - Copilot: `🤖` working, `🔔` idle/attention
+Sound delivery decision:
 
-### Stale spinner / attention / audio
+- audio is embedded as **data URLs**
+- playback uses unlocked **AudioContext**
+- avoids VS Code webview issues with fetch decode / delayed `HTMLAudio`.
 
-- Claude and Codex require observed title transitions before spinner markers count as working.
-- Their spinner state expires if glyphs stall for **3000 ms**.
-- Gemini and Copilot do not use stale-spinner gating.
-- Attention can surface only after a prior working phase of at least **3000 ms**.
-- Completion sound plays **1000 ms** after attention appears.
-- Presentation updates use targeted patch messages rather than full sidebar/workspace rehydrate.
-- Audio is embedded as data URLs and decoded with **`AudioContext`**, unlocked on first user interaction; avoids unreliable fetch/`HTMLAudio` behavior in VS Code webviews.
+Validation constraints in `title_activity_and_sidebar_runtime.md`:
 
-## Backend / daemon behavior
+- `setVisibleCount` only: **1, 2, 3, 4, 6, 9**
+- `setViewMode`: **horizontal, vertical, grid**
+- git actions: **commit, push, pr**
 
-From `current_state.md`:
+## Persistence across reloads
 
-- Backend uses a per-workspace `DaemonTerminalRuntime`, not a global daemon.
-- Managed sidebar sessions stay alive through lease renewal while VS Code is active.
-- `VSmux.backgroundSessionTimeoutMinutes` controls background timeout:
-  - default **5 minutes**
-  - `<= 0` disables timeout
-- If daemon state is unavailable, disconnected snapshots come from persisted session state while preserving title, `agentName`, and `agentStatus`.
-- Backend session polling refreshes every **500 ms**.
+`terminal_persistence_across_reloads.md` and `terminal_persistence_across_vs_code_reloads.md` describe the reload-resilience architecture:
 
-## Workspace browser and T3 integration
+1. `extension/session-grid-store.ts` persists grouped layout
+2. detached per-workspace daemon keeps PTYs alive
+3. restored webview reattaches and rebuilds Restty panes
 
-### Browser tab filtering / panel identity
+Persistence key:
 
-From `workspace_browser_t3_integration.md`:
+- **`VSmux.sessionGridSnapshot`**
 
-- Browser sidebar group ID: `browser-tabs`
-- Exclude VSmux-owned tabs from browser group when:
-  - `viewType === T3_PANEL_TYPE`
-  - `viewType === WORKSPACE_PANEL_TYPE`
-  - `viewType.startsWith("vsmux.")`
-  - URL matches localhost workspace/t3 embed
-- URL exclusion regex:
-  `^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/(?:workspace|t3-embed)(?:\/|$)` with `i`
-- Workspace panel identity:
-  - type: `vsmux.workspace`
-  - title: `VSmux`
-  - icon: `media/icon.svg`
-- Accepted panel messages:
-  - `ready`
-  - `workspaceDebugLog`
-  - `reloadWorkspacePanel`
-  - `focusSession`
-  - `closeSession`
-  - `fullReloadSession`
-  - `syncPaneOrder`
-  - `syncSessionOrder`
+Daemon/runtime details:
 
-### T3 activity monitor
+- daemon is per workspace, not tied to extension-host lifecycle
+- token-authenticated `/control` and `/session` websocket upgrades
+- reuse requires matching `TERMINAL_HOST_PROTOCOL_VERSION` and daemon reachability
+- lock file: `daemon-launch.lock`
+- metadata file: `daemon-info.json`
+- debug log: `terminal-daemon-debug.log`
 
-From `workspace_browser_t3_integration.md`:
+Key thresholds:
 
-- Activity is websocket-backed via `extension/t3-activity-monitor.ts`.
-- RPC methods:
-  - `orchestration.getSnapshot`
-  - `subscribeOrchestrationDomainEvents`
-- Timing:
-  - request timeout **15000 ms**
-  - reconnect delay **1500 ms**
-  - refresh debounce **100 ms**
+- control connect timeout: **3000 ms**
+- daemon ready timeout: **10000 ms**
+- stale launch lock: **30000 ms**
+- heartbeat interval: **5000 ms**
+- heartbeat timeout: **20000 ms**
+- startup grace: **30000 ms**
+- attach ready timeout: **15000 ms**
+- replay buffer cap: **8 MiB**
+- replay chunk size: **128 KiB**
 
-### Managed T3 runtime / upgrade model
+Behavioral decisions:
 
-From `t3_managed_runtime_upgrade_and_recovery.md`:
+- webview uses `retainContextWhenHidden: false`
+- restored sessions reattach via terminal-ready handshake plus replay-before-live handoff
+- pending attach queue buffers output during replay and flushes after replay
+- persisted session-state files preserve title/agent metadata when daemon state is unavailable
+- PTY name is `xterm-256color`
+- `LANG` is normalized to `en_US.UTF-8` if absent or invalid
 
-- Managed runtime: **`127.0.0.1:3774`**
-- Legacy runtime: **`127.0.0.1:3773`**
-- Required websocket endpoint: **`ws://127.0.0.1:3774/ws`**
-- RPC request IDs must be numeric strings matching `^\d+$`.
-- Protocol expectations include `/ws`, `Ping` → `Pong`, and subscription stream handling via `Chunk`, `Ack`, `Exit`.
-- Runtime-related files:
-  - `extension/t3-runtime-manager.ts`
-  - `scripts/build-t3-embed.mjs`
-  - `forks/t3code-embed/upstream/apps/server/src/bin.ts`
-- Runtime supervision:
-  - startup/request timeout **30000 ms**
-  - lease heartbeat **30000 ms**
-  - grace period **180000 ms**
-  - supervisor files: `supervisor.json`, `supervisor-launch.lock`
-- Upgrade rule: validate T3 changes in an isolated worktree, keep embedded HTML + local asset server hosting, and do not point new embed at legacy `3773` runtime.
-- Mixed-install recovery requires syncing `forks/t3code-embed/upstream`, `overlay`, and `dist` from tested worktree back to main.
+## T3 runtime, browser integration, and packaging
 
-## VSIX packaging and embed validation
+### Browser + T3 workspace integration
 
-From `vsix_packaging_and_t3_embed_validation.md`:
+`workspace_browser_t3_integration.md` ties together:
 
-- Packaging baseline:
-  - extension version **2.5.0**
-  - VS Code engine **^1.100.0**
-  - package manager **pnpm@10.14.0**
-  - entrypoint `out/extension/extension.js`
-- Packaged outputs include:
-  - `forks/t3code-embed/dist/**`
-  - `out/workspace/**`
-  - `out/**`
-  - `media/**`
-- Workflow handled by `scripts/vsix.mjs` with modes `package` and `install`
-- Usage: `node ./scripts/vsix.mjs <package|install> [--profile-build]`
-- Key commands/settings:
-  - build: `pnpm run compile`
-  - package: `vp exec vsce package --no-dependencies --skip-license --allow-unused-files-pattern --out <vsixPath>`
-  - install: `<vscodeCli> --install-extension <vsixPath> --force`
-  - env flags: `VSMUX_PROFILE_BUILD=1`, `VSMUX_SKIP_PREPUBLISH=1`
-- CLI resolution prefers `VSMUX_CODE_CLI` or auto-detects `code`, `code-insiders`, `cursor`, `cursor-insiders`, `codium`, `windsurf`.
+- `extension/live-browser-tabs.ts`
+- `extension/workspace-panel.ts`
+- `extension/native-terminal-workspace/controller.ts`
+- `extension/t3-activity-monitor.ts`
+- `sidebar/sidebar-app.tsx`
 
-### Critical validation rule
+Decisions:
 
-Before debugging T3 UI behavior:
+- Browsers sidebar excludes internal VSmux/T3-owned tabs.
+- Restored panel uses:
+  - type **`vsmux.workspace`**
+  - title **`VSmux`**
+  - icon **`media/icon.svg`**
+- Sidebar group rendering must use authoritative `sessionIdsByGroup` to avoid transient empty placeholders.
+- T3 activity is sourced from live websocket monitoring, not assumed idle.
 
-1. Reinstall the intended VSIX
-2. Verify installed asset hash under `~/.vscode/extensions/maddada.vsmux-*/forks/t3code-embed/dist/assets/index-*.js`
-3. Only then compare behavior
+T3 activity endpoint:
 
-Observed mismatch in `vsix_packaging_and_t3_embed_validation.md`:
+- websocket: **`ws://127.0.0.1:3774/ws`**
+- snapshot RPC: `orchestration.getSnapshot`
+- event subscription: `subscribeOrchestrationDomainEvents`
+- request timeout: **15000 ms**
+- reconnect delay: **1500 ms**
+- refresh debounce: **100 ms**
 
-- refreshed worktree hash: `index-DCV3LG5L.js`
-- stale installed hash: `index-BbtZ0IEL.js`
+### Managed T3 runtime upgrade/recovery
 
-## Stable cross-entry architectural decisions
+`t3_managed_runtime_upgrade_and_recovery.md` documents the embedded runtime contract:
 
-Consistent across the topic:
+- managed runtime: **127.0.0.1:3774**
+- legacy runtime reference: **127.0.0.1:3773**
+- entrypoint: `forks/t3code-embed/upstream/apps/server/src/bin.ts`
+- websocket route must be **`/ws`**
+- request IDs must be **numeric strings**
+- ping/pong required
+- streaming subscriptions use **Chunk / Ack / Exit**
 
-- **Restty** is the renderer.
-- Runtime identity/reuse is per `sessionId`.
-- Hidden panes stay mounted and painted.
-- Visible pane order is driven by `activeGroup.snapshot.visibleSessionIds`.
-- `TerminalPane` signals intent; `WorkspaceApp` owns focus.
-- Sidebar reorder requires true drag motion, not clicks.
-- Agent activity is title-derived, with stale-spinner logic for Claude/Codex.
-- Completion sounds use embedded `AudioContext` delivery.
-- Managed T3 integration standardizes on `ws://127.0.0.1:3774/ws`.
-- Installed VSIX asset hash, not localhost output, is the source of truth for embed-debug validation.
+Build/runtime details:
+
+- `scripts/build-t3-embed.mjs` overlays vendored upstream, rebuilds web app, recreates `forks/t3code-embed/dist`, and prunes sourcemaps plus `mockServiceWorker.js`
+- `T3CODE_WEB_SOURCEMAP=false`
+- supervisor files: `supervisor.json`, `supervisor-launch.lock`
+- startup/request timeout: **30000 ms**
+- lease heartbeat: **30000 ms**
+- grace period: **180000 ms**
+
+Mixed-install recovery pattern:
+
+- sync `forks/t3code-embed/upstream`, `overlay`, and `dist` from a known-good worktree,
+- reinstall,
+- restart managed 3774 runtime.
+
+### VSIX packaging and embed validation
+
+`vsix_packaging_and_t3_embed_validation.md` defines the packaging path:
+
+- script: `scripts/vsix.mjs`
+- modes: `package`, `install`
+- optional flag: `--profile-build`
+- build: `pnpm run compile`
+- package: `vp exec vsce package --no-dependencies --skip-license --allow-unused-files-pattern --out <vsixPath>`
+- install: `<vscodeCli> --install-extension <vsixPath> --force`
+
+Package metadata:
+
+- extension version: **2.5.0**
+- VS Code engine: **^1.100.0**
+- package manager: **pnpm@10.14.0**
+
+Packaged assets include:
+
+- `forks/t3code-embed/dist/**`
+- `out/workspace/**`
+- `out/**`
+- `media/**`
+
+Critical validation rule:
+
+- verify installed T3 asset hash inside the actual VSIX before debugging webview behavior.
+- Example mismatch in `vsix_packaging_and_t3_embed_validation.md`:
+  - expected/refreshed: `index-DCV3LG5L.js`
+  - stale installed: `index-BbtZ0IEL.js`
+
+## Cross-entry patterns and drill-down map
+
+The topic repeatedly reinforces these relationships:
+
+- `current_state.md` is the architectural anchor.
+- `simple_grouped_session_workspace_state.md` defines base grouped session semantics.
+- `workspace_session_sleep_wake_support.md` layers awake/sleep behavior onto that base.
+- `workspace_focus_and_sidebar_drag_semantics.md` and `workspace_focus_debugging.md` govern focus ownership and drag safety.
+- `sidebar_session_fork_support.md`, `sidebar_fork_session_behavior.md`, and `session_rename_title_auto_summarization.md` define sidebar action flows.
+- `title_activity_and_sidebar_runtime.md` and `terminal_titles_activity_and_completion_sounds.md` define title/activity/audio presentation behavior.
+- `terminal_persistence_across_reloads.md` and `terminal_persistence_across_vs_code_reloads.md` define reload survival and reattach.
+- `workspace_browser_t3_integration.md`, `t3_managed_runtime_upgrade_and_recovery.md`, and `vsix_packaging_and_t3_embed_validation.md` cover T3 runtime operations, embed lifecycle, and packaged-asset correctness.

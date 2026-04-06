@@ -37,6 +37,7 @@ type SidebarStoryWorkspaceOptions = {
   scratchPadContent: string;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
+  showLastInteractionTimeOnSessionCards: boolean;
   theme: SidebarHydrateMessage["hud"]["theme"];
 };
 
@@ -63,6 +64,7 @@ export function createSidebarStoryWorkspace(message: SidebarHydrateMessage): Sid
       scratchPadContent: message.scratchPadContent,
       showCloseButtonOnSessionCards: message.hud.showCloseButtonOnSessionCards,
       showHotkeysOnSessionCards: message.hud.showHotkeysOnSessionCards,
+      showLastInteractionTimeOnSessionCards: message.hud.showLastInteractionTimeOnSessionCards,
       theme: message.hud.theme,
     },
     sessionDecorationsById: Object.fromEntries(
@@ -129,6 +131,7 @@ export function createSidebarStoryMessage(
       workspace.options.agentManagerZoomPercent,
       workspace.options.showCloseButtonOnSessionCards,
       workspace.options.showHotkeysOnSessionCards,
+      workspace.options.showLastInteractionTimeOnSessionCards,
       workspace.options.debuggingMode,
       workspace.options.completionBellEnabled,
       workspace.options.completionSound,

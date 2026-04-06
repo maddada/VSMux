@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vite-plus/test";
 import {
   buildCopyResumeCommandText,
   buildDetachedResumeAction,
+  buildForkAgentCommand,
   buildResumeAgentCommand,
 } from "./native-terminal-workspace-session-agent-launch";
 
@@ -59,6 +60,63 @@ describe("buildResumeAgentCommand", () => {
         "Bug Fix",
       ),
     ).toBe("codex resume 'Bug Fix'");
+  });
+});
+
+describe("buildForkAgentCommand", () => {
+  test("should build a codex fork command from the visible title", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "codex",
+          command: "codex",
+        },
+        "codex",
+        "Session 12",
+        "Bug Fix",
+      ),
+    ).toBe("codex fork 'Bug Fix'");
+  });
+
+  test("should build a claude fork command for titled sessions", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "claude",
+          command: "claude",
+        },
+        "claude",
+        "Design pass",
+      ),
+    ).toBe("claude --fork-session -r 'Design pass'");
+  });
+
+  test("should preserve custom command prefixes for fork", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "codex",
+          command: "x --profile fast",
+        },
+        "codex",
+        "Pinned session",
+        "Terminal bugfix",
+      ),
+    ).toBe("x --profile fast fork 'Terminal bugfix'");
+  });
+
+  test("should return undefined when no visible title is available", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "codex",
+          command: "codex",
+        },
+        "codex",
+        "Session 34",
+        "/Users/madda/dev/_active/agent-tiler",
+      ),
+    ).toBeUndefined();
   });
 });
 

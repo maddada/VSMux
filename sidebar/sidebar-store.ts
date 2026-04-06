@@ -73,6 +73,7 @@ export function createInitialSidebarStoreDataState(): SidebarStoreDataState {
       sectionVisibility: createDefaultSidebarSectionVisibility(),
       showCloseButtonOnSessionCards: false,
       showHotkeysOnSessionCards: false,
+      showLastInteractionTimeOnSessionCards: true,
       theme: getInitialSidebarTheme(),
       viewMode: "grid",
       visibleCount: 1,
@@ -278,6 +279,8 @@ function normalizeSidebarGroups(
   const nextSessionsById: Record<string, SidebarSessionItem> = {};
 
   for (const group of groups) {
+    const groupSessions = group.sessions ?? [];
+
     if (group.kind === "browser") {
       nextBrowserGroupIds.push(group.groupId);
     } else {
@@ -291,14 +294,14 @@ function normalizeSidebarGroups(
         ? previousGroup
         : nextGroup;
 
-    const nextSessionIds = group.sessions.map((session) => session.sessionId);
+    const nextSessionIds = groupSessions.map((session) => session.sessionId);
     const previousSessionIds = previousState.sessionIdsByGroup[group.groupId];
     nextSessionIdsByGroup[group.groupId] =
       previousSessionIds && haveSameStringArray(previousSessionIds, nextSessionIds)
         ? previousSessionIds
         : nextSessionIds;
 
-    for (const session of group.sessions) {
+    for (const session of groupSessions) {
       const previousSession = previousState.sessionsById[session.sessionId];
       nextSessionsById[session.sessionId] =
         previousSession && haveSameSidebarSessionItem(previousSession, session)
@@ -338,7 +341,7 @@ function reconcilePendingFocusedSession(
   }
 
   const containingGroup = groups.find((group) =>
-    group.sessions.some((session) => session.sessionId === pendingFocusedSessionId),
+    (group.sessions ?? []).some((session) => session.sessionId === pendingFocusedSessionId),
   );
   if (!containingGroup) {
     return {
@@ -347,7 +350,7 @@ function reconcilePendingFocusedSession(
     };
   }
 
-  const isConfirmed = containingGroup.sessions.some(
+  const isConfirmed = (containingGroup.sessions ?? []).some(
     (session) => session.sessionId === pendingFocusedSessionId && session.isFocused,
   );
   if (isConfirmed) {
@@ -363,7 +366,7 @@ function reconcilePendingFocusedSession(
       return {
         ...group,
         isActive: isActiveGroup,
-        sessions: group.sessions.map((session) => ({
+        sessions: (group.sessions ?? []).map((session) => ({
           ...session,
           isFocused: isActiveGroup && session.sessionId === pendingFocusedSessionId,
           isVisible:
@@ -414,9 +417,11 @@ function haveSameSidebarSessionItem(left: SidebarSessionItem, right: SidebarSess
     left.column === right.column &&
     left.detail === right.detail &&
     left.isFocused === right.isFocused &&
+    left.isSleeping === right.isSleeping &&
     left.isRunning === right.isRunning &&
     left.isVisible === right.isVisible &&
     left.kind === right.kind &&
+    left.lastInteractionAt === right.lastInteractionAt &&
     left.primaryTitle === right.primaryTitle &&
     left.row === right.row &&
     left.sessionId === right.sessionId &&

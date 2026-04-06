@@ -15,6 +15,8 @@ import {
   moveSessionToGroupInSimpleWorkspace,
   normalizeSimpleGroupedSessionWorkspaceSnapshot,
   removeSessionInSimpleWorkspace,
+  setGroupSleepingInSimpleWorkspace,
+  setSessionSleepingInSimpleWorkspace,
   setT3SessionMetadataInSimpleWorkspace,
   setVisibleCountInSimpleWorkspace,
   syncSessionOrderInSimpleWorkspace,
@@ -578,6 +580,50 @@ describe("createGroupFromSessionInSimpleWorkspace", () => {
   });
 });
 
+describe("moveSessionToGroupInSimpleWorkspace", () => {
+  test("should reorder within the same group while keeping the moved session focused and visible", () => {
+    const result = moveSessionToGroupInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(2),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [
+                createSessionRecord(1, 0),
+                createSessionRecord(2, 1),
+                createSessionRecord(3, 2),
+              ],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(1), sessionIdForDisplay(2)],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 3,
+        nextSessionNumber: 4,
+      }),
+      sessionIdForDisplay(2),
+      DEFAULT_MAIN_GROUP_ID,
+      1,
+    );
+
+    expect(result.changed).toBe(true);
+    expect(
+      result.snapshot.groups[0]?.snapshot.sessions.map((session) => session.sessionId),
+    ).toEqual([sessionIdForDisplay(0), sessionIdForDisplay(2), sessionIdForDisplay(1)]);
+    expect(result.snapshot.groups[0]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(2));
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([
+      sessionIdForDisplay(1),
+      sessionIdForDisplay(2),
+    ]);
+  });
+});
+
 describe("createGroupInSimpleWorkspace", () => {
   test("should append an empty active group", () => {
     const result = createGroupInSimpleWorkspace(
@@ -613,6 +659,167 @@ describe("createGroupInSimpleWorkspace", () => {
     });
     expect(result.snapshot.groups[1]?.snapshot.sessions).toEqual([]);
     expect(result.snapshot.nextGroupNumber).toBe(3);
+  });
+});
+
+describe("setSessionSleepingInSimpleWorkspace", () => {
+  test("should switch focus to another awake session in the same group", () => {
+    const result = setSessionSleepingInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(1),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(0), sessionIdForDisplay(1)],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 2,
+        nextSessionNumber: 3,
+      }),
+      sessionIdForDisplay(1),
+      true,
+    );
+
+    expect(result.snapshot.groups[0]?.snapshot.sessions[1]?.isSleeping).toBe(true);
+    expect(result.snapshot.groups[0]?.snapshot.focusedSessionId).toBe(sessionIdForDisplay(0));
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([sessionIdForDisplay(0)]);
+  });
+
+  test("should wake a sleeping session when it is focused again", () => {
+    const sleepingSession = {
+      ...createSessionRecord(2, 1),
+      isSleeping: true,
+    };
+    const sleepingSessionId = sessionIdForDisplay(1);
+    const result = focusSessionInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: DEFAULT_MAIN_GROUP_ID,
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0), sleepingSession],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(0)],
+            },
+            title: "Main",
+          },
+        ],
+        nextGroupNumber: 2,
+        nextSessionDisplayId: 2,
+        nextSessionNumber: 3,
+      }),
+      sleepingSessionId,
+    );
+
+    expect(result.snapshot.groups[0]?.snapshot.sessions[1]?.isSleeping).toBe(false);
+    expect(result.snapshot.groups[0]?.snapshot.focusedSessionId).toBe(sleepingSessionId);
+    expect(result.snapshot.groups[0]?.snapshot.visibleSessionIds).toEqual([
+      sleepingSessionId,
+      sessionIdForDisplay(0),
+    ]);
+  });
+
+  test("should fall back to another group when the active group loses its last awake session", () => {
+    const result = setSessionSleepingInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: "group-2",
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(0)],
+            },
+            title: "Main",
+          },
+          {
+            groupId: "group-2",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(1),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(2, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(1)],
+            },
+            title: "Focused",
+          },
+        ],
+        nextGroupNumber: 3,
+        nextSessionDisplayId: 2,
+        nextSessionNumber: 3,
+      }),
+      sessionIdForDisplay(1),
+      true,
+    );
+
+    expect(result.snapshot.activeGroupId).toBe(DEFAULT_MAIN_GROUP_ID);
+    expect(result.snapshot.groups[1]?.snapshot.focusedSessionId).toBeUndefined();
+    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([]);
+  });
+});
+
+describe("setGroupSleepingInSimpleWorkspace", () => {
+  test("should sleep every session in the group and switch away when needed", () => {
+    const result = setGroupSleepingInSimpleWorkspace(
+      createWorkspaceSnapshot({
+        activeGroupId: "group-2",
+        groups: [
+          {
+            groupId: DEFAULT_MAIN_GROUP_ID,
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(0),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(1, 0)],
+              viewMode: "grid",
+              visibleCount: 1,
+              visibleSessionIds: [sessionIdForDisplay(0)],
+            },
+            title: "Main",
+          },
+          {
+            groupId: "group-2",
+            snapshot: {
+              focusedSessionId: sessionIdForDisplay(1),
+              fullscreenRestoreVisibleCount: undefined,
+              sessions: [createSessionRecord(2, 0), createSessionRecord(3, 1)],
+              viewMode: "grid",
+              visibleCount: 2,
+              visibleSessionIds: [sessionIdForDisplay(1), sessionIdForDisplay(2)],
+            },
+            title: "Focused",
+          },
+        ],
+        nextGroupNumber: 3,
+        nextSessionDisplayId: 3,
+        nextSessionNumber: 4,
+      }),
+      "group-2",
+      true,
+    );
+
+    expect(result.snapshot.activeGroupId).toBe(DEFAULT_MAIN_GROUP_ID);
+    expect(
+      result.snapshot.groups[1]?.snapshot.sessions.every((session) => session.isSleeping),
+    ).toBe(true);
+    expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([]);
   });
 });
 

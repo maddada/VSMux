@@ -103,6 +103,7 @@ export function SessionHistoryCard({
           showDebugSessionNumbers={showDebugSessionNumbers}
           showCloseButton={false}
           showHotkeys={showHotkeys}
+          showLastInteractionTime={false}
         />
       </article>
     </div>

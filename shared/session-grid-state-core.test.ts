@@ -185,6 +185,19 @@ describe("session shortcut labels", () => {
 
     expect(items[0]?.sessionNumber).toBe("99");
   });
+
+  test("should expose sleeping state through sidebar session items", () => {
+    const items = createSidebarSessionItems({
+      focusedSessionId: undefined,
+      sessions: [{ ...createSessionRecord(1, 0), isSleeping: true }],
+      viewMode: "grid",
+      visibleCount: 1,
+      visibleSessionIds: [],
+    });
+
+    expect(items[0]?.isSleeping).toBe(true);
+    expect(items[0]?.isRunning).toBe(false);
+  });
 });
 
 describe("session surface titles", () => {
@@ -262,6 +275,7 @@ describe("sidebar HUD state", () => {
       95,
       false,
       false,
+      true,
       false,
       true,
       "glass",
@@ -283,6 +297,7 @@ describe("sidebar HUD state", () => {
     });
     expect(hud.showCloseButtonOnSessionCards).toBe(false);
     expect(hud.showHotkeysOnSessionCards).toBe(false);
+    expect(hud.showLastInteractionTimeOnSessionCards).toBe(true);
     expect(hud.isFocusModeActive).toBe(false);
   });
 
@@ -300,6 +315,7 @@ describe("sidebar HUD state", () => {
       100,
       false,
       false,
+      true,
       false,
       false,
       "ping",

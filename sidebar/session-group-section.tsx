@@ -1,4 +1,4 @@
-import { IconPencil, IconPlus, IconX } from "@tabler/icons-react";
+import { IconMoon, IconPencil, IconPlayerPlay, IconPlus, IconX } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -12,18 +12,17 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import type {
-  VisibleSessionCount,
-} from "../shared/session-grid-contract";
+import type { VisibleSessionCount } from "../shared/session-grid-contract";
 import { ConfirmationModal } from "./confirmation-modal";
 import { createGroupDropData, type SidebarSessionDropTarget } from "./sidebar-dnd";
 import { useSidebarStore } from "./sidebar-store";
 import { SortableSessionCard } from "./sortable-session-card";
 import type { WebviewApi } from "./webview-api";
 
-const CONTEXT_MENU_HEIGHT_PX = 90;
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 164;
+const CONTEXT_MENU_ITEM_HEIGHT_PX = 34;
+const CONTEXT_MENU_VERTICAL_PADDING_PX = 12;
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
 const GROUP_CONTROL_MENU_MARGIN_PX = 12;
 
@@ -45,7 +44,12 @@ export type SessionGroupSectionProps = {
   vscode: WebviewApi;
 };
 
-function clampContextMenuPosition(clientX: number, clientY: number): ContextMenuPosition {
+function clampContextMenuPosition(
+  clientX: number,
+  clientY: number,
+  itemCount: number,
+): ContextMenuPosition {
+  const menuHeight = CONTEXT_MENU_VERTICAL_PADDING_PX + itemCount * CONTEXT_MENU_ITEM_HEIGHT_PX;
   return {
     x: Math.max(
       CONTEXT_MENU_MARGIN_PX,
@@ -53,7 +57,7 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
     ),
     y: Math.max(
       CONTEXT_MENU_MARGIN_PX,
-      Math.min(clientY, window.innerHeight - CONTEXT_MENU_HEIGHT_PX - CONTEXT_MENU_MARGIN_PX),
+      Math.min(clientY, window.innerHeight - menuHeight - CONTEXT_MENU_MARGIN_PX),
     ),
   };
 }
@@ -134,8 +138,16 @@ export function SessionGroupSection({
     return null;
   }
 
+  const groupSessions = group.sessions ?? [];
+  const allSessionsSleeping =
+    groupSessions.length > 0 && groupSessions.every((session) => session.isSleeping);
+
   const isGroupDropTarget = sortable.isDropTarget || isSessionDropTargetGroup;
-  const groupDropPosition = getGroupDropPosition(group.groupId, orderedSessionIds, sessionDragIndicator);
+  const groupDropPosition = getGroupDropPosition(
+    group.groupId,
+    orderedSessionIds,
+    sessionDragIndicator,
+  );
 
   useEffect(() => {
     postGroupDebugLog("group.sectionMounted", {
@@ -369,6 +381,19 @@ export function SessionGroupSection({
     setIsConfirmOpen(true);
   };
 
+  const requestSetGroupSleeping = (sleeping: boolean) => {
+    if (isBrowserGroup) {
+      return;
+    }
+
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      groupId: group.groupId,
+      sleeping,
+      type: "setGroupSleeping",
+    });
+  };
+
   const handleTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -405,7 +430,7 @@ export function SessionGroupSection({
 
           event.preventDefault();
           event.stopPropagation();
-          setContextMenuPosition(clampContextMenuPosition(event.clientX, event.clientY));
+          setContextMenuPosition(clampContextMenuPosition(event.clientX, event.clientY, 3));
         }}
         ref={sortable.ref}
       >
@@ -556,6 +581,23 @@ export function SessionGroupSection({
                 width: `${CONTEXT_MENU_WIDTH_PX}px`,
               }}
             >
+              <button
+                className="session-context-menu-item"
+                onClick={() => requestSetGroupSleeping(!allSessionsSleeping)}
+                role="menuitem"
+                type="button"
+              >
+                {allSessionsSleeping ? (
+                  <IconPlayerPlay
+                    aria-hidden="true"
+                    className="session-context-menu-icon"
+                    size={14}
+                  />
+                ) : (
+                  <IconMoon aria-hidden="true" className="session-context-menu-icon" size={14} />
+                )}
+                {allSessionsSleeping ? "Wake" : "Sleep"}
+              </button>
               <button
                 className="session-context-menu-item"
                 onClick={() => {

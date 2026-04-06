@@ -1,28 +1,32 @@
-import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel } from '../shared/completion-sound';
-import { createDefaultSidebarAgentButtons } from '../shared/sidebar-agents';
-import { createDefaultSidebarCommandButtons } from '../shared/sidebar-commands';
-import { createDefaultSidebarGitState } from '../shared/sidebar-git';
+import { DEFAULT_COMPLETION_SOUND, getCompletionSoundLabel } from "../shared/completion-sound";
+import { createDefaultSidebarAgentButtons } from "../shared/sidebar-agents";
+import { createDefaultSidebarCommandButtons } from "../shared/sidebar-commands";
+import { createDefaultSidebarGitState } from "../shared/sidebar-git";
 import type {
   SidebarHydrateMessage,
   SidebarHudState,
   SidebarTheme,
   TerminalViewMode,
   VisibleSessionCount,
-} from '../shared/session-grid-contract';
+} from "../shared/session-grid-contract";
 import {
   clampVisibleSessionCount,
   createDefaultSidebarSectionCollapseState,
   createDefaultSidebarSectionVisibility,
-} from '../shared/session-grid-contract';
-import { GROUPS_BY_FIXTURE } from './sidebar-story-fixture-data';
-import { cloneGroups, getFocusedSessionTitle, getVisibleSlotLabels } from './sidebar-story-fixture-helpers';
+} from "../shared/session-grid-contract";
+import { GROUPS_BY_FIXTURE } from "./sidebar-story-fixture-data";
+import {
+  cloneGroups,
+  getFocusedSessionTitle,
+  getVisibleSlotLabels,
+} from "./sidebar-story-fixture-helpers";
 
 export type SidebarStoryFixture =
-  | 'default'
-  | 'selector-states'
-  | 'overflow-stress'
-  | 'empty-groups'
-  | 'three-groups-stress';
+  | "default"
+  | "selector-states"
+  | "overflow-stress"
+  | "empty-groups"
+  | "three-groups-stress";
 
 export type SidebarStoryArgs = {
   debuggingMode: boolean;
@@ -31,6 +35,7 @@ export type SidebarStoryArgs = {
   isFocusModeActive: boolean;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
+  showLastInteractionTimeOnSessionCards: boolean;
   theme: SidebarTheme;
   viewMode: TerminalViewMode;
   visibleCount: VisibleSessionCount;
@@ -46,7 +51,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
       ...group,
       isFocusModeActive: group.isActive ? args.isFocusModeActive : false,
       layoutVisibleCount: group.isActive ? args.highlightedVisibleCount : visibleCount,
-      viewMode: group.isActive ? args.viewMode : 'grid',
+      viewMode: group.isActive ? args.viewMode : "grid",
       visibleCount,
     };
   });
@@ -67,6 +72,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     sectionVisibility: createDefaultSidebarSectionVisibility(),
     showCloseButtonOnSessionCards: args.showCloseButtonOnSessionCards,
     showHotkeysOnSessionCards: args.showHotkeysOnSessionCards,
+    showLastInteractionTimeOnSessionCards: args.showLastInteractionTimeOnSessionCards,
     theme: args.theme,
     viewMode: args.viewMode,
     visibleCount: args.visibleCount,
@@ -78,7 +84,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     hud,
     previousSessions: [],
     revision: 1,
-    scratchPadContent: '',
-    type: 'hydrate',
+    scratchPadContent: "",
+    type: "hydrate",
   };
 }

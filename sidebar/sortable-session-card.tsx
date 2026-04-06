@@ -1,4 +1,13 @@
-import { IconCopy, IconHash, IconPencil, IconRefresh, IconX } from "@tabler/icons-react";
+import {
+  IconCopy,
+  IconGitFork,
+  IconHash,
+  IconMoon,
+  IconPencil,
+  IconPlayerPlay,
+  IconRefresh,
+  IconX,
+} from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -91,13 +100,15 @@ export function SortableSessionCard({
   vscode,
 }: SortableSessionCardProps) {
   const session = useSidebarStore((state) => state.sessionsById[sessionId]);
-  const { showCloseButton, showDebugSessionNumbers, showHotkeys } = useSidebarStore(
-    useShallow((state) => ({
-      showCloseButton: state.hud.showCloseButtonOnSessionCards,
-      showDebugSessionNumbers: state.hud.debuggingMode,
-      showHotkeys: state.hud.showHotkeysOnSessionCards,
-    })),
-  );
+  const { showCloseButton, showDebugSessionNumbers, showHotkeys, showLastInteractionTime } =
+    useSidebarStore(
+      useShallow((state) => ({
+        showCloseButton: state.hud.showCloseButtonOnSessionCards,
+        showDebugSessionNumbers: state.hud.debuggingMode,
+        showHotkeys: state.hud.showHotkeysOnSessionCards,
+        showLastInteractionTime: state.hud.showLastInteractionTimeOnSessionCards,
+      })),
+    );
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
   const menuRef = useRef<HTMLDivElement>(null);
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
@@ -105,10 +116,12 @@ export function SortableSessionCard({
   const isBrowserSession = session?.sessionKind === "browser" || session?.kind === "browser";
   const isT3Session = session?.sessionKind === "t3";
   const canSetT3ThreadId = isT3Session;
+  const canForkSession = session ? !isBrowserSession && supportsFork(session) : false;
   const canCopyResumeCommand = session
     ? !isBrowserSession && supportsResumeCommandCopy(session)
     : false;
   const canFullReloadSession = session ? !isBrowserSession && supportsFullReload(session) : false;
+  const canSleepSession = session ? !isBrowserSession : false;
   const postSessionDragDebugLog = useEffectEvent(
     (event: string, details: Record<string, unknown>) => {
       if (!showDebugSessionNumbers) {
@@ -226,8 +239,10 @@ export function SortableSessionCard({
         clientY,
         Number(!isBrowserSession) +
           Number(canSetT3ThreadId) +
+          Number(canForkSession) +
           Number(canCopyResumeCommand) +
           Number(canFullReloadSession) +
+          Number(canSleepSession) +
           1,
       ),
     );
@@ -261,6 +276,14 @@ export function SortableSessionCard({
     });
   };
 
+  const requestForkSession = () => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      sessionId: session.sessionId,
+      type: "forkSession",
+    });
+  };
+
   const requestFullReloadSession = () => {
     setContextMenuPosition(undefined);
     vscode.postMessage({
@@ -277,9 +300,18 @@ export function SortableSessionCard({
     });
   };
 
+  const requestSetSleeping = (sleeping: boolean) => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      sessionId: session.sessionId,
+      sleeping,
+      type: "setSessionSleeping",
+    });
+  };
+
   const requestFocusSession = () => {
     const shouldAcknowledgeAttention = session.activity === "attention";
-    if (session.isFocused && !shouldAcknowledgeAttention) {
+    if (session.isFocused && !session.isSleeping && !shouldAcknowledgeAttention) {
       return;
     }
 
@@ -317,6 +349,7 @@ export function SortableSessionCard({
         data-drop-target={String(Boolean(sortable.isDropTarget))}
         data-focused={String(session.isFocused)}
         data-running={String(session.isRunning)}
+        data-sleeping={String(Boolean(session.isSleeping))}
         data-visible={String(session.isVisible)}
         ref={sortable.ref}
       >
@@ -333,6 +366,7 @@ export function SortableSessionCard({
           data-drop-target={String(Boolean(sortable.isDropTarget))}
           data-focused={String(session.isFocused)}
           data-running={String(session.isRunning)}
+          data-sleeping={String(Boolean(session.isSleeping))}
           data-sidebar-session-id={session.sessionId}
           data-visible={String(session.isVisible)}
           onPointerCancel={(event) => {
@@ -404,6 +438,7 @@ export function SortableSessionCard({
             showDebugSessionNumbers={showDebugSessionNumbers}
             showCloseButton={showCloseButton}
             showHotkeys={showHotkeys}
+            showLastInteractionTime={showLastInteractionTime}
           />
         </article>
         <div aria-hidden className="session-status-dot" />
@@ -474,6 +509,22 @@ export function SortableSessionCard({
                   Copy resume
                 </button>
               ) : null}
+              {canForkSession ? (
+                <button
+                  className="session-context-menu-item"
+                  onClick={requestForkSession}
+                  role="menuitem"
+                  type="button"
+                >
+                  <IconGitFork
+                    aria-hidden="true"
+                    className="session-context-menu-icon"
+                    size={16}
+                    stroke={1.8}
+                  />
+                  Fork
+                </button>
+              ) : null}
               {canFullReloadSession ? (
                 <button
                   className="session-context-menu-item"
@@ -488,6 +539,31 @@ export function SortableSessionCard({
                     stroke={1.8}
                   />
                   Full reload
+                </button>
+              ) : null}
+              {canSleepSession ? (
+                <button
+                  className="session-context-menu-item"
+                  onClick={() => requestSetSleeping(!session.isSleeping)}
+                  role="menuitem"
+                  type="button"
+                >
+                  {session.isSleeping ? (
+                    <IconPlayerPlay
+                      aria-hidden="true"
+                      className="session-context-menu-icon"
+                      size={16}
+                      stroke={1.8}
+                    />
+                  ) : (
+                    <IconMoon
+                      aria-hidden="true"
+                      className="session-context-menu-icon"
+                      size={16}
+                      stroke={1.8}
+                    />
+                  )}
+                  {session.isSleeping ? "Wake" : "Sleep"}
                 </button>
               ) : null}
               <button
@@ -520,6 +596,10 @@ function supportsResumeCommandCopy(session: SidebarSessionItem): boolean {
     session.agentIcon === "gemini" ||
     session.agentIcon === "opencode"
   );
+}
+
+function supportsFork(session: SidebarSessionItem): boolean {
+  return session.agentIcon === "codex" || session.agentIcon === "claude";
 }
 
 function supportsFullReload(session: SidebarSessionItem): boolean {

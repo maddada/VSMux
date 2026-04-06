@@ -41,6 +41,30 @@ export function buildResumeAgentCommand(
   }
 }
 
+export function buildForkAgentCommand(
+  agentLaunch: StoredSessionAgentLaunch | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+  sessionTitle: string | undefined,
+  terminalTitle?: string,
+): string | undefined {
+  const agentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  const agentCommand = resolveAgentCommand(agentLaunch, agentIconId);
+  const forkTitle = resolveResumeTitle(sessionTitle, terminalTitle);
+  if (!agentId || !agentCommand || !forkTitle) {
+    return undefined;
+  }
+
+  const quotedForkTitle = quoteForSingleShellArgument(forkTitle);
+  switch (agentId) {
+    case "codex":
+      return `${agentCommand} fork ${quotedForkTitle}`;
+    case "claude":
+      return `${agentCommand} --fork-session -r ${quotedForkTitle}`;
+    default:
+      return undefined;
+  }
+}
+
 export function buildCopyResumeCommandText(
   agentLaunch: StoredSessionAgentLaunch | undefined,
   agentIconId: SidebarAgentIcon | undefined,

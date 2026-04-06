@@ -3,6 +3,7 @@ import {
   buildGitTextGenerationShellCommand,
   parseGeneratedCommitMessageText,
   parseGeneratedPrContentText,
+  parseGeneratedSessionTitleText,
 } from "./text-generation-utils";
 
 describe("buildGitTextGenerationShellCommand", () => {
@@ -13,9 +14,7 @@ describe("buildGitTextGenerationShellCommand", () => {
         "prompt text",
         "/tmp/commitmessage.txt",
       ),
-    ).toBe(
-      `exec codex -m gpt-5.4-mini -c 'model_reasoning_effort="high"' exec -`,
-    );
+    ).toBe(`exec codex -m gpt-5.4-mini -c 'model_reasoning_effort="high"' exec -`);
   });
 
   test("should build the pinned claude command", () => {
@@ -38,9 +37,7 @@ describe("buildGitTextGenerationShellCommand", () => {
         "prompt text",
         "/tmp/commitmessage.txt",
       ),
-    ).toBe(
-      "my-generator --out '/tmp/commitmessage.txt' --prompt 'prompt text'",
-    );
+    ).toBe("my-generator --out '/tmp/commitmessage.txt' --prompt 'prompt text'");
   });
 });
 
@@ -94,5 +91,29 @@ describe("parseGeneratedPrContentText", () => {
       ].join("\n"),
       title: "Improve git text generation settings",
     });
+  });
+});
+
+describe("parseGeneratedSessionTitleText", () => {
+  test("should read the first non-empty line", () => {
+    expect(
+      parseGeneratedSessionTitleText(`
+
+Polish sidebar rename flow
+Include nothing else
+`),
+    ).toBe("Polish sidebar rename");
+  });
+
+  test("should strip wrapping quotes and punctuation", () => {
+    expect(parseGeneratedSessionTitleText(`"Fix pasted rename summaries."`)).toBe(
+      "Fix pasted rename",
+    );
+  });
+
+  test("should clamp long single words to under twenty five characters", () => {
+    expect(parseGeneratedSessionTitleText("supercalifragilisticexpialidocious")).toBe(
+      "supercalifragilisticexp",
+    );
   });
 });

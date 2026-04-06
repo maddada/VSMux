@@ -2,54 +2,48 @@
   "active_context": [
     {
       "importance": 55,
-      "path": "facts/project/terminal_workspace_runtime_facts.md",
-      "tokens": 1001,
+      "path": "architecture/terminal_workspace/sidebar_session_card_last_interaction_timestamps.md",
+      "tokens": 616,
+      "type": "context"
+    },
+    {
+      "importance": 55,
+      "path": "architecture/terminal_workspace/terminal_persistence_across_vs_code_reloads.md",
+      "tokens": 1827,
+      "type": "context"
+    },
+    {
+      "importance": 55,
+      "path": "architecture/terminal_workspace/workspace_session_sleep_wake_support.md",
+      "tokens": 1166,
       "type": "context"
     },
     {
       "importance": 50,
       "path": "architecture/context.md",
-      "tokens": 180,
+      "tokens": 182,
       "type": "context"
     },
     {
       "importance": 50,
       "path": "architecture/terminal_workspace/context.md",
-      "tokens": 111,
-      "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "architecture/terminal_workspace/current_state.md",
-      "tokens": 1882,
-      "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "facts/context.md",
-      "tokens": 125,
+      "tokens": 112,
       "type": "context"
     },
     {
       "importance": 50,
       "path": "facts/project/context.md",
-      "tokens": 54,
-      "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "facts/project/t3_managed_runtime_upgrade_facts.md",
-      "tokens": 549,
+      "tokens": 55,
       "type": "context"
     }
   ],
-  "generated_at": "2026-04-06T02:29:44.362Z",
+  "generated_at": "2026-04-06T04:17:21.960Z",
   "lane_tokens": {
-    "contexts": 3902,
+    "contexts": 3958,
     "stubs": 0,
     "summaries": 0
   },
-  "source_fingerprint": "64d0874cb322023704d0281da265f5edcb4917445a16067362afa0c371681c54",
-  "total_tokens": 3902,
+  "source_fingerprint": "68f66a38ed91f3129d605dd8d333de83e73d0a73cde9dcaeedaf419580926b74",
+  "total_tokens": 3958,
   "version": 1
 }

@@ -58,6 +58,7 @@ const EMPTY_STATE: NativeTerminalDebugPanelState = {
       pendingAgentIds: [],
       showCloseButtonOnSessionCards: false,
       showHotkeysOnSessionCards: false,
+      showLastInteractionTimeOnSessionCards: true,
       theme: "dark-blue",
       viewMode: "grid",
       visibleCount: 1,

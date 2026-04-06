@@ -252,6 +252,7 @@ function createLiveStoryWorkspace(
       scratchPadContent: "",
       showCloseButtonOnSessionCards: true,
       showHotkeysOnSessionCards: false,
+      showLastInteractionTimeOnSessionCards: true,
       theme: "dark-blue",
     },
     sessionDecorationsById: Object.fromEntries(

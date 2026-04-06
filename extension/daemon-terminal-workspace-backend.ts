@@ -14,6 +14,7 @@ import {
   type TerminalDaemonState,
 } from "./daemon-terminal-runtime";
 import type {
+  TerminalWorkspaceBackendActivityChange,
   TerminalCreateOrAttachResult,
   TerminalWorkspaceBackend,
   TerminalWorkspaceBackendPresentationChange,
@@ -45,6 +46,8 @@ export type DaemonTerminalWorkspaceBackendOptions = {
 
 export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend {
   private readonly changeSessionsEmitter = new vscode.EventEmitter<void>();
+  private readonly changeSessionActivityEmitter =
+    new vscode.EventEmitter<TerminalWorkspaceBackendActivityChange>();
   private readonly changeSessionPresentationEmitter =
     new vscode.EventEmitter<TerminalWorkspaceBackendPresentationChange>();
   private readonly changeSessionTitleEmitter =
@@ -56,6 +59,7 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   private readonly sessionTitleBySessionId = new Map<string, string>();
   private readonly sessions = new Map<string, TerminalSessionSnapshot>();
 
+  public readonly onDidChangeSessionActivity = this.changeSessionActivityEmitter.event;
   public readonly onDidChangeSessionPresentation = this.changeSessionPresentationEmitter.event;
   public readonly onDidChangeSessionTitle = this.changeSessionTitleEmitter.event;
   public readonly onDidChangeSessions = this.changeSessionsEmitter.event;
@@ -132,6 +136,7 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
     this.runtime.dispose();
     this.changeSessionsEmitter.dispose();
+    this.changeSessionActivityEmitter.dispose();
     this.changeSessionPresentationEmitter.dispose();
     this.changeSessionTitleEmitter.dispose();
   }

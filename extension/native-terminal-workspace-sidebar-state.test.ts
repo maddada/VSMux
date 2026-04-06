@@ -201,8 +201,64 @@ describe("buildSidebarMessage", () => {
 
     expect(message.groups[1]?.sessions[0]).toEqual(
       expect.objectContaining({
+        lastInteractionAt: sessionRecord.createdAt,
         primaryTitle: "Claude Code",
         terminalTitle: undefined,
+      }),
+    );
+  });
+
+  test("should expose the latest terminal activity timestamp when available", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0);
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getLastTerminalActivityAt: () => Date.parse("2026-04-02T12:34:56.000Z"),
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        lastInteractionAt: "2026-04-02T12:34:56.000Z",
+      }),
+    );
+  });
+
+  test("should expose the latest T3 interaction timestamp from the runtime state", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0, {
+      kind: "t3",
+      t3: {
+        projectId: "project-1",
+        serverOrigin: "http://127.0.0.1:3773",
+        threadId: "thread-1",
+        workspaceRoot: "/tmp/project",
+      },
+      title: "T3 Code",
+    });
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getT3ActivityState: () => ({
+          activity: "idle",
+          isRunning: true,
+          lastInteractionAt: "2026-04-03T08:09:10.000Z",
+        }),
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        lastInteractionAt: "2026-04-03T08:09:10.000Z",
       }),
     );
   });
@@ -227,6 +283,32 @@ describe("buildSidebarMessage", () => {
       expect.objectContaining({
         primaryTitle: "Bug Fix",
         terminalTitle: "Claude Code",
+      }),
+    );
+  });
+
+  test("should mark sleeping terminal sessions as sleeping and not running", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = {
+      ...createSessionRecord(1, 0),
+      isSleeping: true,
+    };
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getTerminalTitle: () => "Codex",
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        activity: "idle",
+        detail: "Sleeping",
+        isRunning: false,
+        isSleeping: true,
+        primaryTitle: "Codex",
       }),
     );
   });
@@ -312,6 +394,7 @@ describe("createPreviousSessionEntry", () => {
         agentName: "codex",
       }),
       getSessionAgentLaunch: () => undefined,
+      getLastTerminalActivityAt: () => undefined,
       getSessionSnapshot: () => ({
         agentName: "codex",
         agentStatus: "idle",
@@ -358,6 +441,7 @@ function createPreviousSessionEntryOptions(
       agentName: "codex",
     }),
     getSessionAgentLaunch: () => undefined,
+    getLastTerminalActivityAt: () => undefined,
     getSessionSnapshot: () => ({
       agentName: "codex",
       agentStatus: "idle",
@@ -408,6 +492,7 @@ function createBuildSidebarMessageOptions(
       agentName: undefined,
     }),
     getSessionAgentLaunch: () => undefined,
+    getLastTerminalActivityAt: () => undefined,
     getSessionSnapshot: () => undefined,
     getSidebarAgentIcon: () => undefined,
     getT3ActivityState: () => ({
@@ -467,6 +552,7 @@ function createSidebarHudState(): SidebarHydrateMessage["hud"] {
     },
     showCloseButtonOnSessionCards: false,
     showHotkeysOnSessionCards: false,
+    showLastInteractionTimeOnSessionCards: true,
     theme: "dark-blue",
     viewMode: "grid",
     visibleCount: 1,

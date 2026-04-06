@@ -12,6 +12,24 @@ vi.mock("vscode", () => ({
 }));
 
 describe("isSidebarMessage", () => {
+  test("should accept forkSession messages with a session id", () => {
+    expect(
+      isSidebarMessage({
+        sessionId: "session-7",
+        type: "forkSession",
+      }),
+    ).toBe(true);
+  });
+
+  test("should reject forkSession messages without a session id", () => {
+    expect(
+      isSidebarMessage({
+        sessionId: "",
+        type: "forkSession",
+      }),
+    ).toBe(false);
+  });
+
   test("should accept setT3SessionThreadId messages with a session id", () => {
     expect(
       isSidebarMessage({

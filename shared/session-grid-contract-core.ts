@@ -63,6 +63,7 @@ export type BaseSessionRecord = {
   displayId: string;
   title: string;
   alias: string;
+  isSleeping?: boolean;
   slotIndex: number;
   row: number;
   column: number;

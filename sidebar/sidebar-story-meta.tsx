@@ -10,6 +10,7 @@ export const DEFAULT_SIDEBAR_STORY_ARGS: SidebarStoryArgs = {
   isFocusModeActive: false,
   showCloseButtonOnSessionCards: false,
   showHotkeysOnSessionCards: false,
+  showLastInteractionTimeOnSessionCards: true,
   theme: "dark-blue",
   viewMode: "grid",
   visibleCount: 1,
@@ -40,6 +41,9 @@ export const SIDEBAR_STORY_ARG_TYPES: NonNullable<Meta<SidebarStoryArgs>["argTyp
     control: "boolean",
   },
   showHotkeysOnSessionCards: {
+    control: "boolean",
+  },
+  showLastInteractionTimeOnSessionCards: {
     control: "boolean",
   },
   theme: {

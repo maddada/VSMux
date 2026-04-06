@@ -6,11 +6,11 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 2.5.0
+## Latest Release: 2.6.0
 
-- Workspace panels can now recover more gracefully when rendering falls behind, with a reload path that gets you back to work faster.
-- Session cleanup and previous-session history are more reliable, so removed sessions and stale history entries behave more cleanly.
-- Pane ordering, visibility, and overall multi-pane stability have been tightened up across the workspace.
+- T3 session management is more capable, with better coordination between sessions, threads, and workspace state.
+- Sidebar session cards feel more polished, with cleaner tooltips and stronger session metadata handling.
+- Terminal and multi-session state sync is steadier across the workspace, especially in more complex session setups.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

@@ -44,6 +44,7 @@ export type SidebarSessionItem = {
   activity: "idle" | "working" | "attention";
   activityLabel?: string;
   agentIcon?: SidebarAgentIcon;
+  lastInteractionAt?: string;
   sessionId: string;
   sessionNumber?: string;
   primaryTitle?: string;
@@ -53,6 +54,7 @@ export type SidebarSessionItem = {
   row: number;
   column: number;
   isFocused: boolean;
+  isSleeping?: boolean;
   isVisible: boolean;
   isRunning: boolean;
   detail?: string;
@@ -93,6 +95,7 @@ export type SidebarHudState = {
   sectionVisibility: SidebarSectionVisibility;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
+  showLastInteractionTimeOnSessionCards: boolean;
   theme:
     | "plain-dark"
     | "plain-light"
@@ -265,7 +268,21 @@ export type SidebarToExtensionMessage =
       sessionId: string;
     }
   | {
+      type: "setSessionSleeping";
+      sessionId: string;
+      sleeping: boolean;
+    }
+  | {
+      type: "setGroupSleeping";
+      groupId: string;
+      sleeping: boolean;
+    }
+  | {
       type: "copyResumeCommand";
+      sessionId: string;
+    }
+  | {
+      type: "forkSession";
       sessionId: string;
     }
   | {

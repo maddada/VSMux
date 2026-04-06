@@ -1,3 +1,4 @@
+import { GENERATED_SESSION_TITLE_MAX_LENGTH } from "../native-terminal-workspace/session-title-generation";
 import type { GitTextGenerationSettings } from "../../shared/git-text-generation-provider";
 import { quoteShellLiteral } from "../agent-shell-integration-utils";
 
@@ -42,7 +43,10 @@ export function parseGeneratedCommitMessageText(value: string): CommitMessageGen
   }
 
   return {
-    body: lines.slice(subjectLineIndex + 1).join("\n").trim(),
+    body: lines
+      .slice(subjectLineIndex + 1)
+      .join("\n")
+      .trim(),
     subject: sanitizeCommitSubject(lines[subjectLineIndex] ?? ""),
   };
 }
@@ -55,9 +59,22 @@ export function parseGeneratedPrContentText(value: string): PrContentGenerationR
   }
 
   return {
-    body: lines.slice(titleLineIndex + 1).join("\n").trim(),
+    body: lines
+      .slice(titleLineIndex + 1)
+      .join("\n")
+      .trim(),
     title: sanitizePrTitle(lines[titleLineIndex] ?? ""),
   };
+}
+
+export function parseGeneratedSessionTitleText(value: string): string {
+  const lines = normalizeGeneratedText(value).split(/\r?\n/g);
+  const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (titleLineIndex < 0) {
+    throw new Error("Git text generation returned an empty session title.");
+  }
+
+  return sanitizeSessionTitle(lines[titleLineIndex] ?? "");
 }
 
 function buildCustomGitTextGenerationShellCommand(
@@ -91,11 +108,7 @@ function normalizeGeneratedText(value: string): string {
 }
 
 function sanitizeCommitSubject(value: string): string {
-  const sanitized = value
-    .split(/\r?\n/g)[0]
-    ?.replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.]+$/, "");
+  const sanitized = value.split(/\r?\n/g)[0]?.replace(/\s+/g, " ").trim().replace(/[.]+$/, "");
   if (!sanitized) {
     throw new Error("Git text generation returned an empty commit subject.");
   }
@@ -105,9 +118,7 @@ function sanitizeCommitSubject(value: string): string {
     return normalized;
   }
 
-  const stripped = normalized
-    .replace(/^[a-z]+(\([^)]+\))?:\s*/i, "")
-    .trim();
+  const stripped = normalized.replace(/^[a-z]+(\([^)]+\))?:\s*/i, "").trim();
   if (!stripped) {
     throw new Error("Git text generation returned an empty commit subject.");
   }
@@ -121,6 +132,43 @@ function sanitizePrTitle(value: string): string {
     throw new Error("Git text generation returned an empty pull request title.");
   }
   return sanitized;
+}
+
+function sanitizeSessionTitle(value: string): string {
+  const sanitized = value
+    .split(/\r?\n/g)[0]
+    ?.replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.]+$/, "");
+  if (!sanitized) {
+    throw new Error("Git text generation returned an empty session title.");
+  }
+
+  return clampGeneratedSessionTitleLength(sanitized);
+}
+
+function clampGeneratedSessionTitleLength(value: string): string {
+  if (value.length <= GENERATED_SESSION_TITLE_MAX_LENGTH) {
+    return value;
+  }
+
+  const words = value.split(" ").filter(Boolean);
+  let candidate = "";
+  for (const word of words) {
+    const nextCandidate = candidate ? `${candidate} ${word}` : word;
+    if (nextCandidate.length > GENERATED_SESSION_TITLE_MAX_LENGTH) {
+      break;
+    }
+
+    candidate = nextCandidate;
+  }
+
+  if (candidate) {
+    return candidate;
+  }
+
+  return value.slice(0, GENERATED_SESSION_TITLE_MAX_LENGTH).trim();
 }
 
 function buildCommandLine(command: string, args: readonly string[]): string {

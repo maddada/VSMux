@@ -17,6 +17,7 @@ import {
 } from "./native-managed-terminal";
 import { readManagedTerminalIdentityFromProcessId } from "./native-terminal-process-identity";
 import type {
+  TerminalWorkspaceBackendActivityChange,
   TerminalCreateOrAttachResult,
   TerminalWorkspaceBackend,
   TerminalWorkspaceBackendPresentationChange,
@@ -81,6 +82,8 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
   private agentShellIntegration: AgentShellIntegration | undefined;
   private readonly activateSessionEmitter = new vscode.EventEmitter<string>();
   private readonly changeSessionsEmitter = new vscode.EventEmitter<void>();
+  private readonly changeSessionActivityEmitter =
+    new vscode.EventEmitter<TerminalWorkspaceBackendActivityChange>();
   private readonly changeSessionPresentationEmitter =
     new vscode.EventEmitter<TerminalWorkspaceBackendPresentationChange>();
   private readonly changeSessionTitleEmitter =
@@ -100,6 +103,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
   public readonly onDidActivateSession = this.activateSessionEmitter.event;
   public readonly onDidChangeSessions = this.changeSessionsEmitter.event;
+  public readonly onDidChangeSessionActivity = this.changeSessionActivityEmitter.event;
   public readonly onDidChangeSessionPresentation = this.changeSessionPresentationEmitter.event;
   public readonly onDidChangeSessionTitle = this.changeSessionTitleEmitter.event;
 
@@ -160,6 +164,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
         }
 
         this.lastTerminalActivityAtBySessionId.set(sessionId, Date.now());
+        this.changeSessionActivityEmitter.fire({ sessionId });
         void this.captureProcessAssociation(sessionId, terminal);
         void this.logState("EVENT", "terminal-state-changed", {
           sessionId,
@@ -191,6 +196,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
     this.activateSessionEmitter.dispose();
     this.changeSessionsEmitter.dispose();
+    this.changeSessionActivityEmitter.dispose();
     this.changeSessionPresentationEmitter.dispose();
     this.changeSessionTitleEmitter.dispose();
   }
@@ -645,6 +651,7 @@ export class NativeTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     projection.terminal.sendText(data, shouldExecute);
     this.lastTerminalActivityAtBySessionId.set(sessionId, Date.now());
+    this.changeSessionActivityEmitter.fire({ sessionId });
   }
 
   public syncSessions(sessionRecords: readonly SessionRecord[]): void {

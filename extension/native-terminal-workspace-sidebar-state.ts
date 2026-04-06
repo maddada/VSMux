@@ -51,11 +51,13 @@ type BuildSidebarMessageOptions = {
     agentName: string | undefined;
   };
   getSessionAgentLaunch: (sessionId: string) => PreviousSessionHistoryEntry["agentLaunch"];
+  getLastTerminalActivityAt: (sessionId: string) => number | undefined;
   getSessionSnapshot: (sessionId: string) => TerminalSessionSnapshot | undefined;
   getT3ActivityState: (sessionRecord: SessionRecord) => {
     activity: TerminalAgentStatus;
     detail?: string;
     isRunning: boolean;
+    lastInteractionAt?: string;
   };
   getTerminalTitle: (sessionId: string) => string | undefined;
   getSidebarAgentIcon: (
@@ -81,6 +83,7 @@ type CreatePreviousSessionEntryOptions = Pick<
   | "debuggingMode"
   | "getEffectiveSessionActivity"
   | "getSessionAgentLaunch"
+  | "getLastTerminalActivityAt"
   | "getSessionSnapshot"
   | "getSidebarAgentIcon"
   | "getT3ActivityState"
@@ -99,6 +102,7 @@ type CreateSidebarSessionItemOptions = Pick<
   | "debuggingMode"
   | "getEffectiveSessionActivity"
   | "getSessionAgentLaunch"
+  | "getLastTerminalActivityAt"
   | "getSessionSnapshot"
   | "getSidebarAgentIcon"
   | "getT3ActivityState"
@@ -163,6 +167,7 @@ export function createPreviousSessionEntry(
     sidebarItem: {
       ...sidebarItem,
       isFocused: false,
+      isSleeping: false,
       isRunning: false,
       isVisible: false,
     },
@@ -228,6 +233,7 @@ function buildBrowserSidebarGroup(browserTabs: readonly SidebarBrowserTab[]): Si
       isRunning: true,
       isVisible: browserTab.isActive,
       kind: "browser",
+      lastInteractionAt: undefined,
       primaryTitle: browserTab.label.trim() || "Browser",
       row: 0,
       sessionId: browserTab.sessionId,
@@ -251,6 +257,7 @@ function buildSidebarItem(
     | "debuggingMode"
     | "getEffectiveSessionActivity"
     | "getSessionAgentLaunch"
+    | "getLastTerminalActivityAt"
     | "getSessionSnapshot"
     | "getSidebarAgentIcon"
     | "getT3ActivityState"
@@ -264,6 +271,7 @@ function buildSidebarItem(
   const isVisible =
     isActiveGroup && presentedSnapshot.visibleSessionIds.includes(sessionRecord.sessionId);
   const isFocused = isActiveGroup && presentedSnapshot.focusedSessionId === sessionRecord.sessionId;
+  const isSleeping = sessionRecord.isSleeping === true;
   const visiblePrimaryTitle = getVisibleTerminalTitle(getVisiblePrimaryTitle(sessionRecord.title));
   const visibleTerminalTitle = getVisibleTerminalTitle(
     options.getTerminalTitle(sessionRecord.sessionId),
@@ -278,9 +286,11 @@ function buildSidebarItem(
       column: sessionRecord.column,
       detail: sessionRecord.browser.url,
       isFocused,
+      isSleeping: false,
       isRunning: isVisible || options.browserHasLiveProjection(sessionRecord.sessionId),
       isVisible,
       kind: "workspace",
+      lastInteractionAt: undefined,
       primaryTitle: getVisiblePrimaryTitle(sessionRecord.title) ?? "Browser",
       row: sessionRecord.row,
       sessionId: sessionRecord.sessionId,
@@ -298,22 +308,25 @@ function buildSidebarItem(
     );
     const activityState = options.getT3ActivityState(sessionRecord);
     return {
-      activity: activityState.activity,
-      activityLabel: getSessionActivityLabel(activityState.activity, "t3"),
+      activity: isSleeping ? "idle" : activityState.activity,
+      activityLabel: isSleeping ? undefined : getSessionActivityLabel(activityState.activity, "t3"),
       agentIcon: "t3",
       alias: sessionRecord.alias,
       column: sessionRecord.column,
-      detail:
-        activityState.detail ??
-        (activityState.activity !== "working" &&
-        !isPendingT3ThreadId(sessionRecord.t3.threadId) &&
-        sessionRecord.t3.threadId.trim()
-          ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
-          : undefined),
+      detail: isSleeping
+        ? "Sleeping"
+        : (activityState.detail ??
+          (activityState.activity !== "working" &&
+          !isPendingT3ThreadId(sessionRecord.t3.threadId) &&
+          sessionRecord.t3.threadId.trim()
+            ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
+            : undefined)),
       isFocused,
-      isRunning: activityState.isRunning,
+      isSleeping,
+      isRunning: isSleeping ? false : activityState.isRunning,
       isVisible,
       kind: "workspace",
+      lastInteractionAt: activityState.lastInteractionAt ?? sessionRecord.createdAt,
       primaryTitle:
         (hasCustomTitle ? visiblePrimaryTitle : undefined) ?? visibleT3Title ?? "T3 Code",
       row: sessionRecord.row,
@@ -331,8 +344,10 @@ function buildSidebarItem(
   const effectiveActivity = options.getEffectiveSessionActivity(sessionRecord, sessionSnapshot);
 
   return {
-    activity: effectiveActivity.activity,
-    activityLabel: getSessionActivityLabel(effectiveActivity.activity, effectiveActivity.agentName),
+    activity: isSleeping ? "idle" : effectiveActivity.activity,
+    activityLabel: isSleeping
+      ? undefined
+      : getSessionActivityLabel(effectiveActivity.activity, effectiveActivity.agentName),
     agentIcon: options.getSidebarAgentIcon(
       sessionRecord.sessionId,
       sessionSnapshot.agentName,
@@ -340,13 +355,18 @@ function buildSidebarItem(
     ),
     alias: sessionRecord.alias,
     column: sessionRecord.column,
-    detail: sessionSnapshot.errorMessage,
+    detail: isSleeping ? "Sleeping" : sessionSnapshot.errorMessage,
     isFocused,
+    isSleeping,
     isRunning:
+      !isSleeping &&
       sessionSnapshot.status === "running" &&
       options.terminalHasLiveProjection(sessionRecord.sessionId),
     isVisible,
     kind: "workspace",
+    lastInteractionAt:
+      getIsoTimestampFromMs(options.getLastTerminalActivityAt(sessionRecord.sessionId)) ??
+      sessionRecord.createdAt,
     primaryTitle: visiblePrimaryTitle ?? visibleTerminalTitle,
     row: sessionRecord.row,
     sessionId: sessionRecord.sessionId,
@@ -374,4 +394,12 @@ function isPendingT3ThreadId(threadId: string): boolean {
 
 function isDefaultT3SessionTitle(title: string): boolean {
   return title.trim() === "" || title.trim().toLowerCase() === "t3 code";
+}
+
+function getIsoTimestampFromMs(value: number | undefined): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return new Date(value).toISOString();
 }

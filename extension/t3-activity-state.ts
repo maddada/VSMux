@@ -4,6 +4,7 @@ export type SnapshotThread = {
   deletedAt?: string | null;
   id?: string;
   title?: string | null;
+  updatedAt?: string | null;
   latestTurn?: {
     completedAt?: string | null;
     state?: string | null;
@@ -25,6 +26,7 @@ export type T3ThreadActivityState = {
   activity: TerminalAgentStatus;
   completionMarker?: string;
   isRunning: boolean;
+  lastInteractionAt?: string;
 };
 
 export function resolveThreadActivity(
@@ -58,6 +60,7 @@ export function resolveThreadActivity(
         : "idle",
     completionMarker,
     isRunning: sessionStatus !== "error",
+    lastInteractionAt: getLastInteractionAt(thread),
   };
 }
 
@@ -75,7 +78,8 @@ export function haveSameThreadStateMaps(
       !rightState ||
       leftState.activity !== rightState.activity ||
       leftState.isRunning !== rightState.isRunning ||
-      leftState.completionMarker !== rightState.completionMarker
+      leftState.completionMarker !== rightState.completionMarker ||
+      leftState.lastInteractionAt !== rightState.lastInteractionAt
     ) {
       return false;
     }
@@ -111,10 +115,28 @@ function getCompletionMarker(thread: SnapshotThread): string | undefined {
   return undefined;
 }
 
+function getLastInteractionAt(thread: SnapshotThread): string | undefined {
+  const updatedAt = normalizeTimestamp(thread.updatedAt);
+  if (updatedAt) {
+    return updatedAt;
+  }
+
+  const completedAt = normalizeTimestamp(thread.latestTurn?.completedAt);
+  if (completedAt) {
+    return completedAt;
+  }
+
+  return normalizeTimestamp(thread.session?.updatedAt);
+}
+
 function normalizeThreadSessionStatus(status: unknown): string | undefined {
   return typeof status === "string" ? status : undefined;
 }
 
 function normalizeLatestTurnState(state: unknown): string | undefined {
   return typeof state === "string" ? state : undefined;
+}
+
+function normalizeTimestamp(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }

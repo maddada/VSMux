@@ -96,6 +96,10 @@ import {
   sortWorkspacePaneSessionRecords,
 } from "./workspace-pane-session-projection";
 import {
+  resolveSessionRenameTitle,
+  shouldSummarizeSessionRenameTitle,
+} from "./session-title-generation";
+import {
   deleteWorkspacePaneOrderPreference,
   getWorkspacePaneOrderPreference,
   syncWorkspacePaneOrderPreference,
@@ -103,6 +107,7 @@ import {
 import {
   buildCopyResumeCommandText,
   buildDetachedResumeAction,
+  buildForkAgentCommand,
   buildResumeAgentCommand,
   loadStoredSessionAgentLaunches,
   persistSessionAgentLaunches,
@@ -130,6 +135,7 @@ import {
   getDefaultBrowserLaunchUrl,
   getDebuggingMode,
   getShowCloseButtonOnSessionCards,
+  getShowLastInteractionTimeOnSessionCards,
   getShowSidebarActions,
   getShowSidebarAgents,
   getShowSidebarBrowsers,
@@ -156,6 +162,7 @@ import { playCloseTerminalOnExitSound } from "../terminal-exit-sound";
 const SHORTCUT_LABEL_PLATFORM = process.platform === "darwin" ? "mac" : "default";
 const COMMAND_TERMINAL_EXIT_POLL_MS = 250;
 const COMPLETION_SOUND_CONFIRMATION_DELAY_MS = 1_000;
+const FORK_RENAME_DELAY_MS = 4_000;
 const SIMPLE_BROWSER_OPEN_COMMAND = "simpleBrowser.api.open";
 const TERMINAL_SCROLL_TO_BOTTOM_COMMAND = "workbench.action.terminal.scrollToBottom";
 const TOGGLE_MAXIMIZE_EDITOR_GROUP_COMMAND = "workbench.action.toggleMaximizeEditorGroup";
@@ -191,6 +198,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     {
       activity: string;
       activityLabel: string | undefined;
+      lastInteractionAt: string | undefined;
       primaryTitle: string | undefined;
       terminalTitle: string | undefined;
     }
@@ -201,6 +209,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   >();
   private readonly workingStartedAtBySessionId = new Map<string, number>();
   private readonly pendingCompletionSoundTimeoutBySessionId = new Map<string, NodeJS.Timeout>();
+  private readonly pendingForkRenameTimeoutBySessionId = new Map<string, NodeJS.Timeout>();
   private readonly loggedTitleSymbolKeys = new Set<string>();
   private readonly pendingT3SessionIds = new Set<string>();
   private readonly t3ActivityMonitor: T3ActivityMonitor;
@@ -290,6 +299,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           await this.refreshSidebar();
         })();
       }),
+      this.backend.onDidChangeSessionActivity(({ sessionId }) => {
+        void this.postSessionPresentationMessage(sessionId);
+      }),
       this.backend.onDidChangeSessionPresentation(({ sessionId, title }) => {
         const snapshot = this.backend.getSessionSnapshot(sessionId);
         this.syncCompletionSoundForSession(sessionId);
@@ -358,6 +370,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       clearTimeout(timeout);
     }
     this.pendingCompletionSoundTimeoutBySessionId.clear();
+    for (const timeout of this.pendingForkRenameTimeoutBySessionId.values()) {
+      clearTimeout(timeout);
+    }
+    this.pendingForkRenameTimeoutBySessionId.clear();
     this.t3Runtime?.dispose();
     disposeVSmuxDebugLog();
     while (this.disposables.length > 0) {
@@ -662,6 +678,46 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
   }
 
+  public async renameSessionFromUserInput(sessionId: string, title: string): Promise<void> {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return;
+    }
+
+    let resolvedTitle = trimmedTitle;
+    if (shouldSummarizeSessionRenameTitle(trimmedTitle)) {
+      const generator = getGitTextGenerationSettings();
+      if (!hasConfiguredGitTextGenerationProvider(generator)) {
+        void vscode.window.showErrorMessage(
+          "Git text generation is set to custom, but VSmux.gitTextGenerationCustomCommand is empty.",
+        );
+        return;
+      }
+
+      try {
+        resolvedTitle = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "VSmux",
+          },
+          async (progress) => {
+            progress.report({ message: "Generating session name..." });
+            return resolveSessionRenameTitle({
+              cwd: getDefaultWorkspaceCwd(),
+              settings: generator,
+              title: trimmedTitle,
+            });
+          },
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(getErrorMessage(error));
+        return;
+      }
+    }
+
+    await this.renameSession(sessionId, resolvedTitle);
+  }
+
   public async promptRenameSession(sessionId: string): Promise<void> {
     const sessionRecord = this.store.getSession(sessionId);
     if (!sessionRecord) {
@@ -677,7 +733,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         ) ?? sessionRecord.title,
     });
     if (nextTitle) {
-      await this.renameSession(sessionId, nextTitle);
+      await this.renameSessionFromUserInput(sessionId, nextTitle);
     }
   }
 
@@ -717,6 +773,55 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.afterStateChange({ sidebarAlreadyRefreshed: true });
   }
 
+  public async setSessionSleeping(sessionId: string, sleeping: boolean): Promise<void> {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord || sessionRecord.kind === "browser") {
+      return;
+    }
+
+    const changed = await this.store.setSessionSleeping(sessionId, sleeping);
+    if (!changed) {
+      return;
+    }
+
+    if (sleeping) {
+      await this.disposeSleepingSessionSurface(sessionRecord);
+      await this.refreshSidebarFromCurrentState();
+      await this.afterStateChange({ sidebarAlreadyRefreshed: true });
+      return;
+    }
+
+    await this.afterStateChange();
+  }
+
+  public async setGroupSleeping(groupId: string, sleeping: boolean): Promise<void> {
+    const group = this.store.getGroup(groupId);
+    if (!group) {
+      return;
+    }
+
+    const sessionsToSleep = sleeping
+      ? group.snapshot.sessions.filter(
+          (sessionRecord) => sessionRecord.kind !== "browser" && sessionRecord.isSleeping !== true,
+        )
+      : [];
+    const changed = await this.store.setGroupSleeping(groupId, sleeping);
+    if (!changed) {
+      return;
+    }
+
+    if (sleeping) {
+      for (const sessionRecord of sessionsToSleep) {
+        await this.disposeSleepingSessionSurface(sessionRecord);
+      }
+      await this.refreshSidebarFromCurrentState();
+      await this.afterStateChange({ sidebarAlreadyRefreshed: true });
+      return;
+    }
+
+    await this.afterStateChange();
+  }
+
   public async copyResumeCommand(sessionId?: string): Promise<void> {
     if (!sessionId) {
       return;
@@ -739,6 +844,72 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     await vscode.env.clipboard.writeText(commandText);
+  }
+
+  public async forkSession(sessionId?: string): Promise<void> {
+    if (!sessionId) {
+      return;
+    }
+
+    const sessionRecord = this.store.getSession(sessionId);
+    const sourceGroup = this.store.getSessionGroup(sessionId);
+    if (!sessionRecord || sessionRecord.kind !== "terminal" || !sourceGroup) {
+      return;
+    }
+
+    const terminalTitle = this.terminalTitleBySessionId.get(sessionId);
+    const sourceTitle = getPreferredSessionTitle(sessionRecord.title, terminalTitle)
+      ?.replace(/\s+/g, " ")
+      .trim();
+    const forkCommand = buildForkAgentCommand(
+      this.sessionAgentLaunchBySessionId.get(sessionId),
+      this.getSidebarAgentIconForSession(sessionId),
+      sessionRecord.title,
+      terminalTitle,
+    );
+    if (!forkCommand || !sourceTitle) {
+      void vscode.window.showInformationMessage(
+        "Fork is only available for Codex and Claude sessions that have a visible title.",
+      );
+      return;
+    }
+
+    await this.store.focusGroup(sourceGroup.groupId);
+    const forkedSession = await this.store.createSession();
+    if (!forkedSession) {
+      return;
+    }
+
+    const sourceAgentIcon = this.getSidebarAgentIconForSession(sessionId);
+    if (sourceAgentIcon) {
+      this.sidebarAgentIconBySessionId.set(forkedSession.sessionId, sourceAgentIcon);
+    }
+
+    const sourceAgentLaunch = this.sessionAgentLaunchBySessionId.get(sessionId);
+    if (sourceAgentLaunch) {
+      this.sessionAgentLaunchBySessionId.set(forkedSession.sessionId, sourceAgentLaunch);
+    }
+
+    const currentGroup = this.store.getGroup(sourceGroup.groupId);
+    const orderedSessionIds = currentGroup
+      ? getOrderedSessions(currentGroup.snapshot).map((groupSession) => groupSession.sessionId)
+      : [];
+    const sourceIndex = orderedSessionIds.indexOf(sessionId);
+    if (sourceIndex >= 0) {
+      await this.store.moveSessionToGroup(
+        forkedSession.sessionId,
+        sourceGroup.groupId,
+        sourceIndex + 1,
+      );
+    }
+
+    await this.persistSessionAgentLaunchState();
+    await this.refreshSidebarFromCurrentState();
+    const resolvedForkedSession = this.store.getSession(forkedSession.sessionId) ?? forkedSession;
+    await this.backend.createOrAttachSession(resolvedForkedSession);
+    await this.afterStateChange({ sidebarAlreadyRefreshed: true });
+    await this.backend.writeText(resolvedForkedSession.sessionId, forkCommand, true);
+    this.scheduleForkRename(resolvedForkedSession.sessionId, sourceTitle);
   }
 
   public async fullReloadSession(sessionId?: string): Promise<void> {
@@ -1376,7 +1547,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       confirmSidebarGitCommit: async (requestId, subject) =>
         this.confirmSidebarGitCommit(requestId, subject),
       copyResumeCommand: async (sessionId) => this.copyResumeCommand(sessionId),
+      forkSession: async (sessionId) => this.forkSession(sessionId),
       fullReloadSession: async (sessionId) => this.fullReloadSession(sessionId),
+      setGroupSleeping: async (groupId, sleeping) => this.setGroupSleeping(groupId, sleeping),
+      setSessionSleeping: async (sessionId, sleeping) =>
+        this.setSessionSleeping(sessionId, sleeping),
       setT3SessionThreadId: async (sessionId) => this.promptSetT3SessionThreadId(sessionId),
       createGroup: async () => this.createGroup(),
       createGroupFromSession: async (sessionId) => this.createGroupFromSession(sessionId),
@@ -1400,7 +1575,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       refreshGitState: async () => this.refreshGitState(),
       refreshSidebarHydrate: async () => this.refreshSidebar("hydrate"),
       renameGroup: async (groupId, title) => this.renameGroup(groupId, title),
-      renameSession: async (sessionId, title) => this.renameSession(sessionId, title),
+      renameSession: async (sessionId, title) => this.renameSessionFromUserInput(sessionId, title),
       restartSession: async (sessionId) => this.restartSession(sessionId),
       restorePreviousSession: async (historyId) => this.restorePreviousSession(historyId),
       runSidebarAgent: async (agentId) => this.runSidebarAgent(agentId),
@@ -1476,6 +1651,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       getEffectiveSessionActivity: (sessionRecord, sessionSnapshot) =>
         getEffectiveSessionActivity(sessionActivityContext, sessionRecord, sessionSnapshot),
       getSessionAgentLaunch: (sessionId) => this.sessionAgentLaunchBySessionId.get(sessionId),
+      getLastTerminalActivityAt: (sessionId) => this.backend.getLastTerminalActivityAt(sessionId),
       getSessionSnapshot: (sessionId) => this.backend.getSessionSnapshot(sessionId),
       getSidebarAgentIcon: (sessionId, snapshotAgentName, derivedAgentName) =>
         this.sidebarAgentIconBySessionId.get(sessionId) ??
@@ -1489,6 +1665,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         getClampedAgentManagerZoomPercent(),
         getShowCloseButtonOnSessionCards(),
         getShowHotkeysOnSessionCards(),
+        getShowLastInteractionTimeOnSessionCards(),
         getDebuggingMode(),
         this.getCompletionBellEnabled(),
         getClampedCompletionSoundSetting(),
@@ -1583,6 +1760,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         ),
       getSessionAgentLaunch: (candidateSessionId) =>
         this.sessionAgentLaunchBySessionId.get(candidateSessionId),
+      getLastTerminalActivityAt: (candidateSessionId) =>
+        this.backend.getLastTerminalActivityAt(candidateSessionId),
       getSessionSnapshot: (candidateSessionId) =>
         this.backend.getSessionSnapshot(candidateSessionId),
       getSidebarAgentIcon: (candidateSessionId, snapshotAgentName, derivedAgentName) =>
@@ -1606,12 +1785,15 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       const nextSidebarPresentation = {
         activity: sidebarSession.activity,
         activityLabel: sidebarSession.activityLabel,
+        lastInteractionAt: sidebarSession.lastInteractionAt,
         primaryTitle: sidebarSession.primaryTitle,
         terminalTitle: sidebarSession.terminalTitle,
       };
       const payloadChanged =
         previousSidebarPresentation?.activity !== nextSidebarPresentation.activity ||
         previousSidebarPresentation?.activityLabel !== nextSidebarPresentation.activityLabel ||
+        previousSidebarPresentation?.lastInteractionAt !==
+          nextSidebarPresentation.lastInteractionAt ||
         previousSidebarPresentation?.primaryTitle !== nextSidebarPresentation.primaryTitle ||
         previousSidebarPresentation?.terminalTitle !== nextSidebarPresentation.terminalTitle;
       logVSmuxDebug("controller.postSessionPresentationMessage.sidebar", {
@@ -2043,6 +2225,16 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
   }
 
+  private async disposeSleepingSessionSurface(sessionRecord: SessionRecord): Promise<void> {
+    await this.disposeSurface(sessionRecord);
+    if (sessionRecord.kind !== "terminal") {
+      return;
+    }
+
+    this.retireTerminalPaneRuntimeGeneration(sessionRecord.sessionId);
+    await this.destroyWorkspaceTerminalRuntimeIfNeeded(sessionRecord);
+  }
+
   private syncSurfaceManagers(): void {
     const sessions = this.getAllSessionRecords();
     this.backend.syncSessions(sessions);
@@ -2052,6 +2244,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     activity: "idle" | "working" | "attention";
     detail?: string;
     isRunning: boolean;
+    lastInteractionAt?: string;
   } {
     if (!isT3Session(sessionRecord)) {
       return {
@@ -2067,6 +2260,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       return {
         activity: "working",
         isRunning: true,
+        lastInteractionAt: sessionRecord.createdAt,
       };
     }
 
@@ -2078,6 +2272,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
           : undefined,
       isRunning: threadActivity?.isRunning ?? true,
+      lastInteractionAt: threadActivity?.lastInteractionAt ?? sessionRecord.createdAt,
     };
   }
 
@@ -2096,6 +2291,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     this.lastKnownActivityBySessionId.delete(sessionId);
     this.workingStartedAtBySessionId.delete(sessionId);
     this.clearPendingCompletionSound(sessionId);
+    this.clearPendingForkRename(sessionId);
   }
 
   private retireTerminalPaneRuntimeGeneration(sessionId: string): void {
@@ -2171,6 +2367,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           sessionSnapshot,
         ),
       getSessionAgentLaunch: (sessionId) => this.sessionAgentLaunchBySessionId.get(sessionId),
+      getLastTerminalActivityAt: (sessionId) => this.backend.getLastTerminalActivityAt(sessionId),
       getSessionSnapshot: (sessionId) => this.backend.getSessionSnapshot(sessionId),
       getSidebarAgentIcon: (sessionId, snapshotAgentName, derivedAgentName) =>
         this.sidebarAgentIconBySessionId.get(sessionId) ??
@@ -2305,6 +2502,29 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       this.workspaceId,
       this.sessionAgentLaunchBySessionId,
     );
+  }
+
+  private clearPendingForkRename(sessionId: string): void {
+    const timeout = this.pendingForkRenameTimeoutBySessionId.get(sessionId);
+    if (!timeout) {
+      return;
+    }
+
+    clearTimeout(timeout);
+    this.pendingForkRenameTimeoutBySessionId.delete(sessionId);
+  }
+
+  private scheduleForkRename(sessionId: string, sourceTitle: string): void {
+    this.clearPendingForkRename(sessionId);
+    const timeout = setTimeout(() => {
+      this.pendingForkRenameTimeoutBySessionId.delete(sessionId);
+      if (!this.store.getSession(sessionId)) {
+        return;
+      }
+
+      void this.backend.writeText(sessionId, `/rename fork ${sourceTitle}`, true);
+    }, FORK_RENAME_DELAY_MS);
+    this.pendingForkRenameTimeoutBySessionId.set(sessionId, timeout);
   }
 
   private async resumeDetachedTerminalSession(sessionRecord: SessionRecord): Promise<void> {

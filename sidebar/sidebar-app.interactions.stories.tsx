@@ -167,6 +167,16 @@ export const SessionCardActions: Story = {
       await expectMessage({ sessionId: "session-3", type: "copyResumeCommand" });
     });
 
+    await step("fork through the session context menu", async () => {
+      resetSidebarStoryMessages();
+
+      const sessionCard = await findSessionCard();
+      await openContextMenu(sessionCard);
+      await userEvent.click(await body.findByRole("menuitem", { name: "Fork" }));
+
+      await expectMessage({ sessionId: "session-3", type: "forkSession" });
+    });
+
     await step("full reload through the session context menu", async () => {
       resetSidebarStoryMessages();
 
@@ -175,6 +185,16 @@ export const SessionCardActions: Story = {
       await userEvent.click(await body.findByRole("menuitem", { name: "Full reload" }));
 
       await expectMessage({ sessionId: "session-3", type: "fullReloadSession" });
+    });
+
+    await step("sleep through the session context menu", async () => {
+      resetSidebarStoryMessages();
+
+      const sessionCard = await findSessionCard();
+      await openContextMenu(sessionCard);
+      await userEvent.click(await body.findByRole("menuitem", { name: "Sleep" }));
+
+      await expectMessage({ sessionId: "session-3", sleeping: true, type: "setSessionSleeping" });
     });
 
     await step("terminate through the session context menu", async () => {

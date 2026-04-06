@@ -166,6 +166,7 @@ function createT3WorkspaceMessage(): SidebarHydrateMessage {
       },
       showCloseButtonOnSessionCards: false,
       showHotkeysOnSessionCards: false,
+      showLastInteractionTimeOnSessionCards: true,
       theme: "dark-blue",
       viewMode: "grid",
       visibleCount: 1,

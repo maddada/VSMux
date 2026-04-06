@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented in this file.
 
+## 2.6.0 - 2026-04-06
+
+- T3 session workflows are much more capable now, with stronger session management, thread-aware handling, and better coordination between the sidebar and workspace.
+- Session cards and sidebar behavior feel more polished, including cleaner tooltip handling, better session metadata, and stronger title and interaction updates.
+- Workspace session handling is more reliable overall, with continued improvements to terminal session coordination, history behavior, and multi-session state sync.
+
 ## 2.5.0 - 2026-04-06
 
 - Workspace panels can now detect serious render lag and offer a cleaner reload path that brings the workspace back and refocuses the active session.

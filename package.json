@@ -1,7 +1,7 @@
 {
   "name": "VSmux",
   "displayName": "VSmux - T3code & Agent CLIs Manager",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "description": "VSmux - T3code & Agent CLIs Manager",
   "categories": [
@@ -375,6 +375,12 @@
           "type": "boolean",
           "default": false,
           "description": "Show hotkey labels on session cards all the time instead of only revealing them when you hover a card."
+        },
+        "VSmux.showLastInteractionTimeOnSessionCards": {
+          "title": "Show Last Interaction Time On Session Cards",
+          "type": "boolean",
+          "default": true,
+          "description": "Show a small relative timestamp under each session title, like \"5m ago\", using the same timing style as T3 Code."
         },
         "VSmux.showSidebarActions": {
           "title": "Show Sidebar Actions",

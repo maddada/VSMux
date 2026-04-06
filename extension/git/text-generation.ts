@@ -3,12 +3,14 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { GitTextGenerationSettings } from "../../shared/git-text-generation-provider";
+import { GENERATED_SESSION_TITLE_MAX_LENGTH } from "../native-terminal-workspace/session-title-generation";
 import { logVSmuxDebug } from "../vsmux-debug-log";
 import { runShellCommand } from "./process";
 import {
   buildGitTextGenerationShellCommand,
   parseGeneratedCommitMessageText,
   parseGeneratedPrContentText,
+  parseGeneratedSessionTitleText,
 } from "./text-generation-utils";
 
 const GIT_TEXT_GENERATION_TIMEOUT_MS = 180_000;
@@ -33,6 +35,13 @@ type PrContentGenerationInput = {
 
 type CommitMessageGenerationResult = ReturnType<typeof parseGeneratedCommitMessageText>;
 type PrContentGenerationResult = ReturnType<typeof parseGeneratedPrContentText>;
+type SessionTitleGenerationResult = ReturnType<typeof parseGeneratedSessionTitleText>;
+
+type SessionTitleGenerationInput = {
+  cwd: string;
+  settings: GitTextGenerationSettings;
+  sourceText: string;
+};
 
 export async function generateCommitMessage(
   input: CommitMessageGenerationInput,
@@ -81,6 +90,27 @@ export async function generatePrContent(
   });
 
   return parseGeneratedPrContentText(generated);
+}
+
+export async function generateSessionTitle(
+  input: SessionTitleGenerationInput,
+): Promise<SessionTitleGenerationResult> {
+  const prompt = buildSessionTitlePrompt(input.sourceText);
+  logVSmuxDebug("git.textGeneration.generateSessionTitle.promptBuilt", {
+    promptLength: prompt.length,
+    provider: input.settings.provider,
+    sourcePreview: truncateDebugPreview(input.sourceText),
+    sourceTextLength: input.sourceText.length,
+  });
+  const generated = await runGitTextGenerationText({
+    cwd: input.cwd,
+    outputFileName: "sessiontitle.txt",
+    prompt,
+    settings: input.settings,
+    targetLabel: "session title",
+  });
+
+  return parseGeneratedSessionTitleText(generated);
 }
 
 async function runGitTextGenerationText(input: {
@@ -228,6 +258,23 @@ function buildPrContentPrompt(input: {
   ].join("\n");
 }
 
+function buildSessionTitlePrompt(sourceText: string): string {
+  return [
+    "Write a concise session title that summarizes the user's text.",
+    "Return plain text only.",
+    "Rules:",
+    "- keep it specific and scannable",
+    "- prefer 2 to 4 words when possible",
+    `- must be fewer than ${GENERATED_SESSION_TITLE_MAX_LENGTH + 1} characters`,
+    "- do not use quotes, markdown, or commentary",
+    "- do not end with punctuation",
+    "- focus on the task, bug, feature, or topic",
+    "",
+    "User text:",
+    limitSection(sourceText, 12_000),
+  ].join("\n");
+}
+
 function appendOutputHandlingInstructions(
   prompt: string,
   outputFilePath: string,
@@ -315,9 +362,7 @@ function buildCommitPatchSampleForPrompt(stagedPatch: string, stagedSummary: str
   return selectedSections.join("\n\n");
 }
 
-function parseCommitSummaryEntries(
-  stagedSummary: string,
-): Array<{ path: string; status: string }> {
+function parseCommitSummaryEntries(stagedSummary: string): Array<{ path: string; status: string }> {
   return stagedSummary
     .split(/\r?\n/g)
     .map((line) => line.trim())

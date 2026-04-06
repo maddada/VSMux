@@ -265,10 +265,16 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
     case "promptRenameSession":
     case "restartSession":
     case "closeSession":
+    case "setSessionSleeping":
     case "copyResumeCommand":
+    case "forkSession":
     case "fullReloadSession":
     case "setT3SessionThreadId":
-      return typeof message.sessionId === "string" && message.sessionId.length > 0;
+      return (
+        typeof message.sessionId === "string" &&
+        message.sessionId.length > 0 &&
+        (message.type !== "setSessionSleeping" || typeof message.sleeping === "boolean")
+      );
 
     case "restorePreviousSession":
     case "deletePreviousSession":
@@ -341,6 +347,13 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
         message.sessionIds.every(
           (sessionId) => typeof sessionId === "string" && sessionId.length > 0,
         )
+      );
+
+    case "setGroupSleeping":
+      return (
+        typeof message.groupId === "string" &&
+        message.groupId.length > 0 &&
+        typeof message.sleeping === "boolean"
       );
 
     case "closeGroup":

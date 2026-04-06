@@ -28,9 +28,11 @@ import {
   renameGroupInSimpleWorkspace,
   renameSessionAliasInSimpleWorkspace,
   setSessionTitleInSimpleWorkspace,
+  setSessionSleepingInSimpleWorkspace,
   setT3SessionMetadataInSimpleWorkspace,
   setViewModeInSimpleWorkspace,
   setVisibleCountInSimpleWorkspace,
+  setGroupSleepingInSimpleWorkspace,
   syncGroupOrderInSimpleWorkspace,
   syncSessionOrderInSimpleWorkspace,
   toggleFullscreenSessionInSimpleWorkspace,
@@ -81,7 +83,9 @@ export class SessionGridStore {
     }
 
     const orderedSessions = getOrderedSessions(activeGroup.snapshot);
-    const focusedIndex = orderedSessions.findIndex((session) => session.sessionId === focusedSessionId);
+    const focusedIndex = orderedSessions.findIndex(
+      (session) => session.sessionId === focusedSessionId,
+    );
     if (focusedIndex < 0) {
       return false;
     }
@@ -195,10 +199,25 @@ export class SessionGridStore {
     return result.changed;
   }
 
-  public async setT3SessionMetadata(
-    sessionId: string,
-    t3: T3SessionMetadata,
-  ): Promise<boolean> {
+  public async setSessionSleeping(sessionId: string, sleeping: boolean): Promise<boolean> {
+    const result = setSessionSleepingInSimpleWorkspace(this.snapshot, sessionId, sleeping);
+    this.snapshot = result.snapshot;
+    if (result.changed) {
+      await this.persist();
+    }
+    return result.changed;
+  }
+
+  public async setGroupSleeping(groupId: string, sleeping: boolean): Promise<boolean> {
+    const result = setGroupSleepingInSimpleWorkspace(this.snapshot, groupId, sleeping);
+    this.snapshot = result.snapshot;
+    if (result.changed) {
+      await this.persist();
+    }
+    return result.changed;
+  }
+
+  public async setT3SessionMetadata(sessionId: string, t3: T3SessionMetadata): Promise<boolean> {
     const result = setT3SessionMetadataInSimpleWorkspace(this.snapshot, sessionId, t3);
     this.snapshot = result.snapshot;
     if (result.changed) {
@@ -265,7 +284,12 @@ export class SessionGridStore {
     targetIndex?: number,
   ): Promise<boolean> {
     const previousSnapshot = this.snapshot;
-    const result = moveSessionToGroupInSimpleWorkspace(this.snapshot, sessionId, groupId, targetIndex);
+    const result = moveSessionToGroupInSimpleWorkspace(
+      this.snapshot,
+      sessionId,
+      groupId,
+      targetIndex,
+    );
     this.snapshot = result.snapshot;
     logVSmuxDebug("store.moveSessionToGroup", {
       changed: result.changed,
@@ -315,7 +339,9 @@ export class SessionGridStore {
   }
 
   public getActiveGroupSessions(): SessionRecord[] {
-    return getOrderedSessions(getActiveGroup(this.snapshot)?.snapshot ?? createDefaultSessionGridSnapshot());
+    return getOrderedSessions(
+      getActiveGroup(this.snapshot)?.snapshot ?? createDefaultSessionGridSnapshot(),
+    );
   }
 
   private async persist(): Promise<void> {

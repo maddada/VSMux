@@ -19,6 +19,8 @@ export const SIDEBAR_THEME_SETTING = "sidebarTheme";
 export const AGENT_MANAGER_ZOOM_SETTING = "agentManagerZoom";
 export const SHOW_CLOSE_BUTTON_ON_SESSION_CARDS_SETTING = "showCloseButtonOnSessionCards";
 export const SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING = "showHotkeysOnSessionCards";
+export const SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING =
+  "showLastInteractionTimeOnSessionCards";
 export const SHOW_SIDEBAR_ACTIONS_SETTING = "showSidebarActions";
 export const SHOW_SIDEBAR_AGENTS_SETTING = "showSidebarAgents";
 export const SHOW_SIDEBAR_BROWSERS_SETTING = "showSidebarBrowsers";
@@ -73,6 +75,10 @@ export function getShowCloseButtonOnSessionCardsConfigurationKey(): string {
 
 export function getCompletionSoundConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${COMPLETION_SOUND_SETTING}`;
+}
+
+export function getShowLastInteractionTimeOnSessionCardsConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING}`;
 }
 
 export function getAgentsConfigurationKey(): string {
@@ -157,6 +163,14 @@ export function getShowHotkeysOnSessionCards(): boolean {
     vscode.workspace
       .getConfiguration(SETTINGS_SECTION)
       .get<boolean>(SHOW_HOTKEYS_ON_SESSION_CARDS_SETTING, false) ?? false
+  );
+}
+
+export function getShowLastInteractionTimeOnSessionCards(): boolean {
+  return (
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<boolean>(SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING, true) ?? true
   );
 }
 

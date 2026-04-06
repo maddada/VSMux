@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
 import { getSidebarAgentNameByIcon, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
+import { formatRelativeTimeLabel } from "./relative-time";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 
 const AGENT_SECONDARY_LABELS: Record<SidebarAgentIcon, readonly string[]> = {
@@ -28,6 +29,7 @@ export type SessionCardContentProps = {
   showDebugSessionNumbers: boolean;
   showCloseButton: boolean;
   showHotkeys: boolean;
+  showLastInteractionTime?: boolean;
 };
 
 export function SessionCardContent({
@@ -39,6 +41,7 @@ export function SessionCardContent({
   showDebugSessionNumbers,
   showCloseButton,
   showHotkeys,
+  showLastInteractionTime = false,
 }: SessionCardContentProps) {
   const headingText = session.primaryTitle?.trim() || session.alias;
   const terminalTitle = getAgentSecondaryText(session.terminalTitle, session.agentIcon);
@@ -62,6 +65,10 @@ export function SessionCardContent({
     titleTooltip,
   });
   const showMeta = showHotkeys;
+  const lastInteractionLabel =
+    showLastInteractionTime && session.lastInteractionAt
+      ? formatRelativeTimeLabel(session.lastInteractionAt)
+      : undefined;
 
   return (
     <>
@@ -95,6 +102,9 @@ export function SessionCardContent({
           ) : null}
         </div>
       </div>
+      {lastInteractionLabel ? (
+        <div className="session-last-interaction-time">{lastInteractionLabel}</div>
+      ) : null}
       {onRename ? (
         <button
           aria-label="Rename session"
