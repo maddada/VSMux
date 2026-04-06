@@ -1,13 +1,14 @@
-import { access } from "node:fs/promises";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { GitTextGenerationSettings } from "../../shared/git-text-generation-provider";
 import { GENERATED_SESSION_TITLE_MAX_LENGTH } from "../native-terminal-workspace/session-title-generation";
 import { logVSmuxDebug } from "../vsmux-debug-log";
 import { runShellCommand } from "./process";
 import {
   buildGitTextGenerationShellCommand,
+  getGitTextGenerationEffort,
+  type GitTextGenerationPurpose,
   parseGeneratedCommitMessageText,
   parseGeneratedPrContentText,
   parseGeneratedSessionTitleText,
@@ -63,6 +64,7 @@ export async function generateCommitMessage(
     cwd: input.cwd,
     outputFileName: "commitmessage.txt",
     prompt,
+    purpose: "commit-message",
     settings: input.settings,
     targetLabel: "commit message",
   });
@@ -85,6 +87,7 @@ export async function generatePrContent(
     cwd: input.cwd,
     outputFileName: "prcontent.txt",
     prompt,
+    purpose: "pull-request",
     settings: input.settings,
     targetLabel: "pull request content",
   });
@@ -106,6 +109,7 @@ export async function generateSessionTitle(
     cwd: input.cwd,
     outputFileName: "sessiontitle.txt",
     prompt,
+    purpose: "session-title",
     settings: input.settings,
     targetLabel: "session title",
   });
@@ -117,11 +121,12 @@ async function runGitTextGenerationText(input: {
   cwd: string;
   outputFileName: string;
   prompt: string;
+  purpose: GitTextGenerationPurpose;
   settings: GitTextGenerationSettings;
   targetLabel: string;
 }): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "vsmux-git-text-"));
-  const outputFilePath = path.join(tempDir, input.outputFileName);
+  const tempDir = await mkdtemp(join(tmpdir(), "vsmux-git-text-"));
+  const outputFilePath = join(tempDir, input.outputFileName);
   const prompt = appendOutputHandlingInstructions(
     input.prompt,
     outputFilePath,
@@ -129,7 +134,12 @@ async function runGitTextGenerationText(input: {
     input.targetLabel,
   );
   const usesPromptStdin = input.settings.provider === "codex";
-  const command = buildGitTextGenerationShellCommand(input.settings, prompt, outputFilePath);
+  const command = buildGitTextGenerationShellCommand(
+    input.settings,
+    prompt,
+    outputFilePath,
+    input.purpose,
+  );
 
   logVSmuxDebug("git.textGeneration.run.start", {
     commandPreview: truncateDebugPreview(command),
@@ -154,7 +164,12 @@ async function runGitTextGenerationText(input: {
       targetLabel: input.targetLabel,
     });
     if (result.exitCode !== 0) {
-      throw createGitTextGenerationCommandError(input.settings, result, input.targetLabel);
+      throw createGitTextGenerationCommandError(
+        input.settings,
+        result,
+        input.targetLabel,
+        input.purpose,
+      );
     }
 
     const content = await readGeneratedOutput(outputFilePath, result.stdout);
@@ -186,28 +201,35 @@ function buildCommitMessagePrompt(input: {
     "Write a Git commit message for the staged changes.",
     "Return plain text only.",
     "Use this exact format:",
-    "type(scope): short imperative summary",
+    "type: descriptive imperative summary",
+    "or",
+    "type(scope): descriptive imperative summary",
     "- bullet point",
     "- bullet point",
     "",
     "Rules:",
     "- use a conventional commit type such as feat, fix, refactor, chore, docs, test, style, perf, build, or ci",
     "- prefer feat only when it really is a feature; otherwise pick the most accurate type",
-    "- scope must be short, lowercase, and specific",
-    "- summary must be imperative, specific, and <= 72 characters",
-    "- body should be 3 to 8 concise bullet points when there are meaningful changes",
+    "- scope is optional; include it only when it clearly improves precision",
+    "- if you use a scope, keep it short, lowercase, and specific",
+    "- summary should read like a polished VS Code Copilot commit title: descriptive, specific, and imperative",
+    "- summary can be up to 72 characters when needed",
+    "- body should usually be 5 to 12 bullet points when there are multiple meaningful changes",
+    "- each bullet should mention a concrete behavior, file area, refactor, or test change",
+    "- prefer detailed, human-readable bullets over compressed shorthand",
     "- do not use markdown code fences or commentary",
     "",
     "Example:",
-    "feat(daemon): Implement terminal daemon session management and UI enhancements",
-    "- Add functions to create session keys and index terminal snapshots by workspace.",
-    "- Update terminal host protocol version to 10.",
-    "- Introduce DaemonSessionsModal for managing and displaying active daemon sessions.",
-    "- Enhance sidebar to include options for refreshing and killing daemon sessions.",
-    "- Update session-related types and messages to include workspaceId.",
-    "- Improve styling for session cards and modals for better user experience.",
-    "- Refactor session card content to include debug session numbers and improve tooltips.",
-    "- Adjust session context menu and overlay styles for better usability.",
+    "feat: Update session rename title auto summarization and git text generation",
+    "- Increase the importance of session rename title auto summarization facts.",
+    "- Update creation and modification timestamps in title summarization facts.",
+    "- Refine session title generation facts for clarity and accuracy.",
+    "- Expand the documented title sanitization and length-limit behavior.",
+    "- Adjust git text generation commands for Codex and Claude providers.",
+    "- Update tests to match the revised text generation commands.",
+    "- Improve workspace panel bootstrapping with the latest embedded state.",
+    "- Replay the latest workspace state before sending transient updates.",
+    "- Refresh package settings to match the updated text generation behavior.",
     "",
     `Current branch: ${input.branch ?? "(detached)"}`,
     "",
@@ -472,21 +494,26 @@ function createGitTextGenerationCommandError(
     stdout: string;
   },
   targetLabel: string,
+  purpose: GitTextGenerationPurpose,
 ): Error {
   const detail = result.stderr.trim() || result.stdout.trim() || "Git text generation failed.";
   return new Error(
-    `Git ${targetLabel} generation via ${describeGitTextGenerationSettings(settings)} failed: ${detail}`,
+    `Git ${targetLabel} generation via ${describeGitTextGenerationSettings(settings, purpose)} failed: ${detail}`,
   );
 }
 
-function describeGitTextGenerationSettings(settings: GitTextGenerationSettings): string {
+function describeGitTextGenerationSettings(
+  settings: GitTextGenerationSettings,
+  purpose: GitTextGenerationPurpose = "commit-message",
+): string {
   if (settings.provider === "custom") {
     return `custom command "${settings.customCommand}"`;
   }
 
+  const effort = getGitTextGenerationEffort(purpose);
   return settings.provider === "claude"
-    ? "Claude Haiku (high effort)"
-    : "Codex gpt-5.4-mini (high effort)";
+    ? `Claude Haiku (${effort} effort)`
+    : `Codex gpt-5.4-mini (${effort} effort)`;
 }
 
 function truncateDebugPreview(value: string, maxLength = 400): string {

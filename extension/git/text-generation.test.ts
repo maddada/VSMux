@@ -7,24 +7,37 @@ import {
 } from "./text-generation-utils";
 
 describe("buildGitTextGenerationShellCommand", () => {
-  test("should build the pinned codex command", () => {
+  test("should build the pinned codex command for commit messages at medium effort", () => {
     expect(
       buildGitTextGenerationShellCommand(
         { customCommand: "", provider: "codex" },
         "prompt text",
         "/tmp/commitmessage.txt",
+        "commit-message",
       ),
-    ).toBe(`exec codex -m gpt-5.4-mini -c 'model_reasoning_effort="high"' exec -`);
+    ).toBe(`exec codex -m gpt-5.4-mini -c 'model_reasoning_effort="medium"' exec -`);
   });
 
-  test("should build the pinned claude command", () => {
+  test("should build the pinned claude command for pull requests at medium effort", () => {
     expect(
       buildGitTextGenerationShellCommand(
         { customCommand: "", provider: "claude" },
         "prompt text",
         "/tmp/commitmessage.txt",
+        "pull-request",
       ),
-    ).toBe("exec claude --model haiku --effort high -p 'prompt text'");
+    ).toBe("exec claude --model haiku --effort medium -p 'prompt text'");
+  });
+
+  test("should keep session title generation on low effort", () => {
+    expect(
+      buildGitTextGenerationShellCommand(
+        { customCommand: "", provider: "codex" },
+        "prompt text",
+        "/tmp/sessiontitle.txt",
+        "session-title",
+      ),
+    ).toBe(`exec codex -m gpt-5.4-mini -c 'model_reasoning_effort="low"' exec -`);
   });
 
   test("should expand custom command placeholders", () => {
@@ -36,6 +49,7 @@ describe("buildGitTextGenerationShellCommand", () => {
         },
         "prompt text",
         "/tmp/commitmessage.txt",
+        "commit-message",
       ),
     ).toBe("my-generator --out '/tmp/commitmessage.txt' --prompt 'prompt text'");
   });

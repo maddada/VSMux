@@ -12,13 +12,18 @@ type PrContentGenerationResult = {
   title: string;
 };
 
+export type GitTextGenerationPurpose = "commit-message" | "pull-request" | "session-title";
+
 export function buildGitTextGenerationShellCommand(
   settings: GitTextGenerationSettings,
   prompt: string,
   outputFilePath: string,
+  purpose: GitTextGenerationPurpose,
 ): string {
+  const effort = getGitTextGenerationEffort(purpose);
+
   if (settings.provider === "claude") {
-    return buildCommandLine("claude", ["--model", "haiku", "--effort", "high", "-p", prompt]);
+    return buildCommandLine("claude", ["--model", "haiku", "--effort", effort, "-p", prompt]);
   }
 
   if (settings.provider === "custom") {
@@ -29,10 +34,14 @@ export function buildGitTextGenerationShellCommand(
     "-m",
     "gpt-5.4-mini",
     "-c",
-    'model_reasoning_effort="high"',
+    `model_reasoning_effort="${effort}"`,
     "exec",
     "-",
   ]);
+}
+
+export function getGitTextGenerationEffort(purpose: GitTextGenerationPurpose): "low" | "medium" {
+  return purpose === "session-title" ? "low" : "medium";
 }
 
 export function parseGeneratedCommitMessageText(value: string): CommitMessageGenerationResult {

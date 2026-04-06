@@ -568,7 +568,7 @@
             "Claude",
             "Custom"
           ],
-          "description": "Provider used to generate Git commit messages and PR text. Codex uses codex -m gpt-5.4-mini with high reasoning effort and Claude uses claude --model haiku --effort high."
+          "description": "Provider used to generate Git commit messages and PR text. Codex uses codex -m gpt-5.4-mini with low reasoning effort and Claude uses claude --model haiku --effort low."
         },
         "VSmux.gitTextGenerationCustomCommand": {
           "title": "Git Text Generation Custom Command",
