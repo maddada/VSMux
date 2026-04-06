@@ -1,33 +1,31 @@
 ---
 title: Sidebar Session Card Last Interaction Timestamps
 tags: []
-related: [facts/project/sidebar_session_card_last_interaction_timestamp_facts.md]
 keywords: []
-importance: 60
+importance: 65
 recency: 1
-maturity: draft
-updateCount: 2
+maturity: validated
+updateCount: 3
 createdAt: "2026-04-06T03:48:19.300Z"
-updatedAt: "2026-04-06T16:48:18.618Z"
+updatedAt: "2026-04-06T21:16:41.202Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Document sidebar session card last-interaction timestamp alignment adjustment
+Document sidebar session card last interaction timestamp typography update
 
 **Changes:**
 
-- Changed .session-last-interaction-time from text-align: left to text-align: right
-- Preserved the separate timestamp row below the title
-- Left the rest of the session card layout unchanged
+- Increased .session-last-interaction-time font size by 2px using the sidebar density scale variable
+- Preserved existing right alignment and session card layout while increasing timestamp prominence
 
 **Files:**
 
 - sidebar/styles/session-cards.css
 
 **Flow:**
-render session card -> place timestamp on separate row -> right-align timestamp text
+sidebar session card render -> apply .session-last-interaction-time styles -> scale font with --sidebar-density-scale -> preserve alignment within card layout
 
 **Timestamp:** 2026-04-06
 
@@ -35,17 +33,17 @@ render session card -> place timestamp on separate row -> right-align timestamp 
 
 ### Structure
 
-The sidebar session card keeps the last-interaction timestamp on its own row beneath the title. Only the text alignment of that row changed, so the visual structure of title above timestamp remains intact.
+The change is localized to the sidebar session card stylesheet and specifically targets the .session-last-interaction-time selector used to render last interaction timestamps in the session cards.
 
 ### Dependencies
 
-This tweak depends on the existing sidebar session card CSS structure and specifically targets the .session-last-interaction-time rule in sidebar/styles/session-cards.css. No related card layout or component structure changes were introduced.
+Typography continues to depend on the existing --sidebar-density-scale CSS variable, so the updated size still tracks sidebar density settings and does not require layout rule changes.
 
 ### Highlights
 
-This was an alignment-only UX adjustment: the timestamp now aligns to the right while preserving spacing, row separation, and the rest of the card layout behavior.
+The font size moved from calc(10px _ var(--sidebar-density-scale)) to calc(12px _ var(--sidebar-density-scale)), creating a +2px visual bump that improves timestamp visibility without changing right alignment or overall card structure.
 
 ## Facts
 
-- **sidebar_last_interaction_alignment**: The sidebar session card last-interaction timestamp was changed from left-aligned to right-aligned. [project]
-- **sidebar_last_interaction_alignment_file**: The change was made in sidebar/styles/session-cards.css on the .session-last-interaction-time selector. [project]
+- **sidebar_last_interaction_font_size**: The sidebar last interaction timestamp font size was increased from calc(10px _ var(--sidebar-density-scale)) to calc(12px _ var(--sidebar-density-scale)) in sidebar/styles/session-cards.css. [project]
+- **sidebar_timestamp_layout_preservation**: The timestamp typography change preserves the existing right alignment and card layout. [project]

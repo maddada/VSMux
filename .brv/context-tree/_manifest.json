@@ -3,59 +3,59 @@
     {
       "order": 1,
       "path": "architecture/chat_history/_index.md",
-      "tokens": 1163,
+      "tokens": 1639,
       "type": "summary"
     },
     {
-      "importance": 60,
+      "importance": 65,
       "path": "architecture/terminal_workspace/sidebar_session_card_last_interaction_timestamps.md",
-      "tokens": 445,
+      "tokens": 465,
+      "type": "context"
+    },
+    {
+      "importance": 65,
+      "path": "facts/project/sidebar_session_card_last_interaction_timestamp_facts.md",
+      "tokens": 346,
       "type": "context"
     },
     {
       "importance": 60,
-      "path": "facts/project/sidebar_session_card_last_interaction_timestamp_facts.md",
-      "tokens": 403,
+      "path": "architecture/terminal_workspace/sidebar_browsers_empty_state.md",
+      "tokens": 759,
+      "type": "context"
+    },
+    {
+      "importance": 60,
+      "path": "facts/project/sidebar_browsers_empty_state_facts.md",
+      "tokens": 444,
       "type": "context"
     },
     {
       "importance": 55,
       "path": "architecture/terminal_workspace/session_rename_title_auto_summarization.md",
-      "tokens": 1282,
+      "tokens": 1285,
       "type": "context"
     },
     {
       "importance": 55,
-      "path": "architecture/terminal_workspace/sidebar_browsers_empty_state.md",
-      "tokens": 1139,
-      "type": "context"
-    },
-    {
-      "importance": 55,
-      "path": "facts/project/sidebar_browsers_empty_state_facts.md",
-      "tokens": 384,
+      "path": "facts/project/workspace_session_sleep_wake_support_facts.md",
+      "tokens": 624,
       "type": "context"
     },
     {
       "importance": 50,
-      "path": "architecture/chat_history/context.md",
-      "tokens": 142,
-      "type": "context"
-    },
-    {
-      "importance": 50,
-      "path": "architecture/context.md",
-      "tokens": 182,
+      "path": "facts/project/context.md",
+      "tokens": 55,
       "type": "context"
     }
   ],
-  "generated_at": "2026-04-06T17:09:24.790Z",
+  "generated_at": "2026-04-06T21:34:34.430Z",
   "lane_tokens": {
-    "contexts": 3977,
+    "contexts": 3978,
     "stubs": 0,
-    "summaries": 1163
+    "summaries": 1639
   },
-  "source_fingerprint": "4b638acd7c15a29269369ffd68da147dfc209a87dc020afbeaebbb15d3de6389",
-  "total_tokens": 5140,
+  "source_fingerprint": "2571e3810bf2b1804186b91083f290c03dd1645cf6e3517d08a4f0096465c115",
+  "total_tokens": 5617,
   "version": 1
 }

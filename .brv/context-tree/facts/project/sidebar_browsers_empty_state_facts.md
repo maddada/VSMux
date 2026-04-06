@@ -2,30 +2,30 @@
 title: Sidebar Browsers Empty State Facts
 tags: []
 keywords: []
-importance: 55
+importance: 60
 recency: 1
 maturity: draft
-updateCount: 1
+updateCount: 2
 createdAt: "2026-04-06T12:22:48.078Z"
-updatedAt: "2026-04-06T12:23:55.548Z"
+updatedAt: "2026-04-06T20:22:17.761Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Store project facts for sidebar browser-group empty-state behavior
+Record project facts about browser-group empty rendering behavior in the sidebar.
 
 **Changes:**
 
-- Recorded browser-group sidebar UI behavior facts
-- Captured add-button message routing and visible count constants
+- Recorded browser empty-state suppression facts
+- Recorded preserved non-browser empty-state behavior
 
 **Files:**
 
 - sidebar/session-group-section.tsx
 
 **Flow:**
-identify browser-group conditions and actions -> store as recallable project facts
+browser group identified -> empty group body suppressed -> non-browser empty groups still show drop target
 
 **Timestamp:** 2026-04-06
 
@@ -33,16 +33,19 @@ identify browser-group conditions and actions -> store as recallable project fac
 
 ### Structure
 
-This fact entry isolates concrete implementation details from the sidebar browser-group empty-state change so they can be recalled without re-reading the architecture topic.
+This fact record captures the rendering contract for empty browser and non-browser sidebar groups after the session-group-section update.
 
 ### Highlights
 
-It records the file location, browser-group detection expression, message types for add-button actions, and the preserved visible-count constants.
+Browser groups hide the empty body when no sessions exist, avoiding the extra gap below the header, while non-browser groups keep the No sessions drop target behavior.
+
+### Examples
+
+Fact subjects include browser_group_empty_rendering, browser_group_layout_gap_fix, non_browser_group_empty_state, and browser_empty_placeholder_future_option.
 
 ## Facts
 
-- **sidebar_browser_empty_state_file**: The implementation file is sidebar/session-group-section.tsx. [project]
-- **browser_group_kind_check**: Browser group detection uses group?.kind === "browser". [project]
-- **browser_group_add_message**: Browser groups emit type: "openBrowser" when the add button is used. [project]
-- **non_browser_group_add_message**: Non-browser groups emit type: "createSessionInGroup" with the groupId when the add button is used. [project]
-- **visible_count_options**: Visible session count options are 1, 2, 3, 4, 6, and 9. [project]
+- **browser_group_empty_rendering**: Empty browser sidebar groups do not render the .group-sessions container when they have no sessions. [project]
+- **browser_group_layout_gap_fix**: Suppressing .group-sessions for empty browser groups prevents the parent .group grid from leaving an extra gap below the header. [project]
+- **non_browser_group_empty_state**: Non-browser groups still render a No sessions empty drop target when empty. [project]
+- **browser_empty_placeholder_future_option**: A comment remains in sidebar/session-group-section.tsx indicating the browser empty placeholder may be restored later. [project]

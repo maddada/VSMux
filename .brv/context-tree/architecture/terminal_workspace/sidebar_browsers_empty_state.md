@@ -2,77 +2,60 @@
 title: Sidebar Browsers Empty State
 tags: []
 keywords: []
-importance: 55
+importance: 60
 recency: 1
 maturity: draft
-updateCount: 1
+updateCount: 2
 createdAt: "2026-04-06T12:22:48.077Z"
-updatedAt: "2026-04-06T12:23:55.546Z"
+updatedAt: "2026-04-06T20:22:17.759Z"
 ---
 
 ## Raw Concept
 
 **Task:**
-Document browser-group empty-state behavior in the sidebar session group section
+Document the sidebar browser-group empty-state rendering behavior that removes the extra layout gap below browser group headers.
 
 **Changes:**
 
-- Removed the rendered "No browsers" empty placeholder for browser groups
-- Kept the empty browser-group drop target container for drag and drop support
-- Left the old browser placeholder commented with a note for possible restoration later
-- Preserved browser-group specific interaction restrictions and add-button behavior
+- Added shouldRenderGroupSessions guard based on browser-group status and orderedSessionIds length
+- Empty browser groups no longer render the .group-sessions wrapper
+- Preserved non-browser empty drop target rendering with No sessions state
+- Retained a comment noting that the browser empty placeholder may be restored later
 
 **Files:**
 
 - sidebar/session-group-section.tsx
 
 **Flow:**
-render group -> detect browser group -> if empty render drop target only for browser groups -> otherwise render normal empty state or session cards -> route add action to openBrowser for browser groups
+render group header -> evaluate isBrowserGroup and orderedSessionIds.length -> render .group-sessions only when allowed -> preserve non-browser empty drop target behavior
 
 **Timestamp:** 2026-04-06
 
 **Patterns:**
 
-- `group\?\.kind === "browser"` - Detects whether the group is a browser group
-- `type: "openBrowser"` - Sidebar message used when add is clicked for a browser group
-- `type: "createSessionInGroup"` - Sidebar message used when add creates a regular session in a non-browser group
-- `type: "renameGroup"` - Sidebar message type for group rename interactions
-- `type: "focusGroup"` - Sidebar message type for focusing a group
-- `type: "setVisibleCount"` - Sidebar message type for visible session count updates
-- `type: "closeGroup"` - Sidebar message type for closing a group
-- `type: "setGroupSleeping"` - Sidebar message type for sleeping or waking a group
-- `type: "sidebarDebugLog"` - Sidebar message type for debug logging
+- `const shouldRenderGroupSessions = !isBrowserGroup || orderedSessionIds.length > 0;` - Determines whether the sidebar group should render the .group-sessions container.
 
 ## Narrative
 
 ### Structure
 
-The sidebar group renderer in sidebar/session-group-section.tsx checks isBrowserGroup using group?.kind === "browser". When a group has sessions it maps orderedSessionIds to SortableSessionCard. When the group is empty, browser groups render only the group-empty-drop-target wrapper while non-browser groups render the same wrapper plus a visible "No sessions" placeholder.
+The sidebar session-group section now computes a shouldRenderGroupSessions boolean before rendering the group body. Browser groups use that guard to skip the entire .group-sessions container when they have zero orderedSessionIds, while non-browser groups continue through the existing empty-state branch.
 
 ### Dependencies
 
-The empty-state behavior depends on orderedSessionIds, groupDropPosition, isGroupDropTarget, and sessionDragIndicator to preserve drag/drop behavior. Browser-group interaction rules also depend on message dispatch through the vscode webview bridge for actions such as openBrowser and createSessionInGroup.
+This behavior depends on the group classification via isBrowserGroup, the orderedSessionIds collection, and the existing drag-and-drop attributes on group-sessions and group-empty-drop-target nodes. The rendering change is localized to sidebar/session-group-section.tsx and keeps existing SortableSessionCard and drop-target semantics intact for non-empty groups.
 
 ### Highlights
 
-This change intentionally removes the visible "No browsers" copy without removing drop semantics. The old placeholder remains commented in the JSX with a note that it may be restored later. Browser groups continue to opt out of sorting, focus-on-click, context menus, rename, visible-count changes, and sleep actions while the add button opens a browser instead of creating a regular session.
-
-### Rules
-
-Browser groups no longer render the "No browsers" empty placeholder. Keep the empty drop target container so drag/drop still works. Leave the old placeholder commented with a note that it may be restored later. Rename / visible-count / sleep actions are blocked for browser groups.
+The change removes the extra visual gap caused by the parent .group grid reserving space for an empty .group-sessions container under browser headers. Non-browser groups still show the No sessions empty drop target, and the source keeps an inline comment that the browser-specific empty placeholder could be restored in the future.
 
 ### Examples
 
-Example empty browser-group rendering: <div className="group-empty-drop-target" data-drop-position={groupDropPosition} data-drop-target={String(isGroupDropTarget)}>{/_ We may want to restore the empty browser placeholder later. _/}{/_ <div className="group-empty-state">No browsers</div> _/}</div>. Example add-button branching: if (isBrowserGroup) { vscode.postMessage({ type: "openBrowser" }); return; } vscode.postMessage({ groupId: group.groupId, type: "createSessionInGroup" });
+Example behavior: an empty Browsers group now renders only its header with no placeholder body, while an empty non-browser group still renders a drop target containing the text No sessions.
 
 ## Facts
 
-- **browser_group_empty_state**: Browser groups no longer render the "No browsers" empty placeholder. [project]
-- **browser_group_drop_target**: Browser groups keep an empty drop target container so drag and drop still works. [project]
-- **browser_group_condition**: The browser group condition is group?.kind === "browser". [project]
-- **browser_group_sorting**: Group sorting is disabled for browser groups. [project]
-- **browser_group_focus_click**: Clicking a browser group does not focus the group. [project]
-- **browser_group_context_menu**: Browser groups suppress the context menu. [project]
-- **browser_group_add_action**: The add button opens a browser for browser groups instead of creating a session. [project]
-- **browser_group_restricted_actions**: Rename, visible-count, and sleep actions are blocked for browser groups. [project]
-- **visible_session_count_options**: Visible session count options are [1, 2, 3, 4, 6, 9]. [project]
+- **browser_group_empty_rendering**: Empty browser sidebar groups do not render the .group-sessions container when they have no sessions. [project]
+- **browser_group_layout_gap_fix**: Suppressing .group-sessions for empty browser groups prevents the parent .group grid from leaving an extra gap below the header. [project]
+- **non_browser_group_empty_state**: Non-browser groups still render a No sessions empty drop target when empty. [project]
+- **browser_empty_placeholder_future_option**: A comment remains in sidebar/session-group-section.tsx indicating the browser empty placeholder may be restored later. [project]
