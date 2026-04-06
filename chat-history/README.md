@@ -29,12 +29,12 @@ bun install
 bun run build
 ```
 
-This compiles the CSS, extension, and webview, then packages everything into `ai-devtools-vscode-<version>.vsix`.
+This compiles the CSS, extension, and webview, then packages everything into `vsmux-search-vscode-<version>.vsix`.
 
 ### Install to VS Code
 
 ```bash
-code --install-extension ai-devtools-vscode-*.vsix
+code --install-extension vsmux-search-vscode-*.vsix
 ```
 
 Then reload VS Code (`Cmd+Shift+P` → "Developer: Reload Window").

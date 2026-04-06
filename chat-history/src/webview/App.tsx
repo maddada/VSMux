@@ -374,7 +374,7 @@ export function App() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquareText className="h-5 w-5" />
-              AI DevTools - Conversation Viewer
+              VSmux Search - Conversation Viewer
             </CardTitle>
           </CardHeader>
           <CardContent>

@@ -33,7 +33,7 @@ export class ConversationTreeItem extends vscode.TreeItem {
 
       // Command to open the conversation when clicked
       this.command = {
-        command: "ai-devtools.openConversation",
+        command: "VSmuxSearch.openConversation",
         title: "Open Conversation",
         arguments: [conversationFile],
       };

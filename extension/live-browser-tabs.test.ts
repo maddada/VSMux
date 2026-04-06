@@ -206,6 +206,24 @@ describe("getLiveBrowserTabs", () => {
     expect(browserTabs).toEqual([]);
   });
 
+  test("should ignore tabs whose title starts with VSmux Search", () => {
+    const browserTabs = getLiveBrowserTabs([
+      {
+        isActive: true,
+        tabs: [
+          {
+            input: new vscode.TabInputWebview("workbench.vsmuxsearch.panel"),
+            isActive: true,
+            label: "VSmux Search - Network",
+          },
+        ],
+        viewColumn: 1,
+      } as never,
+    ]);
+
+    expect(browserTabs).toEqual([]);
+  });
+
   test("should ignore the VS Code Welcome tab", () => {
     const browserTabs = getLiveBrowserTabs([
       {

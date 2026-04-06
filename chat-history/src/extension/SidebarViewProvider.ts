@@ -48,7 +48,7 @@ function getEncodedHomePrefix(): string {
 
 /**
  * Convert encoded folder name back to a readable path
- * e.g. "-Users-madda-dev-ai-devtools-vscode" -> "~/dev/ai-devtools-vscode"
+ * e.g. "-Users-madda-dev-vsmux-search-vscode" -> "~/dev/vsmux-search-vscode"
  * Only decodes known directory prefixes, keeps project name with dashes intact
  */
 function formatFolderDisplayName(encodedName: string): string {
@@ -132,7 +132,7 @@ function inferConversationProfile(filePath: string): ConversationProfile | undef
 export type ConversationScope = "current" | "all";
 
 export class SidebarViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = "aiDevtools.conversations";
+  public static readonly viewType = "VSmuxSearch.conversations";
 
   private _view?: vscode.WebviewView;
   private _folders: Map<string, FolderNode> = new Map();
@@ -180,7 +180,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         case "openConversation":
           const file = this._findFileByPath(message.path);
           if (file) {
-            vscode.commands.executeCommand("ai-devtools.openConversation", file);
+            vscode.commands.executeCommand("VSmuxSearch.openConversation", file);
           }
           break;
         case "toggleScope":
@@ -374,7 +374,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <title>AI DevTools</title>
+  <title>VSmux Search</title>
   <style>
     * {
       box-sizing: border-box;

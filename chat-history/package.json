@@ -1,19 +1,19 @@
 {
-  "name": "ai-devtools-vscode",
-  "displayName": "AI DevTools",
+  "name": "vsmux-search-vscode",
+  "displayName": "VSmux Search",
   "version": "1.1.0",
   "private": true,
-  "description": "View and debug Claude Code and Codex conversations",
+  "description": "Search and inspect Claude Code and Codex conversations",
   "categories": [
     "Other"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/maddada/ai-devtools-vscode.git",
+    "url": "https://github.com/maddada/VSmux.git",
     "directory": ""
   },
-  "publisher": "ai-devtools",
+  "publisher": "vsmux-search",
   "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "bun run compile",
@@ -60,81 +60,81 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "ai-devtools",
-          "title": "AI DevTools",
+          "id": "vsmux-search",
+          "title": "VSmux Search",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "ai-devtools": [
+      "vsmux-search": [
         {
-          "id": "aiDevtools.conversations",
+          "id": "VSmuxSearch.conversations",
           "type": "webview",
-          "name": "Conversations",
+          "name": "VSmux Search",
           "icon": "media/icon.svg",
-          "contextualTitle": "AI DevTools"
+          "contextualTitle": "VSmux Search"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "aiDevtools.conversations",
-        "contents": "No conversations found for this project.\n\nStart a Claude Code or Codex conversation in this workspace to see it here.\n\n[Show All Projects](command:ai-devtools.toggleScope)\n[Refresh](command:ai-devtools.refresh)"
+        "view": "VSmuxSearch.conversations",
+        "contents": "No conversations found for this project.\n\nStart a Claude Code or Codex conversation in this workspace to see it here.\n\n[Show All Projects](command:VSmuxSearch.toggleScope)\n[Refresh](command:VSmuxSearch.refresh)"
       }
     ],
     "commands": [
       {
-        "command": "ai-devtools.openViewer",
-        "title": "AI DevTools: Open Conversation Viewer"
+        "command": "VSmuxSearch.openViewer",
+        "title": "VSmux Search: Open Conversation Viewer"
       },
       {
-        "command": "ai-devtools.refresh",
+        "command": "VSmuxSearch.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "ai-devtools.openConversation",
+        "command": "VSmuxSearch.openConversation",
         "title": "Open Conversation"
       },
       {
-        "command": "ai-devtools.toggleScope",
-        "title": "AI DevTools: Toggle Scope (Current/All Projects)",
+        "command": "VSmuxSearch.toggleScope",
+        "title": "VSmux Search: Toggle Scope (Current/All Projects)",
         "icon": "$(filter)"
       },
       {
-        "command": "ai-devtools.toggleTimeFilter",
-        "title": "AI DevTools: Toggle Time Filter (Recent/All)",
+        "command": "VSmuxSearch.toggleTimeFilter",
+        "title": "VSmux Search: Toggle Time Filter (Recent/All)",
         "icon": "$(history)"
       },
       {
-        "command": "ai-devtools.suspend",
-        "title": "AI DevTools: Suspend (Release Memory)",
+        "command": "VSmuxSearch.suspend",
+        "title": "VSmux Search: Suspend (Release Memory)",
         "icon": "$(debug-pause)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "ai-devtools.toggleTimeFilter",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.toggleTimeFilter",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@1"
         },
         {
-          "command": "ai-devtools.toggleScope",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.toggleScope",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@2"
         },
         {
-          "command": "ai-devtools.refresh",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.refresh",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@3"
         }
       ]
     }
   },
   "activationEvents": [
-    "onView:aiDevtools.conversations"
+    "onView:VSmuxSearch.conversations"
   ],
   "engines": {
     "vscode": "^1.85.0"

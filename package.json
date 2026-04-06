@@ -215,31 +215,31 @@
         "category": "VSmux"
       },
       {
-        "command": "ai-devtools.openViewer",
-        "title": "AI DevTools: Open Conversation Viewer"
+        "command": "VSmuxSearch.openViewer",
+        "title": "VSmux Search: Open Conversation Viewer"
       },
       {
-        "command": "ai-devtools.refresh",
+        "command": "VSmuxSearch.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "ai-devtools.openConversation",
+        "command": "VSmuxSearch.openConversation",
         "title": "Open Conversation"
       },
       {
-        "command": "ai-devtools.toggleScope",
-        "title": "AI DevTools: Toggle Scope (Current/All Projects)",
+        "command": "VSmuxSearch.toggleScope",
+        "title": "VSmux Search: Toggle Scope (Current/All Projects)",
         "icon": "$(filter)"
       },
       {
-        "command": "ai-devtools.toggleTimeFilter",
-        "title": "AI DevTools: Toggle Time Filter (Recent/All)",
+        "command": "VSmuxSearch.toggleTimeFilter",
+        "title": "VSmux Search: Toggle Time Filter (Recent/All)",
         "icon": "$(history)"
       },
       {
-        "command": "ai-devtools.suspend",
-        "title": "AI DevTools: Suspend (Release Memory)",
+        "command": "VSmuxSearch.suspend",
+        "title": "VSmux Search: Suspend (Release Memory)",
         "icon": "$(debug-pause)"
       }
     ],
@@ -268,34 +268,34 @@
         },
         {
           "type": "webview",
-          "id": "aiDevtools.conversations",
-          "name": "AI DevTools",
+          "id": "VSmuxSearch.conversations",
+          "name": "VSmux Search",
           "icon": "chat-history/media/icon.svg",
-          "contextualTitle": "AI DevTools"
+          "contextualTitle": "VSmux Search"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "aiDevtools.conversations",
-        "contents": "No conversations found for this project.\n\nStart a Claude Code or Codex conversation in this workspace to see it here.\n\n[Show All Projects](command:ai-devtools.toggleScope)\n[Refresh](command:ai-devtools.refresh)"
+        "view": "VSmuxSearch.conversations",
+        "contents": "No conversations found for this project.\n\nStart a Claude Code or Codex conversation in this workspace to see it here.\n\n[Show All Projects](command:VSmuxSearch.toggleScope)\n[Refresh](command:VSmuxSearch.refresh)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "ai-devtools.toggleTimeFilter",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.toggleTimeFilter",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@1"
         },
         {
-          "command": "ai-devtools.toggleScope",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.toggleScope",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@2"
         },
         {
-          "command": "ai-devtools.refresh",
-          "when": "view == aiDevtools.conversations",
+          "command": "VSmuxSearch.refresh",
+          "when": "view == VSmuxSearch.conversations",
           "group": "navigation@3"
         }
       ]
@@ -780,7 +780,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onView:VSmux.sessions",
-    "onView:aiDevtools.conversations",
+    "onView:VSmuxSearch.conversations",
     "onWebviewPanel:vsmux.workspace"
   ],
   "icon": "media/VSmux-marketplace-icon.png",

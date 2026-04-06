@@ -149,8 +149,8 @@ const SEPARATOR = "\n\n ------------- \n\n";
 
 // Export tags for re-import
 const TAGS = {
-  header: "<!-- AI-DEVTOOLS-EXPORT-START -->",
-  footer: "<!-- AI-DEVTOOLS-EXPORT-END -->",
+  header: "<!-- VSMUX-SEARCH-EXPORT-START -->",
+  footer: "<!-- VSMUX-SEARCH-EXPORT-END -->",
   metadata: "<!-- METADATA",
   user: "<!-- USER-MESSAGE -->",
   assistant: "<!-- ASSISTANT-MESSAGE -->",
@@ -427,5 +427,5 @@ export function saveToFile(content: string, fileName: string): void {
 // Generate default export filename
 export function getExportFileName(originalFileName: string): string {
   const sessionId = originalFileName.replace(".jsonl", "");
-  return `ai-devtools-export-${sessionId}.md`;
+  return `vsmux-search-export-${sessionId}.md`;
 }

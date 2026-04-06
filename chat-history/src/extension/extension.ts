@@ -22,7 +22,7 @@ function getWorkspacePath(): string | null {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log("AI DevTools extension is now active");
+  console.log("VSmux Search extension is now active");
 
   // Get the current workspace path
   const workspacePath = getWorkspacePath();
@@ -45,11 +45,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(workspaceWatcher);
 
   // Register refresh command
-  const refreshCommand = vscode.commands.registerCommand("ai-devtools.refresh", () => {
+  const refreshCommand = vscode.commands.registerCommand("VSmuxSearch.refresh", () => {
     if (isSuspended) {
       // Resume from suspended state
       isSuspended = false;
-      // vscode.window.showInformationMessage('AI DevTools resumed');
+      // vscode.window.showInformationMessage('VSmux Search resumed');
     }
     if (sidebarProvider) {
       sidebarProvider.refresh();
@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(refreshCommand);
 
   // Register toggle scope command
-  const toggleScopeCommand = vscode.commands.registerCommand("ai-devtools.toggleScope", () => {
+  const toggleScopeCommand = vscode.commands.registerCommand("VSmuxSearch.toggleScope", () => {
     if (sidebarProvider) {
       sidebarProvider.toggleScope();
     }
@@ -68,7 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register toggle time filter command
   const toggleTimeFilterCommand = vscode.commands.registerCommand(
-    "ai-devtools.toggleTimeFilter",
+    "VSmuxSearch.toggleTimeFilter",
     () => {
       if (sidebarProvider) {
         sidebarProvider.toggleTimeFilter();
@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register open conversation command (called when clicking a file in the tree)
   const openConversationCommand = vscode.commands.registerCommand(
-    "ai-devtools.openConversation",
+    "VSmuxSearch.openConversation",
     (conversationFile: ConversationFile) => {
       openConversationViewer(context, conversationFile);
     },
@@ -87,14 +87,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(openConversationCommand);
 
   // Register open viewer command (for command palette)
-  const openViewerCommand = vscode.commands.registerCommand("ai-devtools.openViewer", () => {
+  const openViewerCommand = vscode.commands.registerCommand("VSmuxSearch.openViewer", () => {
     // Just create a blank viewer panel
     openConversationViewer(context, undefined);
   });
   context.subscriptions.push(openViewerCommand);
 
   // Register suspend command for memory release
-  const suspendCommand = vscode.commands.registerCommand("ai-devtools.suspend", () => {
+  const suspendCommand = vscode.commands.registerCommand("VSmuxSearch.suspend", () => {
     // Dispose the webview panel if it exists
     if (currentPanel) {
       currentPanel.dispose();
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     isSuspended = true;
-    // vscode.window.showInformationMessage('AI DevTools suspended - memory released. Use Refresh to resume.');
+    // vscode.window.showInformationMessage('VSmux Search suspended - memory released. Use Refresh to resume.');
   });
   context.subscriptions.push(suspendCommand);
 
@@ -139,8 +139,8 @@ function openConversationViewer(
   } else {
     // Create a new webview panel
     currentPanel = vscode.window.createWebviewPanel(
-      "aiDevtoolsViewer",
-      "AI DevTools - Conversation Viewer",
+      "vsmuxSearchViewer",
+      "VSmux Search - Conversation Viewer",
       columnToShowIn || vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -233,7 +233,7 @@ async function sendConversationToWebview(
       // vscode.window.showErrorMessage('Failed to read conversation file: File is too large or could not be read');
       return;
     }
-    panel.title = `AI DevTools - ${conversationFile.name}`;
+    panel.title = `VSmux Search - ${conversationFile.name}`;
     panel.webview.postMessage({
       command: "loadConversation",
       fileName: conversationFile.name,
@@ -262,7 +262,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
   <link href="${styleUri}" rel="stylesheet">
-  <title>AI DevTools</title>
+  <title>VSmux Search</title>
 </head>
 <body>
   <div id="root"></div>
