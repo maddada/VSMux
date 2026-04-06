@@ -72,6 +72,14 @@ const AUTO_FOCUS_ACTIVATION_GUARD_MS = 400;
 const AUTO_RELOAD_ON_LAG = true;
 let nextWorkspaceBootId = 0;
 
+const getInitialWorkspaceState = (): WorkspaceStateMessage | undefined => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.__VSMUX_WORKSPACE_BOOTSTRAP__;
+};
+
 const describeActiveElement = () => {
   const activeElement = document.activeElement;
   if (!activeElement) {
@@ -94,7 +102,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       document.visibilityState === "visible" &&
       document.hasFocus(),
   );
-  const [serverState, setServerState] = useState<ExtensionToWorkspacePanelMessage | undefined>();
+  const [serverState, setServerState] = useState<ExtensionToWorkspacePanelMessage | undefined>(() =>
+    getInitialWorkspaceState(),
+  );
   const [localFocusedSessionId, setLocalFocusedSessionId] = useState<string | undefined>();
   const [localPaneOrder, setLocalPaneOrder] = useState<string[] | undefined>();
   const [draggedPaneId, setDraggedPaneId] = useState<string | undefined>();
@@ -836,11 +846,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   }, []);
 
   if (!workspaceState) {
-    return (
-      <main className="workspace-shell workspace-shell-empty">
-        <div className="workspace-empty-state">Loading VSmux workspace…</div>
-      </main>
-    );
+    return <main className="workspace-shell workspace-shell-empty" />;
   }
 
   return (

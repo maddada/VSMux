@@ -608,112 +608,112 @@
         "command": "VSmux.createSession",
         "key": "ctrl+alt+n",
         "mac": "cmd+alt+n",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.openSettings",
         "key": "ctrl+alt+,",
         "mac": "cmd+alt+,",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.moveToSecondarySidebar",
         "key": "ctrl+alt+b",
         "mac": "cmd+alt+b",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.focusGroup1",
         "key": "ctrl+alt+shift+1",
         "mac": "cmd+alt+shift+1",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.focusGroup2",
         "key": "ctrl+alt+shift+2",
         "mac": "cmd+alt+shift+2",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.focusGroup3",
         "key": "ctrl+alt+shift+3",
         "mac": "cmd+alt+shift+3",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.focusGroup4",
         "key": "ctrl+alt+shift+4",
         "mac": "cmd+alt+shift+4",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 1,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+1",
         "mac": "cmd+alt+1",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 2,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+2",
         "mac": "cmd+alt+2",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 3,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+3",
         "mac": "cmd+alt+3",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 4,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+4",
         "mac": "cmd+alt+4",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 5,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+5",
         "mac": "cmd+alt+5",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 6,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+6",
         "mac": "cmd+alt+6",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 7,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+7",
         "mac": "cmd+alt+7",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 8,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+8",
         "mac": "cmd+alt+8",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "args": 9,
         "command": "VSmux.focusSessionSlot",
         "key": "ctrl+alt+9",
         "mac": "cmd+alt+9",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.renameActiveSession",
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.focusUp",
@@ -743,37 +743,37 @@
         "command": "VSmux.showOne",
         "key": "ctrl+alt+s 1",
         "mac": "cmd+alt+s 1",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.showTwo",
         "key": "ctrl+alt+s 2",
         "mac": "cmd+alt+s 2",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.showThree",
         "key": "ctrl+alt+s 3",
         "mac": "cmd+alt+s 3",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.showFour",
         "key": "ctrl+alt+s 4",
         "mac": "cmd+alt+s 4",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.showSix",
         "key": "ctrl+alt+s 6",
         "mac": "cmd+alt+s 6",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       },
       {
         "command": "VSmux.showNine",
         "key": "ctrl+alt+s 9",
         "mac": "cmd+alt+s 9",
-        "when": "!inputFocus || terminalFocus"
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
       }
     ]
   },

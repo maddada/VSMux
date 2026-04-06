@@ -31,16 +31,27 @@ type MockWebviewPanel = {
 
 let registeredSerializer: Serializer | undefined;
 let createdPanels: MockWebviewPanel[] = [];
+const { executeCommandMock } = vi.hoisted(() => ({
+  executeCommandMock: vi.fn(async () => undefined),
+}));
 
 vi.mock("vscode", () => ({
   Uri: {
     joinPath: (...parts: unknown[]) => parts,
+  },
+  commands: {
+    executeCommand: executeCommandMock,
   },
   ViewColumn: {
     Active: -1,
     One: 1,
   },
   window: {
+    createOutputChannel: vi.fn(() => ({
+      appendLine: vi.fn(),
+      clear: vi.fn(),
+      dispose: vi.fn(),
+    })),
     createWebviewPanel: vi.fn((_viewType: string, _title: string, viewColumn: number) => {
       const panel = createMockPanel({ viewColumn });
       createdPanels.push(panel);
@@ -51,6 +62,11 @@ vi.mock("vscode", () => ({
       return createDisposable();
     }),
   },
+  workspace: {
+    getConfiguration: vi.fn(() => ({
+      get: vi.fn(() => false),
+    })),
+  },
 }));
 
 import { WorkspacePanelManager } from "./workspace-panel";
@@ -59,6 +75,7 @@ describe("WorkspacePanelManager", () => {
   beforeEach(() => {
     createdPanels = [];
     registeredSerializer = undefined;
+    executeCommandMock.mockClear();
   });
 
   test("should dispose duplicate restored workspace panels", async () => {
@@ -293,6 +310,97 @@ describe("WorkspacePanelManager", () => {
 
     manager.dispose();
   });
+
+  test("should embed the latest workspace state into newly created panel html", async () => {
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage: vi.fn(),
+    });
+
+    await manager.postMessage(createWorkspaceStateMessage());
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+    expect(panel.webview.html).toContain("window.__VSMUX_WORKSPACE_BOOTSTRAP__ =");
+    expect(panel.webview.html).toContain('"type":"sessionState"');
+    expect(panel.webview.html).toContain('"sessionId":"session-1"');
+
+    manager.dispose();
+  });
+
+  test("should replay the latest workspace state before a buffered transient message", async () => {
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage: vi.fn(),
+    });
+
+    await manager.postMessage(createWorkspaceStateMessage());
+    await manager.postMessage({
+      sessionId: "session-1",
+      terminalTitle: "Claude is working",
+      type: "terminalPresentationChanged",
+    });
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+    expect(panel.webview.html).toContain('"type":"sessionState"');
+
+    panel.webview.postMessage.mockClear();
+    panel.webview.messageListeners[0]?.({ type: "ready" });
+    await Promise.resolve();
+
+    expect(panel.webview.postMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        focusedSessionId: "session-1",
+        type: "sessionState",
+      }),
+    );
+    expect(panel.webview.postMessage).toHaveBeenNthCalledWith(2, {
+      sessionId: "session-1",
+      terminalTitle: "Claude is working",
+      type: "terminalPresentationChanged",
+    });
+
+    manager.dispose();
+  });
+
+  test("should set and clear the workspace focus context as panel focus changes", async () => {
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage: vi.fn(),
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.active = true;
+    panel.visible = true;
+    emitViewStateChange(panel);
+    await Promise.resolve();
+
+    expect(executeCommandMock).toHaveBeenCalledWith(
+      "setContext",
+      "vsmux.workspacePanelFocus",
+      true,
+    );
+
+    panel.active = false;
+    emitViewStateChange(panel);
+    await Promise.resolve();
+
+    expect(executeCommandMock).toHaveBeenCalledWith(
+      "setContext",
+      "vsmux.workspacePanelFocus",
+      false,
+    );
+
+    manager.dispose();
+  });
 });
 
 function createMockContext() {
@@ -311,6 +419,7 @@ function createMockPanel({
   visible?: boolean;
 } = {}): MockWebviewPanel {
   const disposables: Array<() => void> = [];
+  const viewStateListeners: Array<(event: { webviewPanel: MockWebviewPanel }) => void> = [];
   const panel: MockWebviewPanel = {
     active,
     dispose: vi.fn(() => {
@@ -318,7 +427,10 @@ function createMockPanel({
         dispose();
       }
     }),
-    onDidChangeViewState: vi.fn(() => createDisposable()),
+    onDidChangeViewState: vi.fn((listener: (event: { webviewPanel: MockWebviewPanel }) => void) => {
+      viewStateListeners.push(listener);
+      return createDisposable();
+    }),
     onDidDispose: vi.fn((listener: () => void) => {
       disposables.push(listener);
       return createDisposable();
@@ -339,11 +451,78 @@ function createMockPanel({
     },
   };
 
+  Object.defineProperty(panel, "__emitViewStateChange", {
+    value: () => {
+      for (const listener of viewStateListeners) {
+        listener({ webviewPanel: panel });
+      }
+    },
+  });
+
   return panel;
 }
 
 function createDisposable(): MockDisposable {
   return {
     dispose: vi.fn(),
+  };
+}
+
+function emitViewStateChange(panel: MockWebviewPanel): void {
+  (panel as MockWebviewPanel & { __emitViewStateChange?: () => void }).__emitViewStateChange?.();
+}
+
+function createWorkspaceStateMessage() {
+  return {
+    activeGroupId: "group-1",
+    connection: {
+      baseUrl: "http://127.0.0.1:8080",
+      token: "token",
+      workspaceId: "workspace-1",
+    },
+    debuggingMode: false,
+    focusedSessionId: "session-1",
+    layoutAppearance: {
+      activePaneBorderColor: "#fff",
+      paneGap: 12,
+    },
+    panes: [
+      {
+        isVisible: true,
+        kind: "terminal" as const,
+        renderNonce: 0,
+        sessionId: "session-1",
+        sessionRecord: {
+          alias: "Session 1",
+          column: 0,
+          createdAt: new Date(0).toISOString(),
+          displayId: "01",
+          kind: "terminal" as const,
+          row: 0,
+          sessionId: "session-1",
+          slotIndex: 0,
+          title: "Session 1",
+        },
+      },
+    ],
+    terminalAppearance: {
+      cursorBlink: true,
+      cursorStyle: "bar" as const,
+      fontFamily: "monospace",
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 1,
+      scrollToBottomWhenTyping: false,
+    },
+    type: "sessionState" as const,
+    viewMode: "grid" as const,
+    visibleCount: 1 as const,
+    workspaceSnapshot: {
+      activeGroupId: "group-1",
+      groups: [],
+      nextGroupNumber: 1,
+      nextSessionDisplayId: 1,
+      nextSessionNumber: 1,
+    },
   };
 }

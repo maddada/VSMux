@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import type {
   ExtensionToWorkspacePanelMessage,
+  WorkspacePanelHydrateMessage,
+  WorkspacePanelSessionStateMessage,
   WorkspacePanelToExtensionMessage,
 } from "../shared/workspace-panel-contract";
 import { stripWorkspacePanelTransientFields } from "../shared/workspace-panel-contract";
@@ -8,15 +10,20 @@ import { logVSmuxDebug } from "./vsmux-debug-log";
 
 const WORKSPACE_PANEL_TYPE = "vsmux.workspace";
 const WORKSPACE_PANEL_TITLE = "VSmux";
+const WORKSPACE_PANEL_FOCUS_CONTEXT = "vsmux.workspacePanelFocus";
 
 type WorkspacePanelOptions = {
   context: vscode.ExtensionContext;
   onMessage: (message: WorkspacePanelToExtensionMessage) => Promise<void> | void;
 };
 
+type WorkspaceRenderableMessage = WorkspacePanelHydrateMessage | WorkspacePanelSessionStateMessage;
+
 export class WorkspacePanelManager implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private latestMessage: ExtensionToWorkspacePanelMessage | undefined;
+  private latestRenderableMessage: WorkspaceRenderableMessage | undefined;
+  private panelFocusContext = false;
   private panel: vscode.WebviewPanel | undefined;
 
   public constructor(private readonly options: WorkspacePanelOptions) {
@@ -28,9 +35,7 @@ export class WorkspacePanelManager implements vscode.Disposable {
           }
           this.panel = webviewPanel;
           this.configurePanel(webviewPanel);
-          if (this.latestMessage) {
-            await webviewPanel.webview.postMessage(this.latestMessage);
-          }
+          await this.postBufferedMessages(webviewPanel.webview);
         },
       }),
     );
@@ -43,6 +48,7 @@ export class WorkspacePanelManager implements vscode.Disposable {
 
     this.panel?.dispose();
     this.panel = undefined;
+    void this.setWorkspacePanelFocusContext(false);
   }
 
   public async reveal(): Promise<void> {
@@ -61,10 +67,14 @@ export class WorkspacePanelManager implements vscode.Disposable {
     });
     this.panel?.dispose();
     this.panel = undefined;
+    void this.setWorkspacePanelFocusContext(false);
   }
 
   public async postMessage(message: ExtensionToWorkspacePanelMessage): Promise<void> {
     this.latestMessage = stripWorkspacePanelTransientFields(message);
+    if (isWorkspaceRenderableMessage(this.latestMessage)) {
+      this.latestRenderableMessage = this.latestMessage;
+    }
     if (!this.panel) {
       logVSmuxDebug("workspace.panel.postMessageBuffered", {
         messageType: message.type,
@@ -129,7 +139,12 @@ export class WorkspacePanelManager implements vscode.Disposable {
   private configurePanel(panel: vscode.WebviewPanel): void {
     panel.title = WORKSPACE_PANEL_TITLE;
     panel.iconPath = vscode.Uri.joinPath(this.options.context.extensionUri, "media", "icon.svg");
-    panel.webview.html = getWorkspaceHtml(panel.webview, this.options.context.extensionUri);
+    panel.webview.html = getWorkspaceHtml(
+      panel.webview,
+      this.options.context.extensionUri,
+      this.latestRenderableMessage,
+    );
+    void this.syncWorkspacePanelFocusContext(panel);
     this.disposables.push(
       panel.onDidChangeViewState((event) => {
         logVSmuxDebug("workspace.panel.viewStateChanged", {
@@ -137,6 +152,7 @@ export class WorkspacePanelManager implements vscode.Disposable {
           visible: event.webviewPanel.visible,
           viewColumn: event.webviewPanel.viewColumn,
         });
+        void this.syncWorkspacePanelFocusContext(event.webviewPanel);
       }),
     );
     panel.onDidDispose(() => {
@@ -146,6 +162,7 @@ export class WorkspacePanelManager implements vscode.Disposable {
       if (this.panel === panel) {
         this.panel = undefined;
       }
+      void this.setWorkspacePanelFocusContext(false);
     });
     panel.webview.onDidReceiveMessage((message: unknown) => {
       if (!isWorkspaceMessage(message)) {
@@ -159,17 +176,41 @@ export class WorkspacePanelManager implements vscode.Disposable {
         logVSmuxDebug("workspace.panel.ready", {
           hasLatestMessage: this.latestMessage !== undefined,
         });
-        if (this.latestMessage) {
-          void panel.webview.postMessage(this.latestMessage);
-        }
+        void this.postBufferedMessages(panel.webview);
         return;
       }
       void this.options.onMessage(message);
     });
   }
+
+  private async postBufferedMessages(webview: vscode.Webview): Promise<void> {
+    if (this.latestRenderableMessage) {
+      await webview.postMessage(this.latestRenderableMessage);
+    }
+    if (this.latestMessage && this.latestMessage !== this.latestRenderableMessage) {
+      await webview.postMessage(this.latestMessage);
+    }
+  }
+
+  private async syncWorkspacePanelFocusContext(panel: vscode.WebviewPanel): Promise<void> {
+    await this.setWorkspacePanelFocusContext(panel.active && panel.visible);
+  }
+
+  private async setWorkspacePanelFocusContext(isFocused: boolean): Promise<void> {
+    if (this.panelFocusContext === isFocused) {
+      return;
+    }
+
+    this.panelFocusContext = isFocused;
+    await vscode.commands.executeCommand("setContext", WORKSPACE_PANEL_FOCUS_CONTEXT, isFocused);
+  }
 }
 
-function getWorkspaceHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+function getWorkspaceHtml(
+  webview: vscode.Webview,
+  extensionUri: vscode.Uri,
+  bootstrapMessage?: WorkspaceRenderableMessage,
+): string {
   const scriptUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, "out", "workspace", "workspace.js"),
   );
@@ -187,6 +228,7 @@ function getWorkspaceHtml(webview: vscode.Webview, extensionUri: vscode.Uri): st
     `connect-src ${webview.cspSource} ws://127.0.0.1:* http://127.0.0.1:*`,
     `frame-src ${webview.cspSource} data: blob:`,
   ].join("; ");
+  const bootstrapScript = getWorkspaceBootstrapScript(bootstrapMessage);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -208,9 +250,25 @@ function getWorkspaceHtml(webview: vscode.Webview, extensionUri: vscode.Uri): st
   </head>
   <body>
     <div id="root"></div>
+    ${bootstrapScript}
     <script nonce="${nonce}" src="${scriptUri}" type="module"></script>
   </body>
 </html>`;
+}
+
+function getWorkspaceBootstrapScript(message?: WorkspaceRenderableMessage): string {
+  if (!message) {
+    return "";
+  }
+
+  const serializedMessage = JSON.stringify(message).replace(/</g, "\\u003c");
+  return `<script>window.__VSMUX_WORKSPACE_BOOTSTRAP__ = ${serializedMessage};</script>`;
+}
+
+function isWorkspaceRenderableMessage(
+  message: ExtensionToWorkspacePanelMessage,
+): message is WorkspaceRenderableMessage {
+  return message.type === "hydrate" || message.type === "sessionState";
 }
 
 function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToExtensionMessage {
