@@ -40,6 +40,9 @@ export const DEFAULT_SIDEBAR_AGENTS = [
 export type DefaultSidebarAgent = (typeof DEFAULT_SIDEBAR_AGENTS)[number];
 export type DefaultSidebarAgentId = DefaultSidebarAgent["agentId"];
 export type SidebarAgentIcon = "browser" | DefaultSidebarAgent["icon"];
+export type DefaultSidebarAgentCommandOverrides = Partial<
+  Record<DefaultSidebarAgentId, string | null>
+>;
 
 export type SidebarAgentButton = {
   agentId: string;
@@ -58,10 +61,12 @@ export type StoredSidebarAgent = {
   name: string;
 };
 
-export function createDefaultSidebarAgentButtons(): SidebarAgentButton[] {
+export function createDefaultSidebarAgentButtons(
+  commandOverrides: DefaultSidebarAgentCommandOverrides = {},
+): SidebarAgentButton[] {
   return DEFAULT_SIDEBAR_AGENTS.map((agent) => ({
     agentId: agent.agentId,
-    command: agent.command,
+    command: commandOverrides[agent.agentId] ?? agent.command,
     icon: agent.icon,
     isDefault: true,
     name: agent.name,
@@ -71,6 +76,7 @@ export function createDefaultSidebarAgentButtons(): SidebarAgentButton[] {
 export function createSidebarAgentButtons(
   storedAgents: readonly StoredSidebarAgent[],
   storedOrder: readonly string[] = [],
+  commandOverrides: DefaultSidebarAgentCommandOverrides = {},
 ): SidebarAgentButton[] {
   const storedAgentById = new Map(storedAgents.map((agent) => [agent.agentId, agent]));
   const defaultButtons = DEFAULT_SIDEBAR_AGENTS.flatMap((agent) => {
@@ -80,22 +86,26 @@ export function createSidebarAgentButtons(
     }
 
     if (!storedAgent) {
-      return [{
-        agentId: agent.agentId,
-        command: agent.command,
-        icon: agent.icon,
-        isDefault: true,
-        name: agent.name,
-      }];
+      return [
+        {
+          agentId: agent.agentId,
+          command: commandOverrides[agent.agentId] ?? agent.command,
+          icon: agent.icon,
+          isDefault: true,
+          name: agent.name,
+        },
+      ];
     }
 
-    return [{
-      agentId: storedAgent.agentId,
-      command: storedAgent.command,
-      icon: storedAgent.icon ?? agent.icon,
-      isDefault: true,
-      name: getDefaultSidebarAgentName(agent.agentId, storedAgent.name),
-    }];
+    return [
+      {
+        agentId: storedAgent.agentId,
+        command: storedAgent.command,
+        icon: storedAgent.icon ?? agent.icon,
+        isDefault: true,
+        name: getDefaultSidebarAgentName(agent.agentId, storedAgent.name),
+      },
+    ];
   });
 
   const customButtons = storedAgents

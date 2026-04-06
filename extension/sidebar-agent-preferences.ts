@@ -10,6 +10,7 @@ import {
   type SidebarAgentButton,
   type StoredSidebarAgent,
 } from "../shared/sidebar-agents";
+import { getDefaultAgentCommands } from "./native-terminal-workspace/settings";
 
 const SETTINGS_SECTION = "VSmux";
 const AGENTS_SETTING = "agents";
@@ -23,7 +24,11 @@ export type SaveSidebarAgentInput = {
 };
 
 export function getSidebarAgentButtons(): SidebarAgentButton[] {
-  return createSidebarAgentButtons(getStoredSidebarAgents(), getStoredSidebarAgentOrder());
+  return createSidebarAgentButtons(
+    getStoredSidebarAgents(),
+    getStoredSidebarAgentOrder(),
+    getDefaultAgentCommands(),
+  );
 }
 
 export function getSidebarAgentButtonById(agentId: string): SidebarAgentButton | undefined {
@@ -45,8 +50,7 @@ export async function saveSidebarAgentPreference(input: SaveSidebarAgentInput): 
   const shouldRestoreHiddenDefault =
     !requestedAgentId &&
     Boolean(
-      selectedDefaultAgent &&
-        !isSidebarAgentVisible(storedAgents, selectedDefaultAgent.agentId),
+      selectedDefaultAgent && !isSidebarAgentVisible(storedAgents, selectedDefaultAgent.agentId),
     );
   const agentId =
     requestedAgentId ||
@@ -151,7 +155,10 @@ async function updateStoredSidebarAgentOrder(agentIds: readonly string[]): Promi
     .update(AGENT_ORDER_SETTING, agentIds, vscode.ConfigurationTarget.Global);
 }
 
-function isSidebarAgentVisible(storedAgents: readonly StoredSidebarAgent[], agentId: string): boolean {
+function isSidebarAgentVisible(
+  storedAgents: readonly StoredSidebarAgent[],
+  agentId: string,
+): boolean {
   const storedAgent = storedAgents.find((agent) => agent.agentId === agentId);
   return storedAgent?.hidden !== true;
 }

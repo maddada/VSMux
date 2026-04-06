@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import { getPreferredSessionTitle } from "../shared/session-grid-contract";
+import { getPreferredSessionTitle, normalizeTerminalTitle } from "../shared/session-grid-contract";
 import {
   getDefaultSidebarAgentByIcon,
   getDefaultSidebarAgentById,
   type SidebarAgentIcon,
 } from "../shared/sidebar-agents";
+import { getDefaultAgentCommand } from "./native-terminal-workspace/settings";
 import { getWorkspaceStorageKey } from "./terminal-workspace-helpers";
 
 const SESSION_AGENT_COMMANDS_KEY = "VSmux.sessionAgentCommands";
@@ -228,19 +229,34 @@ function resolveResumeTitle(
   sessionTitle: string | undefined,
   terminalTitle: string | undefined,
 ): string | undefined {
-  return getPreferredSessionTitle(sessionTitle, terminalTitle);
+  return normalizeTerminalTitle(getPreferredSessionTitle(sessionTitle, terminalTitle));
 }
 
 function resolveAgentCommand(
   agentLaunch: StoredSessionAgentLaunch | undefined,
   agentIconId: SidebarAgentIcon | undefined,
 ): string | undefined {
-  const command = agentLaunch?.command.trim();
-  if (command) {
-    return command;
+  const builtInAgentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  const configuredDefaultCommand = builtInAgentId
+    ? getDefaultAgentCommand(builtInAgentId)
+    : undefined;
+  const builtInDefaultCommand = builtInAgentId
+    ? getDefaultSidebarAgentById(builtInAgentId)?.command
+    : undefined;
+  const storedCommand = agentLaunch?.command.trim();
+  if (storedCommand) {
+    if (
+      configuredDefaultCommand &&
+      builtInDefaultCommand &&
+      storedCommand === builtInDefaultCommand
+    ) {
+      return configuredDefaultCommand;
+    }
+
+    return storedCommand;
   }
 
-  return getDefaultSidebarAgentByIcon(agentIconId)?.command;
+  return configuredDefaultCommand ?? getDefaultSidebarAgentByIcon(agentIconId)?.command;
 }
 
 function resolveBuiltInAgentId(

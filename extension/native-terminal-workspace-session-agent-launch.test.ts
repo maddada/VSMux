@@ -6,9 +6,38 @@ import {
   buildResumeAgentCommand,
 } from "./native-terminal-workspace-session-agent-launch";
 
-vi.mock("vscode", () => ({}));
+const configurationValues = new Map<string, unknown>();
+
+vi.mock("vscode", () => ({
+  workspace: {
+    getConfiguration: () => ({
+      get: (key: string, defaultValue?: unknown) =>
+        configurationValues.has(key) ? configurationValues.get(key) : defaultValue,
+    }),
+  },
+}));
 
 describe("buildResumeAgentCommand", () => {
+  test("should use the configured default built-in command when a legacy stored command still uses the stock default", () => {
+    configurationValues.set("defaultAgentCommands", {
+      claude: "cw",
+      codex: "x",
+    });
+
+    expect(
+      buildResumeAgentCommand(
+        {
+          agentId: "claude",
+          command: "claude",
+        },
+        "claude",
+        "Fix sidebar card title",
+      ),
+    ).toBe("cw -r 'Fix sidebar card title'");
+
+    configurationValues.clear();
+  });
+
   test("should build a codex resume command for a numeric/default session", () => {
     expect(
       buildResumeAgentCommand(
@@ -61,9 +90,56 @@ describe("buildResumeAgentCommand", () => {
       ),
     ).toBe("codex resume 'Bug Fix'");
   });
+
+  test("should strip indicators and trim when building a resume command from the terminal title", () => {
+    expect(
+      buildResumeAgentCommand(
+        {
+          agentId: "codex",
+          command: "codex",
+        },
+        "codex",
+        "Pinned session",
+        "  ✦ Bug Fix  ",
+      ),
+    ).toBe("codex resume 'Bug Fix'");
+  });
+
+  test("should strip indicators from a legacy saved session title when building a resume command", () => {
+    expect(
+      buildResumeAgentCommand(
+        {
+          agentId: "claude",
+          command: "claude",
+        },
+        "claude",
+        "✳ Fix sidebar card title",
+      ),
+    ).toBe("claude -r 'Fix sidebar card title'");
+  });
 });
 
 describe("buildForkAgentCommand", () => {
+  test("should use the configured default built-in command when a legacy stored command still uses the stock default", () => {
+    configurationValues.set("defaultAgentCommands", {
+      claude: "cw",
+      codex: "x",
+    });
+
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "claude",
+          command: "claude",
+        },
+        "claude",
+        "Fix sidebar card title",
+      ),
+    ).toBe("cw --fork-session -r 'Fix sidebar card title'");
+
+    configurationValues.clear();
+  });
+
   test("should build a codex fork command from the visible title", () => {
     expect(
       buildForkAgentCommand(
@@ -76,6 +152,33 @@ describe("buildForkAgentCommand", () => {
         "Bug Fix",
       ),
     ).toBe("codex fork 'Bug Fix'");
+  });
+
+  test("should strip indicators and trim when building a fork command from the terminal title", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "codex",
+          command: "codex",
+        },
+        "codex",
+        "Session 12",
+        "  🤖 Bug Fix  ",
+      ),
+    ).toBe("codex fork 'Bug Fix'");
+  });
+
+  test("should strip indicators from a legacy saved session title when building a fork command", () => {
+    expect(
+      buildForkAgentCommand(
+        {
+          agentId: "claude",
+          command: "claude",
+        },
+        "claude",
+        "🤖 Fix sidebar card title",
+      ),
+    ).toBe("claude --fork-session -r 'Fix sidebar card title'");
   });
 
   test("should build a claude fork command for titled sessions", () => {

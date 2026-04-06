@@ -553,6 +553,58 @@
           },
           "description": "User-level agent definitions shown in the VSmux sidebar. Built-in agents can be customized or hidden, and extra custom variants can reuse the same agent type icons."
         },
+        "VSmux.defaultAgentCommands": {
+          "title": "Default Agent Commands",
+          "type": "object",
+          "scope": "application",
+          "default": {
+            "t3": null,
+            "codex": null,
+            "copilot": null,
+            "claude": null,
+            "opencode": null,
+            "gemini": null
+          },
+          "properties": {
+            "t3": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "codex": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "copilot": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "claude": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "opencode": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "gemini": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "description": "Override the default shell command used for each built-in VSmux agent. Leave a value null to keep the built-in default command."
+        },
         "VSmux.gitTextGenerationProvider": {
           "title": "Git Text Generation Provider",
           "type": "string",

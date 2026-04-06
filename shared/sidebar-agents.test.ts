@@ -23,8 +23,62 @@ describe("createSidebarAgentButtons", () => {
         name: "Codex",
       },
       {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
+      },
+      {
         agentId: "claude",
         command: "claude",
+        icon: "claude",
+        isDefault: true,
+        name: "Claude",
+      },
+      {
+        agentId: "opencode",
+        command: "opencode",
+        icon: "opencode",
+        isDefault: true,
+        name: "OpenCode",
+      },
+      {
+        agentId: "gemini",
+        command: "gemini -y",
+        icon: "gemini",
+        isDefault: true,
+        name: "Gemini",
+      },
+    ]);
+  });
+
+  test("should apply default command overrides to built-in agents when no stored override exists", () => {
+    expect(createSidebarAgentButtons([], [], { claude: "cw", codex: "x" })).toEqual([
+      {
+        agentId: "t3",
+        command: "npx --yes t3",
+        icon: "t3",
+        isDefault: true,
+        name: "T3 Code",
+      },
+      {
+        agentId: "codex",
+        command: "x",
+        icon: "codex",
+        isDefault: true,
+        name: "Codex",
+      },
+      {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
+      },
+      {
+        agentId: "claude",
+        command: "cw",
         icon: "claude",
         isDefault: true,
         name: "Claude",
@@ -79,6 +133,13 @@ describe("createSidebarAgentButtons", () => {
         name: "Codex",
       },
       {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
+      },
+      {
         agentId: "claude",
         command: "claude",
         icon: "claude",
@@ -130,6 +191,13 @@ describe("createSidebarAgentButtons", () => {
         name: "T3 Code",
       },
       {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
+      },
+      {
         agentId: "claude",
         command: "claude",
         icon: "claude",
@@ -178,6 +246,13 @@ describe("createSidebarAgentButtons", () => {
         icon: "codex",
         isDefault: true,
         name: "Codex",
+      },
+      {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
       },
       {
         agentId: "claude",
@@ -259,6 +334,13 @@ describe("createSidebarAgentButtons", () => {
         icon: "codex",
         isDefault: true,
         name: "Codex",
+      },
+      {
+        agentId: "copilot",
+        command: "copilot",
+        icon: "copilot",
+        isDefault: true,
+        name: "Copilot",
       },
       {
         agentId: "opencode",

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { DefaultSidebarAgentId } from "../../shared/sidebar-agents";
 import {
   clampCompletionSoundSetting,
   type CompletionSoundSetting,
@@ -28,6 +29,7 @@ export const SHOW_SIDEBAR_GIT_BUTTON_SETTING = "showSidebarGitButton";
 export const DEBUGGING_MODE_SETTING = "debuggingMode";
 export const COMPLETION_SOUND_SETTING = "completionSound";
 export const DEFAULT_BROWSER_LAUNCH_URL_SETTING = "defaultBrowserLaunchUrl";
+export const DEFAULT_AGENT_COMMANDS_SETTING = "defaultAgentCommands";
 export const AGENTS_SETTING = "agents";
 export const GIT_TEXT_GENERATION_PROVIDER_SETTING = "gitTextGenerationProvider";
 export const GIT_TEXT_GENERATION_CUSTOM_COMMAND_SETTING = "gitTextGenerationCustomCommand";
@@ -57,6 +59,17 @@ export const SIDEBAR_WELCOME_OK_LABEL = "OK";
 export const WORKING_ACTIVITY_STALE_TIMEOUT_MS = 10_000;
 export const COMMAND_TERMINAL_EXIT_POLL_MS = 250;
 
+export type DefaultAgentCommandsSetting = Record<DefaultSidebarAgentId, string | null>;
+
+const DEFAULT_AGENT_COMMANDS: DefaultAgentCommandsSetting = {
+  claude: null,
+  codex: null,
+  copilot: null,
+  gemini: null,
+  opencode: null,
+  t3: null,
+};
+
 export function getBackgroundSessionTimeoutConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${BACKGROUND_SESSION_TIMEOUT_MINUTES_SETTING}`;
 }
@@ -83,6 +96,10 @@ export function getShowLastInteractionTimeOnSessionCardsConfigurationKey(): stri
 
 export function getAgentsConfigurationKey(): string {
   return `${SETTINGS_SECTION}.${AGENTS_SETTING}`;
+}
+
+export function getDefaultAgentCommandsConfigurationKey(): string {
+  return `${SETTINGS_SECTION}.${DEFAULT_AGENT_COMMANDS_SETTING}`;
 }
 
 export function getGitTextGenerationProviderConfigurationKey(): string {
@@ -224,6 +241,27 @@ export function getDefaultBrowserLaunchUrl(): string {
   return value.trim() || DEFAULT_BROWSER_LAUNCH_URL;
 }
 
+export function getDefaultAgentCommands(): DefaultAgentCommandsSetting {
+  const candidate =
+    vscode.workspace
+      .getConfiguration(SETTINGS_SECTION)
+      .get<unknown>(DEFAULT_AGENT_COMMANDS_SETTING, DEFAULT_AGENT_COMMANDS) ??
+    DEFAULT_AGENT_COMMANDS;
+
+  return {
+    claude: normalizeDefaultAgentCommandValue(candidate, "claude"),
+    codex: normalizeDefaultAgentCommandValue(candidate, "codex"),
+    copilot: normalizeDefaultAgentCommandValue(candidate, "copilot"),
+    gemini: normalizeDefaultAgentCommandValue(candidate, "gemini"),
+    opencode: normalizeDefaultAgentCommandValue(candidate, "opencode"),
+    t3: normalizeDefaultAgentCommandValue(candidate, "t3"),
+  };
+}
+
+export function getDefaultAgentCommand(agentId: DefaultSidebarAgentId): string | undefined {
+  return getDefaultAgentCommands()[agentId] ?? undefined;
+}
+
 export function getGitSkipSuggestedCommitConfirmation(): boolean {
   return (
     vscode.workspace
@@ -328,4 +366,21 @@ function clampNumber(value: number, min: number, max: number, fallback: number):
   }
 
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDefaultAgentCommandValue(
+  candidate: unknown,
+  agentId: DefaultSidebarAgentId,
+): string | null {
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  const value = (candidate as Partial<Record<DefaultSidebarAgentId, unknown>>)[agentId];
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue || null;
 }
