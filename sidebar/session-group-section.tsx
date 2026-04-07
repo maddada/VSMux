@@ -8,6 +8,7 @@ import {
 } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
+import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -21,7 +22,11 @@ import {
 } from "react";
 import type { VisibleSessionCount } from "../shared/session-grid-contract";
 import { ConfirmationModal } from "./confirmation-modal";
-import { createGroupDropData, type SidebarSessionDropTarget } from "./sidebar-dnd";
+import {
+  createGroupDropData,
+  createSessionDropTargetData,
+  createSessionDropTargetId,
+} from "./sidebar-dnd";
 import { useSidebarStore } from "./sidebar-store";
 import { SortableSessionCard } from "./sortable-session-card";
 import type { WebviewApi } from "./webview-api";
@@ -48,7 +53,6 @@ export type SessionGroupSectionProps = {
   onAutoEditHandled: () => void;
   onFocusRequested?: (groupId: string, sessionId: string) => void;
   orderedSessionIds?: readonly string[];
-  sessionDragIndicator?: SidebarSessionDropTarget;
   vscode: WebviewApi;
 };
 
@@ -100,7 +104,6 @@ export function SessionGroupSection({
   onAutoEditHandled,
   onFocusRequested,
   orderedSessionIds: orderedSessionIdsProp,
-  sessionDragIndicator,
   vscode,
 }: SessionGroupSectionProps) {
   const group = useSidebarStore((state) => state.groupsById[groupId]);
@@ -119,7 +122,6 @@ export function SessionGroupSection({
   const isBrowserGroup = group?.kind === "browser";
   const isManualActiveSessionsSort =
     useSidebarStore((state) => state.hud.activeSessionsSortMode) === "manual";
-  const isSessionDropTargetGroup = sessionDragIndicator?.groupId === groupId;
   const debuggingMode = useSidebarStore((state) => state.hud.debuggingMode);
   const postGroupDebugLog = useEffectEvent((event: string, details: Record<string, unknown>) => {
     if (!debuggingMode) {
@@ -146,6 +148,20 @@ export function SessionGroupSection({
     plugins: [SortableKeyboardPlugin],
     type: "group",
   });
+  const emptyGroupDropTarget = useDroppable({
+    accept: "session",
+    data: createSessionDropTargetData({
+      groupId,
+      kind: "group",
+      position: "start",
+    }),
+    disabled: isBrowserGroup || !isManualActiveSessionsSort,
+    id: createSessionDropTargetId({
+      groupId,
+      kind: "group",
+      position: "start",
+    }),
+  });
 
   if (!group) {
     return null;
@@ -158,12 +174,7 @@ export function SessionGroupSection({
     groupSessions.length > 0 && groupSessions.every((session) => session.isSleeping);
   const canFullReloadGroup = groupSessions.length > 0;
 
-  const isGroupDropTarget = sortable.isDropTarget || isSessionDropTargetGroup;
-  const groupDropPosition = getGroupDropPosition(
-    group.groupId,
-    orderedSessionIds,
-    sessionDragIndicator,
-  );
+  const isGroupDropTarget = sortable.isDropTarget || emptyGroupDropTarget.isDropTarget;
   const shouldRenderGroupSessions = !isBrowserGroup || orderedSessionIds.length > 0;
 
   useEffect(() => {
@@ -181,18 +192,16 @@ export function SessionGroupSection({
 
   useEffect(() => {
     postGroupDebugLog("group.dropStateChanged", {
-      groupDropPosition,
       isGroupDropTarget,
       orderedSessionIds,
-      sessionDragIndicator,
+      sessionEmptyDropTarget: emptyGroupDropTarget.isDropTarget,
       sortableIsDropTarget: sortable.isDropTarget,
     });
   }, [
-    groupDropPosition,
+    emptyGroupDropTarget.isDropTarget,
     isGroupDropTarget,
     orderedSessionIds,
     postGroupDebugLog,
-    sessionDragIndicator,
     sortable.isDropTarget,
   ]);
 
@@ -556,21 +565,10 @@ export function SessionGroupSection({
           </div>
         </div>
         {shouldRenderGroupSessions ? (
-          <div
-            className="group-sessions"
-            data-drop-position={groupDropPosition}
-            data-drop-target={String(isGroupDropTarget)}
-          >
+          <div className="group-sessions" data-drop-target={String(isGroupDropTarget)}>
             {orderedSessionIds.length > 0 ? (
               orderedSessionIds.map((sessionId, sessionIndex) => (
                 <SortableSessionCard
-                  dropPosition={
-                    sessionDragIndicator?.kind === "session" &&
-                    sessionDragIndicator.groupId === group.groupId &&
-                    sessionDragIndicator.sessionId === sessionId
-                      ? sessionDragIndicator.position
-                      : undefined
-                  }
                   groupId={group.groupId}
                   index={sessionIndex}
                   key={sessionId}
@@ -582,8 +580,9 @@ export function SessionGroupSection({
             ) : (
               <div
                 className="group-empty-drop-target"
-                data-drop-position={groupDropPosition}
+                data-drop-position={emptyGroupDropTarget.isDropTarget ? "start" : undefined}
                 data-drop-target={String(isGroupDropTarget)}
+                ref={emptyGroupDropTarget.ref}
               >
                 <div className="group-empty-state">No sessions</div>
               </div>
@@ -710,18 +709,6 @@ export function SessionGroupSection({
       ) : null}
     </>
   );
-}
-
-function getGroupDropPosition(
-  groupId: string,
-  orderedSessionIds: readonly string[],
-  sessionDragIndicator: SidebarSessionDropTarget | undefined,
-): "end" | "start" | undefined {
-  if (sessionDragIndicator?.kind !== "group" || sessionDragIndicator.groupId !== groupId) {
-    return undefined;
-  }
-
-  return orderedSessionIds.length === 0 ? "start" : sessionDragIndicator.position;
 }
 
 function getPortalMenuStyle(button: HTMLButtonElement | null) {

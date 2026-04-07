@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   createGroupDropData,
+  createSessionDropTargetData,
   createSessionDragData,
   getSidebarDropData,
+  getSidebarSessionDropTarget,
   getSidebarSessionDropTargetAtPoint,
   moveSessionIdsByDropTarget,
   type SidebarSessionDropTarget,
@@ -19,6 +21,47 @@ describe("getSidebarDropData", () => {
     expect(getSidebarDropData({ data: createGroupDropData("group-2") })).toEqual({
       groupId: "group-2",
       kind: "group",
+    });
+
+    expect(
+      getSidebarDropData({
+        data: createSessionDropTargetData({
+          groupId: "group-2",
+          kind: "session",
+          position: "after",
+          sessionId: "session-9",
+        }),
+      }),
+    ).toEqual({
+      dropTarget: {
+        groupId: "group-2",
+        kind: "session",
+        position: "after",
+        sessionId: "session-9",
+      },
+      kind: "session-drop-target",
+    });
+  });
+});
+
+describe("getSidebarSessionDropTarget", () => {
+  test("should read explicit session drop target payloads", () => {
+    expect(
+      getSidebarSessionDropTarget(
+        getSidebarDropData({
+          data: createSessionDropTargetData({
+            groupId: "group-1",
+            kind: "session",
+            position: "before",
+            sessionId: "session-2",
+          }),
+        }),
+      ),
+    ).toEqual({
+      groupId: "group-1",
+      kind: "session",
+      position: "before",
+      sessionId: "session-2",
     });
   });
 });
@@ -49,16 +92,12 @@ describe("moveSessionIdsByDropTarget", () => {
       "group-1": ["session-1", "session-2"],
     };
 
-    const nextSessionIdsByGroup = moveSessionIdsByDropTarget(
-      sessionIdsByGroup,
-      "session-1",
-      {
-        groupId: "group-1",
-        kind: "session",
-        position: "before",
-        sessionId: "session-1",
-      },
-    );
+    const nextSessionIdsByGroup = moveSessionIdsByDropTarget(sessionIdsByGroup, "session-1", {
+      groupId: "group-1",
+      kind: "session",
+      position: "before",
+      sessionId: "session-1",
+    });
 
     expect(nextSessionIdsByGroup).toBe(sessionIdsByGroup);
   });
@@ -96,9 +135,7 @@ describe("getSidebarSessionDropTargetAtPoint", () => {
       getBoundingClientRect: () => ({ height: 40, top: 100 }),
     }) as HTMLElement;
     const draggingSessionElement = createMockElement({
-      closestMap: new Map([
-        ["[data-dragging='true']", {} as HTMLElement],
-      ]),
+      closestMap: new Map([["[data-dragging='true']", {} as HTMLElement]]),
     });
     const targetSessionElement = createMockElement({
       closestMap: new Map([

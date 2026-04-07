@@ -2,6 +2,23 @@
   position: relative;
 }
 
+.session-drop-target-surface {
+  inset-inline: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 5;
+}
+
+.session-drop-target-surface-before {
+  height: 50%;
+  top: 0;
+}
+
+.session-drop-target-surface-after {
+  bottom: 0;
+  height: 50%;
+}
+
 .session-frame::before,
 .session-frame::after {
   content: "";

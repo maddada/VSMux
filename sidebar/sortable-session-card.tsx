@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
+import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { createPortal } from "react-dom";
 import {
@@ -23,7 +24,11 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import type { SidebarSessionItem } from "../shared/session-grid-contract";
 import { SessionCardContent, SessionFloatingAgentIcon } from "./session-card-content";
-import { createSessionDragData } from "./sidebar-dnd";
+import {
+  createSessionDragData,
+  createSessionDropTargetData,
+  createSessionDropTargetId,
+} from "./sidebar-dnd";
 import { useSidebarStore } from "./sidebar-store";
 import type { WebviewApi } from "./webview-api";
 
@@ -65,7 +70,6 @@ type ContextMenuPosition = {
 };
 
 export type SortableSessionCardProps = {
-  dropPosition?: "after" | "before";
   groupId: string;
   index: number;
   onFocusRequested?: (groupId: string, sessionId: string) => void;
@@ -92,7 +96,6 @@ function clampContextMenuPosition(
 }
 
 export function SortableSessionCard({
-  dropPosition,
   groupId,
   index,
   onFocusRequested,
@@ -155,6 +158,50 @@ export function SortableSessionCard({
     sensors: sessionCardSensors,
     type: "session",
   });
+  const isSessionReorderDisabled =
+    !session ||
+    isBrowserSession ||
+    contextMenuPosition !== undefined ||
+    !isManualActiveSessionsSort;
+  const beforeDropTarget = useDroppable({
+    accept: "session",
+    data: createSessionDropTargetData({
+      groupId,
+      kind: "session",
+      position: "before",
+      sessionId,
+    }),
+    disabled: isSessionReorderDisabled,
+    id: createSessionDropTargetId({
+      groupId,
+      kind: "session",
+      position: "before",
+      sessionId,
+    }),
+  });
+  const afterDropTarget = useDroppable({
+    accept: "session",
+    data: createSessionDropTargetData({
+      groupId,
+      kind: "session",
+      position: "after",
+      sessionId,
+    }),
+    disabled: isSessionReorderDisabled,
+    id: createSessionDropTargetId({
+      groupId,
+      kind: "session",
+      position: "after",
+      sessionId,
+    }),
+  });
+  const dropPosition = sortable.isDragging
+    ? undefined
+    : beforeDropTarget.isDropTarget
+      ? "before"
+      : afterDropTarget.isDropTarget
+        ? "after"
+        : undefined;
 
   if (!session) {
     return null;
@@ -355,6 +402,16 @@ export function SortableSessionCard({
         data-visible={String(session.isVisible)}
         ref={sortable.ref}
       >
+        <div
+          aria-hidden
+          className="session-drop-target-surface session-drop-target-surface-before"
+          ref={beforeDropTarget.ref}
+        />
+        <div
+          aria-hidden
+          className="session-drop-target-surface session-drop-target-surface-after"
+          ref={afterDropTarget.ref}
+        />
         <SessionFloatingAgentIcon agentIcon={session.agentIcon} />
         <article
           aria-expanded={contextMenuPosition ? true : undefined}

@@ -13,8 +13,6 @@ type CreateGroupDropData = {
   kind: "create-group";
 };
 
-export type SidebarDropData = SessionDragData | GroupDropData | CreateGroupDropData;
-
 export type SidebarSessionDropTarget =
   | {
       groupId: string;
@@ -27,6 +25,17 @@ export type SidebarSessionDropTarget =
       position: "before" | "after";
       sessionId: string;
     };
+
+type SessionDropTargetData = {
+  dropTarget: SidebarSessionDropTarget;
+  kind: "session-drop-target";
+};
+
+export type SidebarDropData =
+  | SessionDragData
+  | GroupDropData
+  | CreateGroupDropData
+  | SessionDropTargetData;
 
 const SIDEBAR_GROUP_SELECTOR = "[data-sidebar-group-id]";
 const SIDEBAR_SESSION_SELECTOR = "[data-sidebar-session-id]";
@@ -50,6 +59,23 @@ export function createCreateGroupDropData(): CreateGroupDropData {
   return {
     kind: "create-group",
   };
+}
+
+export function createSessionDropTargetData(
+  dropTarget: SidebarSessionDropTarget,
+): SessionDropTargetData {
+  return {
+    dropTarget,
+    kind: "session-drop-target",
+  };
+}
+
+export function createSessionDropTargetId(dropTarget: SidebarSessionDropTarget): string {
+  if (dropTarget.kind === "group") {
+    return `session-drop-target:${dropTarget.groupId}:group:${dropTarget.position}`;
+  }
+
+  return `session-drop-target:${dropTarget.groupId}:${dropTarget.sessionId}:${dropTarget.position}`;
 }
 
 export function getSidebarDropData(candidate: unknown): SidebarDropData | undefined {
@@ -83,9 +109,23 @@ export function getSidebarDropData(candidate: unknown): SidebarDropData | undefi
     case "create-group":
       return { kind: "create-group" };
 
+    case "session-drop-target":
+      return isSidebarSessionDropTarget(data.dropTarget)
+        ? {
+            dropTarget: data.dropTarget,
+            kind: "session-drop-target",
+          }
+        : undefined;
+
     default:
       return undefined;
   }
+}
+
+export function getSidebarSessionDropTarget(
+  candidate: SidebarDropData | undefined,
+): SidebarSessionDropTarget | undefined {
+  return candidate?.kind === "session-drop-target" ? candidate.dropTarget : undefined;
 }
 
 export function getClientPoint(
@@ -108,8 +148,7 @@ export function getClientPoint(
 }
 
 export function getSidebarSessionDropTargetAtPoint(
-  documentLike: Pick<Document, "elementFromPoint"> &
-    Partial<Pick<Document, "elementsFromPoint">>,
+  documentLike: Pick<Document, "elementFromPoint"> & Partial<Pick<Document, "elementsFromPoint">>,
   x: number,
   y: number,
 ): SidebarSessionDropTarget | undefined {
@@ -183,11 +222,7 @@ export function moveSessionIdsByDropTarget(
 
     const nextSessionIds = [...sourceSessionIds];
     nextSessionIds.splice(sourceIndex, 1);
-    nextSessionIds.splice(
-      clampIndex(adjustedTargetIndex, nextSessionIds.length),
-      0,
-      sessionId,
-    );
+    nextSessionIds.splice(clampIndex(adjustedTargetIndex, nextSessionIds.length), 0, sessionId);
 
     return {
       ...sessionIdsByGroup,
@@ -285,4 +320,20 @@ function isDraggingElement(element: Element): boolean {
 
 function isDomElement(candidate: unknown): candidate is Element {
   return typeof candidate === "object" && candidate !== null && "closest" in candidate;
+}
+
+function isSidebarSessionDropTarget(candidate: unknown): candidate is SidebarSessionDropTarget {
+  if (!isObjectRecord(candidate) || typeof candidate.groupId !== "string") {
+    return false;
+  }
+
+  if (candidate.kind === "group") {
+    return candidate.position === "start" || candidate.position === "end";
+  }
+
+  return (
+    candidate.kind === "session" &&
+    typeof candidate.sessionId === "string" &&
+    (candidate.position === "before" || candidate.position === "after")
+  );
 }

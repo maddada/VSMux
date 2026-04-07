@@ -38,6 +38,7 @@ import { resetSidebarStore, useSidebarStore } from "./sidebar-store";
 import {
   getClientPoint,
   getSidebarDropData,
+  getSidebarSessionDropTarget,
   type SidebarSessionDropTarget,
   getSidebarSessionDropTargetFromEvent,
   getSidebarSessionDropTargetAtPoint,
@@ -114,7 +115,6 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   const [isPreviousSessionsOpen, setIsPreviousSessionsOpen] = useState(false);
   const [isScratchPadOpen, setIsScratchPadOpen] = useState(false);
   const [isSessionsCollapsed, setIsSessionsCollapsed] = useState(false);
-  const [sessionDragIndicator, setSessionDragIndicator] = useState<SidebarSessionDropTarget>();
   const [overflowMenuAnchor, setOverflowMenuAnchor] = useState<HTMLElement>();
   const [overflowMenuPosition, setOverflowMenuPosition] = useState<FloatingMenuPosition>();
   const pendingCreateGroupRef = useRef(false);
@@ -482,39 +482,6 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     };
   }, [recordPointerDownSessionTarget, unlockCompletionSoundPlayback]);
 
-  useEffect(() => {
-    postSidebarDebugLog("session.dragIndicatorChanged", {
-      indicator: sessionDragIndicator,
-    });
-  }, [postSidebarDebugLog, sessionDragIndicator]);
-
-  const updateSessionDragIndicator = useEffectEvent(
-    (
-      nativeEvent: Event | undefined,
-      source: { data?: unknown } | null | undefined,
-      target: { data?: unknown } | null | undefined,
-    ) => {
-      const sourceData = getSidebarDropData(source);
-      if (sourceData?.kind !== "session") {
-        setSessionDragIndicator(undefined);
-        return;
-      }
-
-      const targetData = getSidebarDropData(target);
-      const resolvedDropTarget = resolveSessionDropTargetFromPoint(
-        nativeEvent,
-        sessionIdsByGroupRef.current,
-        targetData,
-        sourceData,
-      );
-      const nextIndicator = resolvedDropTarget ?? undefined;
-
-      setSessionDragIndicator((previous) =>
-        haveSameSessionDropTarget(previous, nextIndicator) ? previous : nextIndicator,
-      );
-    },
-  );
-
   const handleDragStart = ((event) => {
     if (!isManualActiveSessionsSort) {
       return;
@@ -534,12 +501,6 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       sourceData,
       targetData: getSidebarDropData(event.operation.target),
     });
-    if (sourceData?.kind !== "session") {
-      setSessionDragIndicator(undefined);
-      return;
-    }
-
-    setSessionDragIndicator(undefined);
   }) satisfies DragDropEventHandlers["onDragStart"];
 
   const handleDragMove = ((event) => {
@@ -548,11 +509,6 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     }
 
     updateSessionPointerDragState(sessionPointerDragStateRef.current, getDragNativeEvent(event));
-    updateSessionDragIndicator(
-      getDragNativeEvent(event),
-      event.operation.source,
-      event.operation.target,
-    );
   }) satisfies DragDropEventHandlers["onDragMove"];
 
   const handleDragOver = ((event) => {
@@ -561,21 +517,14 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     }
 
     updateSessionPointerDragState(sessionPointerDragStateRef.current, getDragNativeEvent(event));
-    updateSessionDragIndicator(
-      getDragNativeEvent(event),
-      event.operation.source,
-      event.operation.target,
-    );
   }) satisfies DragDropEventHandlers["onDragOver"];
 
   const handleDragEnd = ((event) => {
     if (!isManualActiveSessionsSort) {
-      setSessionDragIndicator(undefined);
       sessionPointerDragStateRef.current = undefined;
       return;
     }
 
-    setSessionDragIndicator(undefined);
     const currentGroupIds = groupIdsRef.current;
     const currentSessionIdsByGroup = sessionIdsByGroupRef.current;
     const authoritativeGroupIds = workspaceGroupIds;
@@ -897,7 +846,6 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                       onAutoEditHandled={() => setAutoEditingGroupId(undefined)}
                       onFocusRequested={applyLocalFocus}
                       orderedSessionIds={effectiveSessionIdsByGroup[groupId] ?? []}
-                      sessionDragIndicator={sessionDragIndicator}
                       vscode={vscode}
                     />
                   ))}
@@ -1364,6 +1312,7 @@ function resolveSessionDropTargetFromPoint(
 ) {
   const point = getClientPoint(nativeEvent);
   const candidates = [
+    getSidebarSessionDropTarget(targetData),
     getSidebarSessionDropTargetFromDropData(targetData, point),
     point ? getSidebarSessionDropTargetAtPoint(document, point.x, point.y) : undefined,
     getSidebarSessionDropTargetFromEvent(nativeEvent),
@@ -1387,29 +1336,6 @@ function resolveSessionDropTargetFromPoint(
   }
 
   return null;
-}
-
-function haveSameSessionDropTarget(
-  left: SidebarSessionDropTarget | undefined,
-  right: SidebarSessionDropTarget | undefined,
-): boolean {
-  if (!left || !right) {
-    return left === right;
-  }
-
-  if (
-    left.groupId !== right.groupId ||
-    left.kind !== right.kind ||
-    left.position !== right.position
-  ) {
-    return false;
-  }
-
-  if (left.kind !== "session" || right.kind !== "session") {
-    return true;
-  }
-
-  return left.sessionId === right.sessionId;
 }
 
 function isSourceSessionDropTarget(
