@@ -46,6 +46,7 @@ export type SidebarSessionItem = {
   activity: "idle" | "working" | "attention";
   activityLabel?: string;
   agentIcon?: SidebarAgentIcon;
+  isFavorite?: boolean;
   lastInteractionAt?: string;
   sessionId: string;
   sessionNumber?: string;
@@ -276,6 +277,11 @@ export type SidebarToExtensionMessage =
       type: "setSessionSleeping";
       sessionId: string;
       sleeping: boolean;
+    }
+  | {
+      favorite: boolean;
+      type: "setSessionFavorite";
+      sessionId: string;
     }
   | {
       type: "setGroupSleeping";

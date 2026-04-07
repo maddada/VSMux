@@ -27,6 +27,7 @@ import {
   removeSessionInSimpleWorkspace,
   renameGroupInSimpleWorkspace,
   renameSessionAliasInSimpleWorkspace,
+  setSessionFavoriteInSimpleWorkspace,
   setSessionTitleInSimpleWorkspace,
   setSessionSleepingInSimpleWorkspace,
   setT3SessionMetadataInSimpleWorkspace,
@@ -201,6 +202,15 @@ export class SessionGridStore {
 
   public async setSessionSleeping(sessionId: string, sleeping: boolean): Promise<boolean> {
     const result = setSessionSleepingInSimpleWorkspace(this.snapshot, sessionId, sleeping);
+    this.snapshot = result.snapshot;
+    if (result.changed) {
+      await this.persist();
+    }
+    return result.changed;
+  }
+
+  public async setSessionFavorite(sessionId: string, favorite: boolean): Promise<boolean> {
+    const result = setSessionFavoriteInSimpleWorkspace(this.snapshot, sessionId, favorite);
     this.snapshot = result.snapshot;
     if (result.changed) {
       await this.persist();

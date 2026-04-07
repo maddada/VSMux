@@ -47,4 +47,24 @@ describe("isSidebarMessage", () => {
       }),
     ).toBe(false);
   });
+
+  test("should accept setSessionFavorite messages with a boolean favorite value", () => {
+    expect(
+      isSidebarMessage({
+        favorite: true,
+        sessionId: "session-7",
+        type: "setSessionFavorite",
+      }),
+    ).toBe(true);
+  });
+
+  test("should reject setSessionFavorite messages without a boolean favorite value", () => {
+    expect(
+      isSidebarMessage({
+        favorite: "yes",
+        sessionId: "session-7",
+        type: "setSessionFavorite",
+      }),
+    ).toBe(false);
+  });
 });

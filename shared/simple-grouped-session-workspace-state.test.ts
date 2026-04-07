@@ -15,6 +15,7 @@ import {
   moveSessionToGroupInSimpleWorkspace,
   normalizeSimpleGroupedSessionWorkspaceSnapshot,
   removeSessionInSimpleWorkspace,
+  setSessionFavoriteInSimpleWorkspace,
   setGroupSleepingInSimpleWorkspace,
   setSessionSleepingInSimpleWorkspace,
   setT3SessionMetadataInSimpleWorkspace,
@@ -831,6 +832,37 @@ describe("setSessionSleepingInSimpleWorkspace", () => {
     expect(result.snapshot.activeGroupId).toBe(DEFAULT_MAIN_GROUP_ID);
     expect(result.snapshot.groups[1]?.snapshot.focusedSessionId).toBeUndefined();
     expect(result.snapshot.groups[1]?.snapshot.visibleSessionIds).toEqual([]);
+  });
+});
+
+describe("setSessionFavoriteInSimpleWorkspace", () => {
+  test("should persist the favorite flag on the target session", () => {
+    const snapshot = createWorkspaceSnapshot({
+      activeGroupId: DEFAULT_MAIN_GROUP_ID,
+      groups: [
+        {
+          groupId: DEFAULT_MAIN_GROUP_ID,
+          snapshot: {
+            focusedSessionId: sessionIdForDisplay(0),
+            fullscreenRestoreVisibleCount: undefined,
+            sessions: [createSessionRecord(1, 0), createSessionRecord(2, 1)],
+            viewMode: "grid",
+            visibleCount: 2,
+            visibleSessionIds: [sessionIdForDisplay(0), sessionIdForDisplay(1)],
+          },
+          title: "Main",
+        },
+      ],
+      nextGroupNumber: 2,
+      nextSessionDisplayId: 2,
+      nextSessionNumber: 3,
+    });
+
+    const result = setSessionFavoriteInSimpleWorkspace(snapshot, sessionIdForDisplay(1), true);
+
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.groups[0]?.snapshot.sessions[1]?.isFavorite).toBe(true);
+    expect(result.snapshot.groups[0]?.snapshot.sessions[0]?.isFavorite).toBeUndefined();
   });
 });
 

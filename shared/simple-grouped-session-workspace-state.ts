@@ -356,6 +356,30 @@ export function setSessionSleepingInSimpleWorkspace(
   };
 }
 
+export function setSessionFavoriteInSimpleWorkspace(
+  snapshot: GroupedSessionWorkspaceSnapshot,
+  sessionId: string,
+  favorite: boolean,
+): WorkspaceMutationResult {
+  const normalizedSnapshot = normalizeSimpleGroupedSessionWorkspaceSnapshot(snapshot);
+  const owningGroup = getGroupForSession(normalizedSnapshot, sessionId);
+  if (!owningGroup) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  const currentSession = owningGroup.snapshot.sessions.find(
+    (session) => session.sessionId === sessionId,
+  );
+  if (!currentSession || currentSession.isFavorite === favorite) {
+    return { changed: false, snapshot: normalizedSnapshot };
+  }
+
+  return updateSession(normalizedSnapshot, sessionId, (session) => ({
+    ...session,
+    isFavorite: favorite,
+  }));
+}
+
 export function setGroupSleepingInSimpleWorkspace(
   snapshot: GroupedSessionWorkspaceSnapshot,
   groupId: string,

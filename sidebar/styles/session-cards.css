@@ -324,6 +324,14 @@
   --session-agent-icon-color: #6d96c0;
 }
 
+.session-floating-agent-icon[data-favorite="true"],
+.session-floating-agent-tabler-icon[data-favorite="true"] {
+  filter: drop-shadow(0 0 2px color-mix(in srgb, #ffe38a 88%, transparent))
+    drop-shadow(0 0 8px color-mix(in srgb, #f5c84c 68%, transparent))
+    drop-shadow(0 0 16px color-mix(in srgb, #c99412 42%, transparent));
+  opacity: 0.98;
+}
+
 .session-head {
   position: relative;
   z-index: 1;

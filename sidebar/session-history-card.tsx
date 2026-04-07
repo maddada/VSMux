@@ -38,7 +38,7 @@ export function SessionHistoryCard({
       data-restorable={String(session.isRestorable)}
       data-visible="false"
     >
-      <SessionFloatingAgentIcon agentIcon={session.agentIcon} />
+      <SessionFloatingAgentIcon agentIcon={session.agentIcon} isFavorite={session.isFavorite} />
       <article
         aria-disabled={!session.isRestorable}
         aria-pressed="false"

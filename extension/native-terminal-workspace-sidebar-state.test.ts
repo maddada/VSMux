@@ -281,8 +281,31 @@ describe("buildSidebarMessage", () => {
 
     expect(message.groups[1]?.sessions[0]).toEqual(
       expect.objectContaining({
+        isFavorite: false,
         primaryTitle: "Bug Fix",
         terminalTitle: "Claude Code",
+      }),
+    );
+  });
+
+  test("should expose favorite sessions to the sidebar projection", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = {
+      ...createSessionRecord(1, 0),
+      isFavorite: true,
+    };
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage(createBuildSidebarMessageOptions(workspaceSnapshot, [])),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        isFavorite: true,
+        sessionId: sessionRecord.sessionId,
       }),
     );
   });
@@ -426,6 +449,25 @@ describe("createPreviousSessionEntry", () => {
 
     expect(previousSession?.agentIcon).toBe("codex");
     expect(previousSession?.sidebarItem.agentIcon).toBe("codex");
+  });
+
+  test("should preserve favorite state in previous session history", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = {
+      ...createSessionRecord(1, 0),
+      isFavorite: true,
+    };
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry(
+      createPreviousSessionEntryOptions(group, sessionRecord),
+    );
+
+    expect(previousSession?.sidebarItem.isFavorite).toBe(true);
+    expect(previousSession?.sessionRecord.isFavorite).toBe(true);
   });
 });
 

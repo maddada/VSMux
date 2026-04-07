@@ -6,6 +6,7 @@ import {
   IconPencil,
   IconPlayerPlay,
   IconRefresh,
+  IconStar,
   IconX,
 } from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
@@ -121,6 +122,7 @@ export function SortableSessionCard({
   const isBrowserSession = session?.sessionKind === "browser" || session?.kind === "browser";
   const isT3Session = session?.sessionKind === "t3";
   const canSetT3ThreadId = isT3Session;
+  const canFavoriteSession = !isBrowserSession;
   const canForkSession = session ? !isBrowserSession && supportsFork(session) : false;
   const canCopyResumeCommand = session
     ? !isBrowserSession && supportsResumeCommandCopy(session)
@@ -287,6 +289,7 @@ export function SortableSessionCard({
         clientX,
         clientY,
         Number(!isBrowserSession) +
+          Number(canFavoriteSession) +
           Number(canSetT3ThreadId) +
           Number(canForkSession) +
           Number(canCopyResumeCommand) +
@@ -358,6 +361,15 @@ export function SortableSessionCard({
     });
   };
 
+  const requestSetFavorite = (favorite: boolean) => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      favorite,
+      sessionId: session.sessionId,
+      type: "setSessionFavorite",
+    });
+  };
+
   const requestFocusSession = () => {
     const shouldAcknowledgeAttention = session.activity === "attention";
     if (session.isFocused && !session.isSleeping && !shouldAcknowledgeAttention) {
@@ -412,7 +424,7 @@ export function SortableSessionCard({
           className="session-drop-target-surface session-drop-target-surface-after"
           ref={afterDropTarget.ref}
         />
-        <SessionFloatingAgentIcon agentIcon={session.agentIcon} />
+        <SessionFloatingAgentIcon agentIcon={session.agentIcon} isFavorite={session.isFavorite} />
         <article
           aria-expanded={contextMenuPosition ? true : undefined}
           aria-haspopup="menu"
@@ -534,6 +546,22 @@ export function SortableSessionCard({
                     stroke={1.8}
                   />
                   Rename
+                </button>
+              ) : null}
+              {canFavoriteSession ? (
+                <button
+                  className="session-context-menu-item"
+                  onClick={() => requestSetFavorite(!session.isFavorite)}
+                  role="menuitem"
+                  type="button"
+                >
+                  <IconStar
+                    aria-hidden="true"
+                    className="session-context-menu-icon"
+                    size={16}
+                    stroke={1.8}
+                  />
+                  {session.isFavorite ? "Unfavorite" : "Favorite"}
                 </button>
               ) : null}
               {canSleepSession ? (

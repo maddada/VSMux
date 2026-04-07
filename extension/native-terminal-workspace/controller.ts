@@ -822,6 +822,20 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.afterStateChange();
   }
 
+  public async setSessionFavorite(sessionId: string, favorite: boolean): Promise<void> {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord || sessionRecord.kind === "browser") {
+      return;
+    }
+
+    const changed = await this.store.setSessionFavorite(sessionId, favorite);
+    if (!changed) {
+      return;
+    }
+
+    await this.refreshSidebarFromCurrentState();
+  }
+
   public async setGroupSleeping(groupId: string, sleeping: boolean): Promise<void> {
     const group = this.store.getGroup(groupId);
     if (!group) {
@@ -1668,6 +1682,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       fullReloadGroup: async (groupId) => this.fullReloadGroup(groupId),
       fullReloadSession: async (sessionId) => this.fullReloadSession(sessionId),
       setGroupSleeping: async (groupId, sleeping) => this.setGroupSleeping(groupId, sleeping),
+      setSessionFavorite: async (sessionId, favorite) =>
+        this.setSessionFavorite(sessionId, favorite),
       setSessionSleeping: async (sessionId, sleeping) =>
         this.setSessionSleeping(sessionId, sleeping),
       setT3SessionThreadId: async (sessionId) => this.promptSetT3SessionThreadId(sessionId),

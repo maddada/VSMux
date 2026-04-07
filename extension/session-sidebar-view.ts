@@ -270,6 +270,7 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
     case "restartSession":
     case "closeSession":
     case "setSessionSleeping":
+    case "setSessionFavorite":
     case "copyResumeCommand":
     case "forkSession":
     case "fullReloadSession":
@@ -277,7 +278,8 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
       return (
         typeof message.sessionId === "string" &&
         message.sessionId.length > 0 &&
-        (message.type !== "setSessionSleeping" || typeof message.sleeping === "boolean")
+        (message.type !== "setSessionSleeping" || typeof message.sleeping === "boolean") &&
+        (message.type !== "setSessionFavorite" || typeof message.favorite === "boolean")
       );
 
     case "fullReloadGroup":

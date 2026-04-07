@@ -184,19 +184,22 @@ export function getSessionTitleTooltipOptions({
 
 type SessionAgentIconProps = {
   agentIcon: SidebarSessionItem["agentIcon"];
+  isFavorite?: boolean;
 };
 
 type SessionAgentLogoStyle = CSSProperties & {
   "--session-agent-logo": string;
 };
 
-export function SessionFloatingAgentIcon({ agentIcon }: SessionAgentIconProps) {
+export function SessionFloatingAgentIcon({ agentIcon, isFavorite = false }: SessionAgentIconProps) {
+  const favoriteState = String(isFavorite);
   if (agentIcon === "browser") {
     return (
       <IconWorld
         aria-hidden="true"
         className="session-floating-agent-tabler-icon"
         data-agent-icon="browser"
+        data-favorite={favoriteState}
         size={14}
         stroke={1.8}
       />
@@ -216,6 +219,7 @@ export function SessionFloatingAgentIcon({ agentIcon }: SessionAgentIconProps) {
       aria-hidden="true"
       className="session-floating-agent-icon"
       data-agent-icon={agentIcon}
+      data-favorite={favoriteState}
       style={agentLogoStyle}
     />
   );

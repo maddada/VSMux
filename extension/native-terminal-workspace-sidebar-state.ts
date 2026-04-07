@@ -230,6 +230,7 @@ function buildBrowserSidebarGroup(browserTabs: readonly SidebarBrowserTab[]): Si
       column: 0,
       detail: browserTab.detail,
       isFocused: browserTab.isActive,
+      isFavorite: false,
       isRunning: true,
       isVisible: browserTab.isActive,
       kind: "browser",
@@ -286,6 +287,7 @@ function buildSidebarItem(
       column: sessionRecord.column,
       detail: sessionRecord.browser.url,
       isFocused,
+      isFavorite: false,
       isSleeping: false,
       isRunning: isVisible || options.browserHasLiveProjection(sessionRecord.sessionId),
       isVisible,
@@ -322,6 +324,7 @@ function buildSidebarItem(
             ? `Thread ${sessionRecord.t3.threadId.slice(0, 8)}`
             : undefined)),
       isFocused,
+      isFavorite: sessionRecord.isFavorite === true,
       isSleeping,
       isRunning: isSleeping ? false : activityState.isRunning,
       isVisible,
@@ -357,6 +360,7 @@ function buildSidebarItem(
     column: sessionRecord.column,
     detail: isSleeping ? "Sleeping" : sessionSnapshot.errorMessage,
     isFocused,
+    isFavorite: sessionRecord.isFavorite === true,
     isSleeping,
     isRunning:
       !isSleeping &&

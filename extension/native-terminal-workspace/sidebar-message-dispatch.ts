@@ -20,6 +20,7 @@ export type SidebarMessageHandlers = {
   fullReloadGroup: (groupId: string) => Promise<void>;
   fullReloadSession: (sessionId: string) => Promise<void>;
   setGroupSleeping: (groupId: string, sleeping: boolean) => Promise<void>;
+  setSessionFavorite: (sessionId: string, favorite: boolean) => Promise<void>;
   setSessionSleeping: (sessionId: string, sleeping: boolean) => Promise<void>;
   setT3SessionThreadId: (sessionId: string) => Promise<void>;
   cancelSidebarGitCommit: (requestId: string) => Promise<void>;
@@ -216,6 +217,11 @@ export async function dispatchSidebarMessage(
     case "setSessionSleeping":
       if (message.sessionId) {
         await handlers.setSessionSleeping(message.sessionId, message.sleeping);
+      }
+      return;
+    case "setSessionFavorite":
+      if (message.sessionId) {
+        await handlers.setSessionFavorite(message.sessionId, message.favorite);
       }
       return;
     case "setGroupSleeping":

@@ -269,6 +269,16 @@ export const SessionCardActions: Story = {
       await expectMessage({ sessionId: "session-3", type: "copyResumeCommand" });
     });
 
+    await step("favorite through the session context menu", async () => {
+      resetSidebarStoryMessages();
+
+      const sessionCard = await findSessionCard();
+      await openContextMenu(sessionCard);
+      await userEvent.click(await body.findByRole("menuitem", { name: "Favorite" }));
+
+      await expectMessage({ favorite: true, sessionId: "session-3", type: "setSessionFavorite" });
+    });
+
     await step("fork through the session context menu", async () => {
       resetSidebarStoryMessages();
 
