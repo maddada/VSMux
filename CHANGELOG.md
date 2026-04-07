@@ -2,6 +2,13 @@
 
 All notable user-facing changes are documented in this file.
 
+## 2.7.0 - 2026-04-07
+
+- VSmux Search is now built in, giving you an integrated conversation viewer with workspace bridges so it is easier to revisit and jump back into past agent work.
+- Session management feels much more polished, with active-session sorting, live timestamps, stronger ordering and reload actions, and cleaner session card titles and browser grouping in the sidebar.
+- Workspace terminal behavior is steadier overall, with better focus recovery, more reliable T3 clipboard writes, improved lag diagnostics, and richer backend activity tracking so session state stays fresher while you work.
+- Built-in agent commands are more flexible now, including support for overriding the default built-in command definitions.
+
 ## 2.6.0 - 2026-04-06
 
 - T3 session workflows are much more capable now, with stronger session management, thread-aware handling, and better coordination between the sidebar and workspace.

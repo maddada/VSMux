@@ -6,11 +6,11 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 2.6.0
+## Latest Release: 2.7.0
 
-- T3 session management is more capable, with better coordination between sessions, threads, and workspace state.
-- Sidebar session cards feel more polished, with cleaner tooltips and stronger session metadata handling.
-- Terminal and multi-session state sync is steadier across the workspace, especially in more complex session setups.
+- VSmux Search is now built in, so you can revisit conversation history and bridge back into workspace flows more easily.
+- Session sorting, timestamps, titles, and reload actions are more polished throughout the sidebar.
+- Terminal focus, T3 clipboard writes, and backend activity tracking are all more reliable across the workspace.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 
