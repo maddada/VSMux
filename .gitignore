@@ -10,3 +10,5 @@ installer/
 .collaborator
 docs/*
 !docs/workarea-lag-recovery.md
+.brv/
+.agents/skills/byterover/
