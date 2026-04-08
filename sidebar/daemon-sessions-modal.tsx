@@ -11,11 +11,7 @@ export type DaemonSessionsModalProps = {
   vscode: WebviewApi;
 };
 
-export function DaemonSessionsModal({
-  isOpen,
-  onClose,
-  vscode,
-}: DaemonSessionsModalProps) {
+export function DaemonSessionsModal({ isOpen, onClose, vscode }: DaemonSessionsModalProps) {
   const state = useSidebarStore((storeState) => storeState.daemonSessionsState);
   const [searchQuery, setSearchQuery] = useState("");
   const [isKillDaemonConfirmOpen, setIsKillDaemonConfirmOpen] = useState(false);
@@ -97,9 +93,8 @@ export function DaemonSessionsModal({
             <div className="confirm-modal-title" id="daemon-sessions-modal-title">
               Running VSmux Sessions
             </div>
-            <div className="confirm-modal-description" id="daemon-sessions-modal-description">
-              Live daemon-managed sessions across all workspaces and projects.
-            </div>
+            {/* <div className="confirm-modal-description" id="daemon-sessions-modal-description"> */}
+            {/* </div> */}
           </div>
           <div className="daemon-sessions-toolbar">
             <input
@@ -182,9 +177,7 @@ export function DaemonSessionsModal({
                             <div className="daemon-session-card-title">
                               {session.title?.trim() || session.sessionId}
                             </div>
-                            <div className="daemon-session-card-subtitle">
-                              {session.sessionId}
-                            </div>
+                            <div className="daemon-session-card-subtitle">{session.sessionId}</div>
                           </div>
                           <div className="daemon-session-card-badges">
                             {session.isCurrentWorkspace ? (
@@ -204,7 +197,9 @@ export function DaemonSessionsModal({
                           <Detail label="Restore">{session.restoreState}</Detail>
                           <Detail label="Size">{`${String(session.cols)} x ${String(session.rows)}`}</Detail>
                           <Detail label="Started">{formatTimestamp(session.startedAt)}</Detail>
-                          <Detail label="Ended">{session.endedAt ? formatTimestamp(session.endedAt) : "Active"}</Detail>
+                          <Detail label="Ended">
+                            {session.endedAt ? formatTimestamp(session.endedAt) : "Active"}
+                          </Detail>
                           <Detail label="Exit Code">
                             {session.exitCode !== undefined ? String(session.exitCode) : "N/A"}
                           </Detail>
