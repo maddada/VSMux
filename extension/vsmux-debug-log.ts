@@ -14,12 +14,17 @@ const DEBUG_EVENT_PREFIX_ALLOWLIST = [
   "workspace.webview.workspace.generation",
   "workspace.webview.workspace.mainPane",
   "workspace.webview.workspace.paneMeasuredBounds",
+  "workspace.webview.workspace.hiddenPaneParkingSummary",
+  "workspace.webview.workspace.activeGroupLayoutSummary",
   "workspace.webview.workspace.terminalPortalTargetChanged",
   "workspace.webview.workspace.paneView",
+  "controller.activitySuppression.",
   "controller.refreshWorkspacePanel.",
   "controller.createWorkspacePanelMessage.",
   "controller.focusSession.",
+  "controller.focusGroup.",
   "controller.reloadWorkspacePanel.",
+  "backend.daemon.sessionActivity.",
   "daemon.runtime.",
 ] as const;
 const DEBUG_EVENT_ALLOWLIST = new Set<string>([

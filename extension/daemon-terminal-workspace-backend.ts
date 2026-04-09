@@ -476,6 +476,11 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
 
     if (nextActivityAtMs === undefined) {
       this.lastTerminalActivityAtBySessionId.delete(sessionId);
+      logVSmuxDebug("backend.daemon.sessionActivity.cleared", {
+        nextActivityAt: undefined,
+        previousActivityAt: formatDebugActivityAt(previousActivityAtMs),
+        sessionId,
+      });
       return;
     }
 
@@ -484,8 +489,21 @@ export class DaemonTerminalWorkspaceBackend implements TerminalWorkspaceBackend 
     }
 
     this.lastTerminalActivityAtBySessionId.set(sessionId, nextActivityAtMs);
+    logVSmuxDebug("backend.daemon.sessionActivity.updated", {
+      nextActivityAt: formatDebugActivityAt(nextActivityAtMs),
+      previousActivityAt: formatDebugActivityAt(previousActivityAtMs),
+      sessionId,
+    });
     this.changeSessionActivityEmitter.fire({ sessionId });
   }
+}
+
+function formatDebugActivityAt(value: number | undefined): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return new Date(value).toISOString();
 }
 
 export function applyPersistedSessionStateToDisconnectedSnapshot(

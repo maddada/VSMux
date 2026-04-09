@@ -8,6 +8,7 @@ const CONNECTION_SUMMARY_DELAY_MS = 4_000;
 export type WorkspaceResttyTransportController = {
   markTerminalReady: (cols: number, rows: number) => void;
   sendRawInput: (data: string) => boolean;
+  setReconnectEnabled: (enabled: boolean, reason: string) => void;
   transport: PtyTransport;
 };
 
@@ -58,6 +59,8 @@ export function createWorkspaceResttyTransport(
   let desiredCols = 80;
   let desiredRows = 24;
   let desiredUrl = "";
+  let reconnectEnabled = true;
+  let reconnectDisabledReason: string | null = null;
   let callbacks: PtyCallbacks | undefined;
   let pendingMessages: string[] = [];
   let activeConnectionOpenedAt = 0;
@@ -165,6 +168,14 @@ export function createWorkspaceResttyTransport(
   };
 
   const scheduleReconnect = () => {
+    if (!reconnectEnabled) {
+      options.reportDebug?.("terminal.socketReconnectSuppressed", {
+        reason: reconnectDisabledReason ?? "reconnect-disabled",
+        sessionId: options.sessionId,
+      });
+      return;
+    }
+
     if (explicitDisconnect || reconnectTimeoutId !== undefined || !desiredUrl.trim()) {
       return;
     }
@@ -203,6 +214,22 @@ export function createWorkspaceResttyTransport(
   };
 
   const openSocket = () => {
+    if (!reconnectEnabled) {
+      options.reportDebug?.("terminal.socketOpenSkipped", {
+        activeConnectId,
+        explicitDisconnect,
+        hasDesiredUrl: desiredUrl.trim().length > 0,
+        hasSocket: !!socket,
+        readySentConnectId,
+        reconnectDisabledReason,
+        reconnectEnabled,
+        sessionId: options.sessionId,
+        socketReadyState: socket?.readyState,
+        terminalReady,
+      });
+      return;
+    }
+
     if (explicitDisconnect || socket || !desiredUrl.trim()) {
       options.reportDebug?.("terminal.socketOpenSkipped", {
         activeConnectId,
@@ -210,6 +237,8 @@ export function createWorkspaceResttyTransport(
         hasDesiredUrl: desiredUrl.trim().length > 0,
         hasSocket: !!socket,
         readySentConnectId,
+        reconnectDisabledReason,
+        reconnectEnabled,
         sessionId: options.sessionId,
         socketReadyState: socket?.readyState,
         terminalReady,
@@ -424,6 +453,29 @@ export function createWorkspaceResttyTransport(
       sendReadyIfPossible();
     },
     sendRawInput,
+    setReconnectEnabled: (enabled, reason) => {
+      const normalizedReason = reason.trim() || (enabled ? "enabled" : "disabled");
+      if (
+        reconnectEnabled === enabled &&
+        reconnectDisabledReason === (enabled ? null : normalizedReason)
+      ) {
+        return;
+      }
+
+      reconnectEnabled = enabled;
+      reconnectDisabledReason = enabled ? null : normalizedReason;
+      options.reportDebug?.("terminal.reconnectPolicyChanged", {
+        enabled,
+        reason: normalizedReason,
+        sessionId: options.sessionId,
+      });
+
+      if (!enabled) {
+        clearReconnectTimeout();
+      } else if (!explicitDisconnect && !socket && desiredUrl.trim()) {
+        openSocket();
+      }
+    },
     transport: {
       connect: ({ callbacks: nextCallbacks, cols, rows, url }) => {
         options.reportDebug?.("terminal.transportConnectCalled", {

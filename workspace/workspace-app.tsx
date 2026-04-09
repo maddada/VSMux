@@ -76,25 +76,25 @@ type WorkspaceAutoFocusGuard = {
   sessionId: string;
 };
 
-type WorkspaceTerminalHostPresence = {
-  ownerId: string;
-  priority: number;
-  visible: boolean;
-  workspaceGenerationId: string;
+type WorkspacePanelInstanceIdentity = {
+  createdAt: number;
+  id: string;
 };
 
 const AUTO_FOCUS_ACTIVATION_GUARD_MS = 400;
 const AUTO_RELOAD_ON_LAG = true;
-const TERMINAL_HOST_HEARTBEAT_MS = 1_000;
-const TERMINAL_HOST_STALE_AFTER_MS = 3_500;
 let nextWorkspaceBootId = 0;
-let nextWorkspaceGenerationId = 0;
-let nextWorkspaceTerminalHostOwnerId = 0;
 let nextWorkspacePaneViewInstanceId = 0;
 let nextWorkspacePortalTargetId = 0;
 const WORKSPACE_GENERATION_EVENT = "vsmux:workspace-generation";
-const buildWorkspaceTerminalHostOwnerId = () =>
-  `terminal-host-owner-${++nextWorkspaceTerminalHostOwnerId}`;
+const TERMINAL_HOST_LOCK_PREFIX = "vsmux-terminal-host:";
+const buildUniqueWorkspaceId = (prefix: string) => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
 
 const getInitialWorkspaceState = (): WorkspaceStateMessage | undefined => {
   if (typeof window === "undefined") {
@@ -103,6 +103,21 @@ const getInitialWorkspaceState = (): WorkspaceStateMessage | undefined => {
 
   return window.__VSMUX_WORKSPACE_BOOTSTRAP__;
 };
+
+const getWorkspacePanelInstanceIdentity = (): WorkspacePanelInstanceIdentity | undefined => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.__VSMUX_WORKSPACE_PANEL_INSTANCE__;
+};
+
+declare global {
+  interface Window {
+    __VSMUX_WORKSPACE_BOOTSTRAP__?: WorkspaceStateMessage;
+    __VSMUX_WORKSPACE_PANEL_INSTANCE__?: WorkspacePanelInstanceIdentity;
+  }
+}
 
 const describeActiveElement = () => {
   const activeElement = document.activeElement;
@@ -160,17 +175,9 @@ const summarizeTerminalLayerState = (
 
 export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = window, vscode }) => {
   const workspaceBootIdRef = useRef(++nextWorkspaceBootId);
-  const workspaceGenerationIdRef = useRef(`workspace-generation-${++nextWorkspaceGenerationId}`);
-  const terminalHostOwnerIdRef = useRef(buildWorkspaceTerminalHostOwnerId());
-  const terminalHostPeersRef = useRef(
-    new Map<
-      string,
-      {
-        lastSeenAt: number;
-        presence: WorkspaceTerminalHostPresence;
-      }
-    >(),
-  );
+  const workspaceGenerationIdRef = useRef(buildUniqueWorkspaceId("workspace-generation"));
+  const terminalHostOwnerIdRef = useRef(buildUniqueWorkspaceId("terminal-host-owner"));
+  const workspacePanelInstanceIdentityRef = useRef(getWorkspacePanelInstanceIdentity());
   const [isWorkspaceFocused, setIsWorkspaceFocused] = useState(
     () =>
       typeof document !== "undefined" &&
@@ -185,7 +192,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const [draggedPaneId, setDraggedPaneId] = useState<string | undefined>();
   const [dropTargetPaneId, setDropTargetPaneId] = useState<string | undefined>();
   const [isRetired, setIsRetired] = useState(false);
-  const [isTerminalHostLeader, setIsTerminalHostLeader] = useState(true);
+  const [isTerminalHostLeader, setIsTerminalHostLeader] = useState(false);
   const [paneMeasuredBoundsVersion, setPaneMeasuredBoundsVersion] = useState(0);
   const [, setTerminalPortalVersion] = useState(0);
   const focusRequestSequenceRef = useRef(0);
@@ -228,6 +235,13 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   debuggingModeRef.current = workspaceState?.debuggingMode;
   workspaceStateRef.current = workspaceState;
 
+  const postToExtension = (message: Record<string, unknown>) => {
+    vscode.postMessage({
+      ...message,
+      workspacePanelInstanceId: workspacePanelInstanceIdentityRef.current?.id,
+    });
+  };
+
   const postWorkspaceDebugLog = (
     enabled: boolean | undefined,
     event: string,
@@ -238,7 +252,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       return;
     }
 
-    vscode.postMessage({
+    postToExtension({
       details: payload ? safeSerializeWorkspaceDebugDetails(payload) : undefined,
       event,
       type: "workspaceDebugLog",
@@ -289,50 +303,19 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
   useEffect(() => {
     if (isRetired || !workspaceState?.connection.workspaceId) {
+      setIsTerminalHostLeader(false);
       return;
     }
 
     const workspaceId = workspaceState.connection.workspaceId;
-    const channel = new BroadcastChannel(`vsmux-terminal-host-${workspaceId}`);
     const ownerId = terminalHostOwnerIdRef.current;
     const workspaceGenerationId = workspaceGenerationIdRef.current;
+    const lockName = `${TERMINAL_HOST_LOCK_PREFIX}${workspaceId}`;
+    let disposed = false;
+    let releaseLeadership: (() => void) | undefined;
+    const abortController = new AbortController();
 
-    const getLocalPresence = (): WorkspaceTerminalHostPresence => ({
-      ownerId,
-      priority: isWorkspaceFocused ? 2 : document.visibilityState === "visible" ? 1 : 0,
-      visible: document.visibilityState === "visible",
-      workspaceGenerationId,
-    });
-
-    const comparePresence = (
-      left: WorkspaceTerminalHostPresence,
-      right: WorkspaceTerminalHostPresence,
-    ) => {
-      if (left.priority !== right.priority) {
-        return left.priority - right.priority;
-      }
-
-      return left.ownerId.localeCompare(right.ownerId) * -1;
-    };
-
-    const evaluateLeader = (source: string) => {
-      const now = Date.now();
-      for (const [peerOwnerId, peer] of terminalHostPeersRef.current.entries()) {
-        if (now - peer.lastSeenAt <= TERMINAL_HOST_STALE_AFTER_MS) {
-          continue;
-        }
-
-        terminalHostPeersRef.current.delete(peerOwnerId);
-      }
-
-      let leaderPresence = getLocalPresence();
-      for (const { presence } of terminalHostPeersRef.current.values()) {
-        if (comparePresence(presence, leaderPresence) > 0) {
-          leaderPresence = presence;
-        }
-      }
-
-      const nextIsLeader = leaderPresence.ownerId === ownerId;
+    const setLeaderState = (nextIsLeader: boolean, source: string) => {
       setIsTerminalHostLeader((previousIsLeader) => {
         if (previousIsLeader === nextIsLeader) {
           return previousIsLeader;
@@ -341,7 +324,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
         postWorkspaceDebugLog(debuggingModeRef.current, "workspace.terminalHostLeadershipChanged", {
           bootId: workspaceBootIdRef.current,
           isLeader: nextIsLeader,
-          leaderOwnerId: leaderPresence.ownerId,
+          lockName,
           ownerId,
           source,
           workspaceGenerationId,
@@ -351,53 +334,70 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       });
     };
 
-    const postPresence = (source: string) => {
-      const presence = getLocalPresence();
-      channel.postMessage({
-        presence,
-        source,
-        type: "presence",
-      });
-      evaluateLeader(`local-${source}`);
-    };
-
-    channel.onmessage = (event) => {
-      const data = event.data;
-      if (!data || typeof data !== "object" || data.type !== "presence") {
+    const acquireLock = async () => {
+      if (typeof navigator === "undefined" || !("locks" in navigator) || !navigator.locks) {
+        postWorkspaceDebugLog(debuggingModeRef.current, "workspace.terminalHostLockUnavailable", {
+          bootId: workspaceBootIdRef.current,
+          lockName,
+          ownerId,
+          workspaceGenerationId,
+          workspaceId,
+        });
+        setLeaderState(true, "fallback-no-web-locks");
         return;
       }
 
-      const presence = data.presence as WorkspaceTerminalHostPresence | undefined;
-      if (!presence || typeof presence.ownerId !== "string" || presence.ownerId === ownerId) {
-        return;
-      }
-
-      terminalHostPeersRef.current.set(presence.ownerId, {
-        lastSeenAt: Date.now(),
-        presence,
+      postWorkspaceDebugLog(debuggingModeRef.current, "workspace.terminalHostLockWaiting", {
+        bootId: workspaceBootIdRef.current,
+        lockName,
+        ownerId,
+        workspaceGenerationId,
+        workspaceId,
       });
-      evaluateLeader(`peer-${data.source ?? "presence"}`);
+
+      try {
+        await navigator.locks.request(
+          lockName,
+          {
+            mode: "exclusive",
+            signal: abortController.signal,
+          },
+          async () => {
+            if (disposed) {
+              return;
+            }
+
+            setLeaderState(true, "lock-acquired");
+            await new Promise<void>((resolve) => {
+              releaseLeadership = resolve;
+            });
+            setLeaderState(false, "lock-released");
+          },
+        );
+      } catch (error) {
+        if (abortController.signal.aborted || disposed) {
+          return;
+        }
+
+        postWorkspaceDebugLog(debuggingModeRef.current, "workspace.terminalHostLockError", {
+          error: error instanceof Error ? error.message : String(error),
+          lockName,
+          ownerId,
+          workspaceGenerationId,
+          workspaceId,
+        });
+      }
     };
 
-    postPresence("mount");
-    const heartbeatId = window.setInterval(() => {
-      postPresence("heartbeat");
-    }, TERMINAL_HOST_HEARTBEAT_MS);
+    void acquireLock();
 
     return () => {
-      window.clearInterval(heartbeatId);
-      channel.postMessage({
-        presence: {
-          ...getLocalPresence(),
-          priority: -1,
-          visible: false,
-        },
-        source: "dispose",
-        type: "presence",
-      });
-      channel.close();
+      disposed = true;
+      abortController.abort();
+      releaseLeadership?.();
+      setLeaderState(false, "effect-cleanup");
     };
-  }, [debuggingModeRef, isRetired, isWorkspaceFocused, workspaceState?.connection.workspaceId]);
+  }, [debuggingModeRef, isRetired, workspaceState?.connection.workspaceId]);
 
   useEffect(() => {
     if (isTerminalHostLeader) {
@@ -408,12 +408,82 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   }, [isTerminalHostLeader]);
 
   useEffect(() => {
+    if (isRetired || !workspaceState?.connection.workspaceId) {
+      return;
+    }
+
+    const panelInstanceIdentity = workspacePanelInstanceIdentityRef.current;
+    if (!panelInstanceIdentity || typeof BroadcastChannel === "undefined") {
+      return;
+    }
+
+    const channel = new BroadcastChannel(
+      `vsmux-workspace-panel:${workspaceState.connection.workspaceId}`,
+    );
+    const shouldRetireForPeer = (peerIdentity: WorkspacePanelInstanceIdentity) => {
+      if (peerIdentity.id === panelInstanceIdentity.id) {
+        return false;
+      }
+
+      if (peerIdentity.createdAt !== panelInstanceIdentity.createdAt) {
+        return peerIdentity.createdAt > panelInstanceIdentity.createdAt;
+      }
+
+      return peerIdentity.id > panelInstanceIdentity.id;
+    };
+
+    const announcePresence = (source: string) => {
+      channel.postMessage({
+        bootId: workspaceBootIdRef.current,
+        source,
+        workspaceGenerationId: workspaceGenerationIdRef.current,
+        workspacePanelInstance: panelInstanceIdentity,
+      });
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as
+        | {
+            workspacePanelInstance?: WorkspacePanelInstanceIdentity;
+          }
+        | undefined;
+      const peerIdentity = data?.workspacePanelInstance;
+      if (!peerIdentity || !shouldRetireForPeer(peerIdentity)) {
+        return;
+      }
+
+      postWorkspaceDebugLog(true, "workspace.panelInstanceRetiredForPeer", {
+        bootId: workspaceBootIdRef.current,
+        peerPanelCreatedAt: peerIdentity.createdAt,
+        peerPanelInstanceId: peerIdentity.id,
+        workspaceGenerationId: workspaceGenerationIdRef.current,
+        workspacePanelCreatedAt: panelInstanceIdentity.createdAt,
+        workspacePanelInstanceId: panelInstanceIdentity.id,
+      });
+      setIsRetired(true);
+      destroyCachedTerminalRuntimesForGeneration(workspaceGenerationIdRef.current);
+    };
+
+    channel.addEventListener("message", handleMessage as EventListener);
+    announcePresence("mount");
+    const heartbeatId = window.setInterval(() => announcePresence("heartbeat"), 2_000);
+
+    return () => {
+      window.clearInterval(heartbeatId);
+      channel.removeEventListener("message", handleMessage as EventListener);
+      channel.close();
+    };
+  }, [isRetired, workspaceState?.connection.workspaceId]);
+
+  useEffect(() => {
     postWorkspaceDebugLog(true, "workspace.instanceMounted", {
       bootId: workspaceBootIdRef.current,
       documentHasFocus: document.hasFocus(),
       hidden: document.hidden,
       visibilityState: document.visibilityState,
       workspaceGenerationId: workspaceGenerationIdRef.current,
+      workspacePanelCreatedAt: workspacePanelInstanceIdentityRef.current?.createdAt,
+      workspacePanelInstanceId: workspacePanelInstanceIdentityRef.current?.id,
     });
 
     return () => {
@@ -423,6 +493,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
         hidden: document.hidden,
         visibilityState: document.visibilityState,
         workspaceGenerationId: workspaceGenerationIdRef.current,
+        workspacePanelCreatedAt: workspacePanelInstanceIdentityRef.current?.createdAt,
+        workspacePanelInstanceId: workspacePanelInstanceIdentityRef.current?.id,
       });
     };
   }, []);
@@ -594,6 +666,14 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
         focusedSessionId: nextMessage.focusedSessionId,
         paneCount: nextMessage.panes.length,
         panes: summarizeWorkspaceTerminalPanes(nextMessage.panes),
+        workspaceGroups: nextMessage.workspaceSnapshot.groups.map((group) => ({
+          focusedSessionId: group.snapshot.focusedSessionId,
+          groupId: group.groupId,
+          sessionIds: group.snapshot.sessions.map((session) => session.sessionId),
+          viewMode: group.snapshot.viewMode,
+          visibleCount: group.snapshot.visibleCount,
+          visibleSessionIds: [...group.snapshot.visibleSessionIds],
+        })),
       });
 
       applyWorkspaceStateMessage(nextMessage);
@@ -615,7 +695,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
     messageSource.addEventListener("message", handleWorkspaceMessage);
     window.addEventListener("message", handleIframeFocus);
-    vscode.postMessage({ type: "ready" });
+    postToExtension({ type: "ready" });
 
     return () => {
       messageSource.removeEventListener("message", handleWorkspaceMessage);
@@ -773,6 +853,61 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       return;
     }
 
+    postWorkspaceDebugLog(workspaceState.debuggingMode, "workspace.activeGroupLayoutSummary", {
+      activeGroupId: workspaceState.activeGroupId,
+      focusedSessionId: presentedFocusedSessionId,
+      visibleLayouts: visiblePanes.map((pane) => ({
+        gridColumn: visiblePaneLayoutBySessionId.get(pane.sessionId)?.gridColumn,
+        gridRow: visiblePaneLayoutBySessionId.get(pane.sessionId)?.gridRow,
+        isFocused: presentedFocusedSessionId === pane.sessionId,
+        sessionId: pane.sessionId,
+      })),
+      viewMode: workspaceState.viewMode,
+      workspaceGenerationId: workspaceGenerationIdRef.current,
+    });
+  }, [
+    presentedFocusedSessionId,
+    visiblePaneLayoutBySessionId,
+    visiblePaneIdsKey,
+    visiblePanes,
+    workspaceState,
+  ]);
+
+  useEffect(() => {
+    if (!workspaceState) {
+      return;
+    }
+
+    postWorkspaceDebugLog(workspaceState.debuggingMode, "workspace.hiddenPaneParkingSummary", {
+      activeGroupId: workspaceState.activeGroupId,
+      hiddenPanes: orderedPanes.flatMap((pane) => {
+        if (pane.kind !== "terminal" || pane.isVisible) {
+          return [];
+        }
+
+        const measuredBounds = paneMeasuredBoundsRef.current.get(pane.sessionId);
+        const parkingStyle = hiddenPaneParkingStyles.get(pane.sessionId);
+        return [
+          {
+            measuredBounds,
+            parkingHeight:
+              typeof parkingStyle?.height === "string" ? parkingStyle.height : undefined,
+            parkingTop: typeof parkingStyle?.top === "string" ? parkingStyle.top : undefined,
+            parkingWidth: typeof parkingStyle?.width === "string" ? parkingStyle.width : undefined,
+            renderNonce: pane.renderNonce,
+            sessionId: pane.sessionId,
+          },
+        ];
+      }),
+      workspaceGenerationId: workspaceGenerationIdRef.current,
+    });
+  }, [hiddenPaneParkingStyles, orderedPanes, workspaceState]);
+
+  useEffect(() => {
+    if (!workspaceState) {
+      return;
+    }
+
     postWorkspaceDebugLog(workspaceState.debuggingMode, "workspace.terminalLayerSummary", {
       activeGroupId: workspaceState.activeGroupId,
       bootId: workspaceBootIdRef.current,
@@ -852,7 +987,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       sessionId,
     });
     setLocalFocusedSessionId(sessionId);
-    vscode.postMessage({
+    postToExtension({
       sessionId,
       type: "focusSession",
     });
@@ -1016,7 +1151,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       sourcePaneId,
       targetPaneId,
     });
-    vscode.postMessage({
+    postToExtension({
       groupId: workspaceState.activeGroupId,
       sessionIds: nextPaneOrder,
       type: "syncPaneOrder",
@@ -1045,7 +1180,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       overshootMs: payload.overshootMs,
       sessionId: payload.sessionId,
     });
-    vscode.postMessage({ sessionId: payload.sessionId, type: "reloadWorkspacePanel" });
+    postToExtension({ sessionId: payload.sessionId, type: "reloadWorkspacePanel" });
   };
 
   const clearDragState = () => {
@@ -1121,6 +1256,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     setPaneMeasuredBoundsVersion((value) => value + 1);
     postWorkspaceDebugLog(workspaceState?.debuggingMode, "workspace.paneMeasuredBounds", {
       bounds,
+      previousBounds,
       sessionId,
       workspaceGenerationId: workspaceGenerationIdRef.current,
     });
@@ -1257,21 +1393,21 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           onLocalFocus={() => applyLocalFocusVisual(pane.sessionId)}
           onFocus={() => requestFocusSession(pane.sessionId)}
           onClose={() =>
-            vscode.postMessage({
+            postToExtension({
               sessionId: pane.sessionId,
               type: "closeSession",
             })
           }
           onReload={() => {
             if (pane.kind === "terminal") {
-              vscode.postMessage({
+              postToExtension({
                 sessionId: pane.sessionId,
                 type: "fullReloadSession",
               });
               return;
             }
 
-            vscode.postMessage({
+            postToExtension({
               sessionId: pane.sessionId,
               type: "reloadWorkspacePanel",
             });

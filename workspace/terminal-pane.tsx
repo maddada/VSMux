@@ -158,6 +158,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     snapshotStatus: pane.snapshot?.status,
   });
 
+  const shouldAllowHiddenReconnect = () =>
+    isVisibleRef.current || pane.snapshot?.isAttached === true;
+
   const syncRefsFromRuntime = (runtime: CachedTerminalRuntime) => {
     activePaneRef.current = runtime.activePane;
     appearancePromiseRef.current = runtime.appearancePromise;
@@ -864,6 +867,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       ...collectSnapshotMetrics(),
     });
 
+    if (!shouldAllowHiddenReconnect()) {
+      reportDebug("terminal.connectSkipped", {
+        reason: "hidden-not-attached",
+        sessionId: pane.sessionId,
+        source: sourceLabel,
+        ...collectSnapshotMetrics(),
+      });
+      return;
+    }
+
     await appearancePromiseRef.current;
     const stableTerminalSize = await waitForStableTerminalSize();
     if (!stableTerminalSize || connectPtyStartedRef.current) {
@@ -1086,6 +1099,19 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   }, [debuggingMode, pane.sessionId]);
 
   useEffect(() => {
+    const transportController = transportRef.current;
+    if (!transportController) {
+      return;
+    }
+
+    const reconnectEnabled = shouldAllowHiddenReconnect();
+    transportController.setReconnectEnabled(
+      reconnectEnabled,
+      reconnectEnabled ? (isVisible ? "visible" : "snapshot-attached") : "hidden-not-attached",
+    );
+  }, [isVisible, pane.snapshot?.isAttached, pane.sessionId]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) {
       return;
@@ -1127,8 +1153,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         onTermSize: (cols, rows) => {
           latestTermSizeRef.current = { cols, rows };
           syncRuntimeFromRefs();
+          const containerBounds = containerRef.current?.getBoundingClientRect();
           reportDebug("terminal.termSizeChanged", {
             cols,
+            containerHeight: containerBounds ? Math.round(containerBounds.height) : undefined,
+            containerWidth: containerBounds ? Math.round(containerBounds.width) : undefined,
+            isFocused: isFocusedRef.current,
+            isVisible: isVisibleRef.current,
             rows,
           });
         },
@@ -1141,6 +1172,14 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
     runtimeRef.current = runtime;
     syncRefsFromRuntime(runtime);
+    runtime.transportController?.setReconnectEnabled(
+      shouldAllowHiddenReconnect(),
+      shouldAllowHiddenReconnect()
+        ? isVisibleRef.current
+          ? "visible"
+          : "snapshot-attached"
+        : "hidden-not-attached",
+    );
     const previousHostParentTagName = runtime.host.parentElement?.tagName ?? null;
     container.replaceChildren(runtime.host);
     reportDebug("terminal.runtimeHostAttached", {

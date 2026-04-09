@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
+import { randomUUID } from "node:crypto";
 import type {
   ExtensionToWorkspacePanelMessage,
   WorkspacePanelHydrateMessage,
   WorkspacePanelSessionStateMessage,
+  WorkspacePanelToExtensionEnvelope,
   WorkspacePanelToExtensionMessage,
 } from "../shared/workspace-panel-contract";
 import { stripWorkspacePanelTransientFields } from "../shared/workspace-panel-contract";
@@ -18,6 +20,10 @@ type WorkspacePanelOptions = {
 };
 
 type WorkspaceRenderableMessage = WorkspacePanelHydrateMessage | WorkspacePanelSessionStateMessage;
+type WorkspacePanelInstanceIdentity = {
+  createdAt: number;
+  id: string;
+};
 
 export class WorkspacePanelManager implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -25,6 +31,7 @@ export class WorkspacePanelManager implements vscode.Disposable {
   private latestRenderableMessage: WorkspaceRenderableMessage | undefined;
   private panelFocusContext = false;
   private panel: vscode.WebviewPanel | undefined;
+  private panelInstanceIdentity: WorkspacePanelInstanceIdentity | undefined;
 
   public constructor(private readonly options: WorkspacePanelOptions) {
     this.disposables.push(
@@ -137,12 +144,14 @@ export class WorkspacePanelManager implements vscode.Disposable {
   }
 
   private configurePanel(panel: vscode.WebviewPanel): void {
+    this.panelInstanceIdentity = createWorkspacePanelInstanceIdentity();
     panel.title = WORKSPACE_PANEL_TITLE;
     panel.iconPath = vscode.Uri.joinPath(this.options.context.extensionUri, "media", "icon.svg");
     panel.webview.html = getWorkspaceHtml(
       panel.webview,
       this.options.context.extensionUri,
       this.latestRenderableMessage,
+      this.panelInstanceIdentity,
     );
     void this.syncWorkspacePanelFocusContext(panel);
     this.disposables.push(
@@ -166,6 +175,19 @@ export class WorkspacePanelManager implements vscode.Disposable {
     });
     panel.webview.onDidReceiveMessage((message: unknown) => {
       if (!isWorkspaceMessage(message)) {
+        return;
+      }
+      const workspacePanelInstanceId = getWorkspacePanelInstanceId(message);
+      if (
+        this.panelInstanceIdentity &&
+        workspacePanelInstanceId &&
+        workspacePanelInstanceId !== this.panelInstanceIdentity.id
+      ) {
+        logVSmuxDebug("workspace.panel.ignoredMessageFromStaleInstance", {
+          activeWorkspacePanelInstanceId: this.panelInstanceIdentity.id,
+          messageType: message.type,
+          staleWorkspacePanelInstanceId: workspacePanelInstanceId,
+        });
         return;
       }
       if (message.type === "workspaceDebugLog") {
@@ -210,6 +232,7 @@ function getWorkspaceHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   bootstrapMessage?: WorkspaceRenderableMessage,
+  panelInstanceIdentity?: WorkspacePanelInstanceIdentity,
 ): string {
   const scriptUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, "out", "workspace", "workspace.js"),
@@ -228,7 +251,7 @@ function getWorkspaceHtml(
     `connect-src ${webview.cspSource} ws://127.0.0.1:* http://127.0.0.1:*`,
     `frame-src ${webview.cspSource} data: blob:`,
   ].join("; ");
-  const bootstrapScript = getWorkspaceBootstrapScript(bootstrapMessage);
+  const bootstrapScript = getWorkspaceBootstrapScript(bootstrapMessage, panelInstanceIdentity);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -256,13 +279,27 @@ function getWorkspaceHtml(
 </html>`;
 }
 
-function getWorkspaceBootstrapScript(message?: WorkspaceRenderableMessage): string {
-  if (!message) {
+function getWorkspaceBootstrapScript(
+  message?: WorkspaceRenderableMessage,
+  panelInstanceIdentity?: WorkspacePanelInstanceIdentity,
+): string {
+  const lines: string[] = [];
+  if (message) {
+    const serializedMessage = JSON.stringify(message).replace(/</g, "\\u003c");
+    lines.push(`window.__VSMUX_WORKSPACE_BOOTSTRAP__ = ${serializedMessage};`);
+  }
+  if (panelInstanceIdentity) {
+    const serializedPanelInstanceIdentity = JSON.stringify(panelInstanceIdentity).replace(
+      /</g,
+      "\\u003c",
+    );
+    lines.push(`window.__VSMUX_WORKSPACE_PANEL_INSTANCE__ = ${serializedPanelInstanceIdentity};`);
+  }
+  if (lines.length === 0) {
     return "";
   }
 
-  const serializedMessage = JSON.stringify(message).replace(/</g, "\\u003c");
-  return `<script>window.__VSMUX_WORKSPACE_BOOTSTRAP__ = ${serializedMessage};</script>`;
+  return `<script>${lines.join("")}</script>`;
 }
 
 function isWorkspaceRenderableMessage(
@@ -307,6 +344,22 @@ function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToEx
   }
 
   return false;
+}
+
+function getWorkspacePanelInstanceId(
+  candidate: WorkspacePanelToExtensionMessage,
+): string | undefined {
+  const withInstanceId = candidate as WorkspacePanelToExtensionEnvelope;
+  return typeof withInstanceId.workspacePanelInstanceId === "string"
+    ? withInstanceId.workspacePanelInstanceId
+    : undefined;
+}
+
+function createWorkspacePanelInstanceIdentity(): WorkspacePanelInstanceIdentity {
+  return {
+    createdAt: Date.now(),
+    id: `workspace-panel-${randomUUID()}`,
+  };
 }
 
 function getNonce(): string {

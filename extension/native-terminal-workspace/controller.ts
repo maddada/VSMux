@@ -241,6 +241,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   >();
   private readonly activitySuppressedUntilBySessionId = new Map<string, number>();
   private readonly frozenLastActivityAtBySessionId = new Map<string, number | null>();
+  private readonly lastActivityIgnoreUntilBySessionId = new Map<string, number>();
   private readonly lastActivityOverrideAtBySessionId = new Map<string, number>();
   private readonly workingStartedAtBySessionId = new Map<string, number>();
   private readonly pendingCompletionSoundTimeoutBySessionId = new Map<string, NodeJS.Timeout>();
@@ -1576,7 +1577,22 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
   public async focusGroup(groupId: string, source?: "sidebar"): Promise<void> {
     this.clearObservedSidebarFocusState();
+    const beforeSnapshot = this.describeActiveSnapshot();
+    logVSmuxDebug("controller.focusGroup.start", {
+      beforeSnapshot,
+      groupId,
+      source,
+      workspaceId: this.workspaceId,
+    });
     const changed = await this.store.focusGroup(groupId);
+    const afterSnapshot = this.describeActiveSnapshot();
+    logVSmuxDebug("controller.focusGroup.afterStoreFocus", {
+      afterSnapshot,
+      changed,
+      groupId,
+      source,
+      workspaceId: this.workspaceId,
+    });
     if (source === "sidebar") {
       this.enqueueWorkspaceAutoFocusForFocusedSession("sidebar");
     }
@@ -2560,6 +2576,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private clearSessionPresentationState(sessionId: string): void {
     this.activitySuppressedUntilBySessionId.delete(sessionId);
     this.frozenLastActivityAtBySessionId.delete(sessionId);
+    this.lastActivityIgnoreUntilBySessionId.delete(sessionId);
     this.pendingT3SessionIds.delete(sessionId);
     this.sidebarAgentIconBySessionId.delete(sessionId);
     this.sessionAgentLaunchBySessionId.delete(sessionId);
@@ -2718,16 +2735,29 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       return;
     }
 
+    const displayedLastActivityAt = this.getLastTerminalActivityAtForSidebar(
+      sessionRecord.sessionId,
+    );
+    const rawLastActivityAt = this.getResolvedLastTerminalActivityAtForSidebar(
+      sessionRecord.sessionId,
+    );
+    const suppressedUntil = Date.now() + INITIAL_ACTIVITY_SUPPRESSION_MS;
     this.frozenLastActivityAtBySessionId.set(
       sessionRecord.sessionId,
-      this.getLastTerminalActivityAtForSidebar(sessionRecord.sessionId) ?? null,
+      displayedLastActivityAt ?? null,
     );
-    this.activitySuppressedUntilBySessionId.set(
-      sessionRecord.sessionId,
-      Date.now() + INITIAL_ACTIVITY_SUPPRESSION_MS,
-    );
+    this.lastActivityIgnoreUntilBySessionId.set(sessionRecord.sessionId, suppressedUntil);
+    this.activitySuppressedUntilBySessionId.set(sessionRecord.sessionId, suppressedUntil);
     this.workingStartedAtBySessionId.delete(sessionRecord.sessionId);
     this.clearPendingCompletionSound(sessionRecord.sessionId);
+    logVSmuxDebug("controller.activitySuppression.started", {
+      displayedLastActivityAt: formatDebugActivityAt(displayedLastActivityAt),
+      frozenLastActivityAt: formatDebugActivityAt(displayedLastActivityAt),
+      rawLastActivityAt: formatDebugActivityAt(rawLastActivityAt),
+      sessionCreatedAt: sessionRecord.createdAt,
+      sessionId: sessionRecord.sessionId,
+      suppressedUntil: formatDebugActivityAt(suppressedUntil),
+    });
   }
 
   private getActivitySuppressedUntil(sessionRecord: SessionRecord): number | undefined {
@@ -2744,6 +2774,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       restartSuppressedUntil <= Date.now()
     ) {
       this.activitySuppressedUntilBySessionId.delete(sessionRecord.sessionId);
+      logVSmuxDebug("controller.activitySuppression.expired", {
+        sessionId: sessionRecord.sessionId,
+        suppressedUntil: formatDebugActivityAt(restartSuppressedUntil),
+      });
     }
 
     const createdAtMs = Date.parse(sessionRecord.createdAt);
@@ -2859,12 +2893,61 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     ) {
       if (!this.frozenLastActivityAtBySessionId.has(sessionId)) {
         this.frozenLastActivityAtBySessionId.set(sessionId, null);
+        this.lastActivityIgnoreUntilBySessionId.set(sessionId, activitySuppressedUntil);
+        logVSmuxDebug("controller.activitySuppression.frozenInitialized", {
+          activitySuppressedUntil: formatDebugActivityAt(activitySuppressedUntil),
+          fallback: "createdAt",
+          rawLastActivityAt: formatDebugActivityAt(rawActivityAt),
+          sessionCreatedAt: sessionRecord.createdAt,
+          sessionId,
+        });
       }
 
-      return this.frozenLastActivityAtBySessionId.get(sessionId) ?? undefined;
+      const frozenActivityAt = this.frozenLastActivityAtBySessionId.get(sessionId) ?? undefined;
+      logVSmuxDebug("controller.activitySuppression.lastActivityDecision", {
+        activitySuppressedUntil: formatDebugActivityAt(activitySuppressedUntil),
+        decision:
+          frozenActivityAt === undefined
+            ? "fallbackCreatedAtDuringSuppression"
+            : "frozenDuringSuppression",
+        frozenLastActivityAt: formatDebugActivityAt(frozenActivityAt),
+        rawLastActivityAt: formatDebugActivityAt(rawActivityAt),
+        sessionCreatedAt: sessionRecord.createdAt,
+        sessionId,
+      });
+      return frozenActivityAt;
     }
 
+    const lastActivityIgnoreUntil = this.lastActivityIgnoreUntilBySessionId.get(sessionId);
+    if (
+      lastActivityIgnoreUntil !== undefined &&
+      Number.isFinite(lastActivityIgnoreUntil) &&
+      (rawActivityAt === undefined || rawActivityAt <= lastActivityIgnoreUntil)
+    ) {
+      const frozenActivityAt = this.frozenLastActivityAtBySessionId.get(sessionId) ?? undefined;
+      logVSmuxDebug("controller.activitySuppression.lastActivityDecision", {
+        activitySuppressedUntil: formatDebugActivityAt(lastActivityIgnoreUntil),
+        decision:
+          frozenActivityAt === undefined
+            ? "fallbackCreatedAtPendingRealActivity"
+            : "frozenPendingRealActivity",
+        frozenLastActivityAt: formatDebugActivityAt(frozenActivityAt),
+        rawLastActivityAt: formatDebugActivityAt(rawActivityAt),
+        sessionCreatedAt: sessionRecord.createdAt,
+        sessionId,
+      });
+      return frozenActivityAt;
+    }
+
+    if (this.frozenLastActivityAtBySessionId.has(sessionId)) {
+      logVSmuxDebug("controller.activitySuppression.released", {
+        ignoredUntil: formatDebugActivityAt(lastActivityIgnoreUntil),
+        rawLastActivityAt: formatDebugActivityAt(rawActivityAt),
+        sessionId,
+      });
+    }
     this.frozenLastActivityAtBySessionId.delete(sessionId);
+    this.lastActivityIgnoreUntilBySessionId.delete(sessionId);
     return rawActivityAt;
   }
 
@@ -3424,6 +3507,14 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       autoFocusRequest,
       durationMs: Date.now() - startedAt,
       focusedSessionId: activeSnapshot.focusedSessionId,
+      groupSummaries: workspaceSnapshot.groups.map((group) => ({
+        focusedSessionId: group.snapshot.focusedSessionId,
+        groupId: group.groupId,
+        sessionIds: group.snapshot.sessions.map((session) => session.sessionId),
+        viewMode: group.snapshot.viewMode,
+        visibleCount: group.snapshot.visibleCount,
+        visibleSessionIds: [...group.snapshot.visibleSessionIds],
+      })),
       paneIds: panes.map((pane) => `${pane.sessionId}:${pane.isVisible ? "visible" : "hidden"}`),
       type,
       viewMode: activeSnapshot.viewMode,
@@ -3739,6 +3830,14 @@ function getSidebarDaemonStatusPriority(status: SidebarDaemonSessionItem["status
     default:
       return 5;
   }
+}
+
+function formatDebugActivityAt(value: number | undefined): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return new Date(value).toISOString();
 }
 
 function getCommandTerminalShellArgs(shellPath: string, command: string): string[] {

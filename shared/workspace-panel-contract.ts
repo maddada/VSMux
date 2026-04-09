@@ -135,6 +135,10 @@ export type WorkspacePanelReloadMessage = {
   type: "reloadWorkspacePanel";
 };
 
+export type WorkspacePanelMessageInstanceMetadata = {
+  workspacePanelInstanceId?: string;
+};
+
 export type WorkspacePanelToExtensionMessage =
   | WorkspacePanelReadyMessage
   | WorkspacePanelFocusSessionMessage
@@ -144,6 +148,9 @@ export type WorkspacePanelToExtensionMessage =
   | WorkspacePanelSyncSessionOrderMessage
   | WorkspacePanelDebugLogMessage
   | WorkspacePanelReloadMessage;
+
+export type WorkspacePanelToExtensionEnvelope = WorkspacePanelToExtensionMessage &
+  WorkspacePanelMessageInstanceMetadata;
 
 export function stripWorkspacePanelTransientFields(
   message: ExtensionToWorkspacePanelMessage,
