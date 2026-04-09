@@ -4,6 +4,7 @@ import {
   type ChatHistoryResumeSource,
 } from "../../../extension/chat-history-vsmux-bridge";
 import { SidebarViewProvider } from "./SidebarViewProvider";
+import { logChatHistoryInfo } from "./log";
 import { readJsonlFileAsync, type ConversationFile } from "./fileSystem";
 
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -22,11 +23,11 @@ function getWorkspacePath(): string | null {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log("VSmux Search extension is now active");
+  logChatHistoryInfo("VSmux Search extension is now active");
 
   // Get the current workspace path
   const workspacePath = getWorkspacePath();
-  console.log("Workspace path:", workspacePath);
+  logChatHistoryInfo("Workspace path:", workspacePath);
 
   // Create and register the sidebar webview provider
   sidebarProvider = new SidebarViewProvider(context.extensionUri, workspacePath ?? undefined);
@@ -40,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (sidebarProvider) {
       sidebarProvider.setWorkspacePath(newWorkspacePath);
     }
-    console.log("Workspace changed to:", newWorkspacePath);
+    logChatHistoryInfo("Workspace changed to:", newWorkspacePath);
   });
   context.subscriptions.push(workspaceWatcher);
 

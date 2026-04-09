@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { appendFile, mkdir } from "node:fs/promises";
 import * as path from "node:path";
+import { formatVscodeWorkspaceLogPrefix } from "../shared/vscode-workspace-log-context";
 
 const SETTINGS_SECTION = "VSmux";
 const DEBUGGING_MODE_SETTING = "debuggingMode";
@@ -54,7 +55,7 @@ export function logVSmuxDebug(event: string, details?: unknown): void {
 
   const output = getOutputChannel();
   const suffix = details === undefined ? "" : ` ${safeSerialize(details)}`;
-  const line = `${new Date().toISOString()} ${event}${suffix}`;
+  const line = `${new Date().toISOString()} ${formatVscodeWorkspaceLogPrefix()} ${event}${suffix}`;
   output.appendLine(line);
   queueDebugLogFileAppend(`${line}\n`);
 }

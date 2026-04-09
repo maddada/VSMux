@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { logChatHistoryError, logChatHistoryWarn } from "./log";
 
 export const MIN_FILE_SIZE = 1 * 1024; // 1KB minimum
 export const MAX_FILE_SIZE_FOR_FULL_READ = 50 * 1024 * 1024; // 50MB limit for full file reads
@@ -861,14 +862,14 @@ export function readJsonlFile(filePath: string): string | null {
   try {
     const stats = fs.statSync(filePath);
     if (stats.size > MAX_FILE_SIZE_FOR_FULL_READ) {
-      console.warn(`File too large to read: ${filePath} (${formatFileSize(stats.size)})`);
+      logChatHistoryWarn(`File too large to read: ${filePath} (${formatFileSize(stats.size)})`);
       return null;
     }
 
     const content = fs.readFileSync(filePath, "utf-8");
     return normalizeConversationContent(content, filePath);
   } catch (error) {
-    console.error(`Error reading file: ${filePath}`, error);
+    logChatHistoryError(`Error reading file: ${filePath}`, error);
     return null;
   }
 }
@@ -881,14 +882,14 @@ export async function readJsonlFileAsync(filePath: string): Promise<string | nul
   try {
     const stats = await fs.promises.stat(filePath);
     if (stats.size > MAX_FILE_SIZE_FOR_FULL_READ) {
-      console.warn(`File too large to read: ${filePath} (${formatFileSize(stats.size)})`);
+      logChatHistoryWarn(`File too large to read: ${filePath} (${formatFileSize(stats.size)})`);
       return null;
     }
 
     const content = await fs.promises.readFile(filePath, "utf-8");
     return normalizeConversationContent(content, filePath);
   } catch (error) {
-    console.error(`Error reading file: ${filePath}`, error);
+    logChatHistoryError(`Error reading file: ${filePath}`, error);
     return null;
   }
 }
@@ -941,7 +942,7 @@ export async function loadFileSummary(file: ConversationFile): Promise<string> {
     file.summary = summary;
     return summary;
   } catch (error) {
-    console.error(`Error loading summary for ${file.path}:`, error);
+    logChatHistoryError(`Error loading summary for ${file.path}:`, error);
     file.summary = "";
     return "";
   }
@@ -1027,7 +1028,7 @@ function scanClaudeConversationsSync(folders: Map<string, FolderNode>): void {
           });
         }
       } catch (err) {
-        console.error(`Error reading folder ${folderPath}:`, err);
+        logChatHistoryError(`Error reading folder ${folderPath}:`, err);
       }
     }
   }
@@ -1073,7 +1074,7 @@ async function scanClaudeConversationsAsync(folders: Map<string, FolderNode>): P
           });
         }
       } catch (err) {
-        console.error(`Error reading folder ${folderPath}:`, err);
+        logChatHistoryError(`Error reading folder ${folderPath}:`, err);
       }
     }
   }
@@ -1180,7 +1181,7 @@ function scanCodexConversationsSync(folders: Map<string, FolderNode>): void {
     try {
       collectJsonlFilesSync(rootPath, files);
     } catch (err) {
-      console.error(`Error scanning Codex sessions in ${rootPath}:`, err);
+      logChatHistoryError(`Error scanning Codex sessions in ${rootPath}:`, err);
       continue;
     }
 
@@ -1201,7 +1202,7 @@ function scanCodexConversationsSync(folders: Map<string, FolderNode>): void {
           profile,
         });
       } catch (err) {
-        console.error(`Error reading Codex conversation ${filePath}:`, err);
+        logChatHistoryError(`Error reading Codex conversation ${filePath}:`, err);
       }
     }
   }
@@ -1235,7 +1236,7 @@ async function scanCodexConversationsAsync(folders: Map<string, FolderNode>): Pr
           profile,
         });
       } catch (err) {
-        console.error(`Error reading Codex conversation ${filePath}:`, err);
+        logChatHistoryError(`Error reading Codex conversation ${filePath}:`, err);
       }
     }
   }

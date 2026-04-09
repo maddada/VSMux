@@ -9,6 +9,7 @@ import {
   type ConversationFile,
   type FolderNode,
 } from "./fileSystem";
+import { logChatHistoryError } from "./log";
 
 export type ConversationScope = "current" | "all";
 
@@ -172,7 +173,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
         this.folders = folders;
       })
       .catch((err) => {
-        console.error("Error scanning conversations:", err);
+        logChatHistoryError("Error scanning conversations:", err);
         this.folders = new Map();
       })
       .finally(() => {

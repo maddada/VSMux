@@ -12,6 +12,7 @@ import {
   type ConversationFile,
   type FolderNode,
 } from "./fileSystem";
+import { logChatHistoryError } from "./log";
 
 // Cache for folder display names and home prefix
 const folderDisplayNameCache = new Map<string, string>();
@@ -264,7 +265,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
         }
       }
     } catch (err) {
-      console.error("Error scanning conversations:", err);
+      logChatHistoryError("Error scanning conversations:", err);
       this._folders = new Map();
     } finally {
       this._isLoading = false;
