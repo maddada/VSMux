@@ -2,6 +2,13 @@
 
 All notable user-facing changes are documented in this file.
 
+## 3.0.0 - 2026-04-09
+
+- VSmux 3.0 is a major stability step for the workspace runtime, with stronger pane visibility handling, more stable terminal host ownership, cleaner reload behavior, and better runtime reuse across session changes.
+- Previous-session recovery is much more capable now, including type-to-search in the history view and a more usable modal layout when you have a lot of saved sessions.
+- Session presentation feels more polished overall, with better agent-aware terminal titles, calmer activity timing, trimmed tooltip labels, cleaner daemon/session headers, and improved drag indicators in the sidebar.
+- Workspace panes are more predictable during focus and layout changes, thanks to stable pane targets, hidden-pane retention, and more deliberate session projection behavior.
+
 ## 2.7.5 - 2026-04-08
 
 - You can now mark sessions as favorites in the sidebar, making important sessions easier to keep visible and get back to quickly.
