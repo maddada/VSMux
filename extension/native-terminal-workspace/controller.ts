@@ -292,7 +292,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       workspaceId: this.workspaceId,
     });
     this.t3ActivityMonitor = new T3ActivityMonitor({
-      getWebSocketUrl: () => this.t3Runtime?.getWebSocketUrl() ?? DEFAULT_T3_ACTIVITY_WEBSOCKET_URL,
+      getWebSocketUrl: () =>
+        this.t3Runtime?.createAuthenticatedWebSocketUrl() ?? DEFAULT_T3_ACTIVITY_WEBSOCKET_URL,
     });
     this.agentManagerXBridge = new AgentManagerXBridgeClient({
       onCloseSession: async (sessionId) => this.closeSessionFromAgentManagerX(sessionId),
@@ -3671,6 +3672,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       workspaceId: this.workspaceId,
     };
     const autoFocusRequest = this.consumeWorkspaceAutoFocusRequest();
+    const activeT3Runtime = this.t3Runtime ?? new T3RuntimeManager(this.context);
+    this.t3Runtime = activeT3Runtime;
     const panes = (
       await Promise.all(
         activeGroupSessions.map(async (sessionRecord) => {
@@ -3703,6 +3706,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
                     this.context,
                     sessionRecord,
                     this.workspaceAssetServer,
+                    activeT3Runtime,
                   ),
           };
         }),

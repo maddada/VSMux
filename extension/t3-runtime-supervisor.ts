@@ -6,6 +6,7 @@ const POLL_INTERVAL_MS = 10_000;
 const SHUTDOWN_GRACE_MS = 5_000;
 
 type SupervisorOptions = {
+  bootstrapJson?: string;
   command: string;
   cwd: string;
   graceMs: number;
@@ -35,10 +36,19 @@ async function main(): Promise<void> {
     },
     // On Windows, ignoring stdio causes PowerShell-launched `npx --yes t3`
     // to exit immediately. Keep stdout/stderr piped and drain them instead.
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: options.bootstrapJson ? ["ignore", "pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
   });
   child.stdout?.resume();
   child.stderr?.resume();
+  const bootstrapStream = options.bootstrapJson ? child.stdio[3] : undefined;
+  if (options.bootstrapJson) {
+    if (!bootstrapStream || !("write" in bootstrapStream)) {
+      throw new Error("Managed T3 runtime is missing bootstrap fd 3.");
+    }
+
+    bootstrapStream.write(`${options.bootstrapJson}\n`);
+    bootstrapStream.end();
+  }
   child.unref();
 
   await writeSupervisorState(options, child);
@@ -174,6 +184,7 @@ function parseArgs(argv: readonly string[]): SupervisorOptions {
   }
 
   return {
+    bootstrapJson: values.get("bootstrap-json"),
     command: getRequiredArg(values, "command"),
     cwd: getRequiredArg(values, "cwd"),
     graceMs: Number(getRequiredArg(values, "grace-ms")),

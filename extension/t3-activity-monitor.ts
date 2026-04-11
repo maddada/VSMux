@@ -20,7 +20,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const RECONNECT_DELAY_MS = 1_500;
 const REFRESH_DEBOUNCE_MS = 100;
 type T3ActivityMonitorOptions = {
-  getWebSocketUrl?: () => string;
+  getWebSocketUrl?: () => string | Promise<string>;
 };
 
 type PendingSnapshotRequest = {
@@ -168,40 +168,42 @@ export class T3ActivityMonitor implements vscode.Disposable {
       return this.socket;
     }
 
-    this.connectPromise ??= new Promise<WebSocket>((resolve, reject) => {
-      const socket = new WebSocket(this.getWebSocketUrl());
+    this.connectPromise ??= (async () => {
+      const socket = new WebSocket(await this.getWebSocketUrl());
 
-      const handleOpen = () => {
-        this.socket = socket;
-        socket.addEventListener("message", handleMessage);
-        socket.addEventListener("close", handleClose);
-        this.subscribeToDomainEvents();
-        resolve(socket);
-      };
+      return await new Promise<WebSocket>((resolve, reject) => {
+        const handleOpen = () => {
+          this.socket = socket;
+          socket.addEventListener("message", handleMessage);
+          socket.addEventListener("close", handleClose);
+          this.subscribeToDomainEvents();
+          resolve(socket);
+        };
 
-      const handleError = () => {
-        reject(new Error("Failed to connect to the T3 activity websocket."));
-      };
+        const handleError = () => {
+          reject(new Error("Failed to connect to the T3 activity websocket."));
+        };
 
-      const handleClose = () => {
-        if (this.socket === socket) {
-          this.socket = undefined;
-        }
-        this.domainEventsRequestId = undefined;
-        this.subscribedToDomainEvents = false;
-        this.rejectPendingSnapshotRequest(new Error("T3 activity websocket closed."));
-        if (this.enabled) {
-          this.scheduleReconnect();
-        }
-      };
+        const handleClose = () => {
+          if (this.socket === socket) {
+            this.socket = undefined;
+          }
+          this.domainEventsRequestId = undefined;
+          this.subscribedToDomainEvents = false;
+          this.rejectPendingSnapshotRequest(new Error("T3 activity websocket closed."));
+          if (this.enabled) {
+            this.scheduleReconnect();
+          }
+        };
 
-      const handleMessage = (event: MessageEvent) => {
-        this.handleMessage(event.data);
-      };
+        const handleMessage = (event: MessageEvent) => {
+          this.handleMessage(event.data);
+        };
 
-      socket.addEventListener("open", handleOpen, { once: true });
-      socket.addEventListener("error", handleError, { once: true });
-    }).finally(() => {
+        socket.addEventListener("open", handleOpen, { once: true });
+        socket.addEventListener("error", handleError, { once: true });
+      });
+    })().finally(() => {
       this.connectPromise = undefined;
     });
 
@@ -383,8 +385,8 @@ export class T3ActivityMonitor implements vscode.Disposable {
     pendingRequest.reject(error);
   }
 
-  private getWebSocketUrl(): string {
-    return this.options.getWebSocketUrl?.() ?? DEFAULT_T3_WEBSOCKET_URL;
+  private async getWebSocketUrl(): Promise<string> {
+    return (await this.options.getWebSocketUrl?.()) ?? DEFAULT_T3_WEBSOCKET_URL;
   }
 
   private subscribeToDomainEvents(): void {

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { T3SessionRecord } from "../../shared/session-grid-contract";
+import type { T3RuntimeManager } from "../t3-runtime-manager";
 import type { WorkspaceAssetServer } from "../workspace-asset-server";
 
 export function getEmbeddedT3Root(context: vscode.ExtensionContext): vscode.Uri {
@@ -12,10 +13,12 @@ export async function createT3IframeSource(
   context: vscode.ExtensionContext,
   sessionRecord: T3SessionRecord,
   workspaceAssetServer: WorkspaceAssetServer,
+  runtime: T3RuntimeManager,
 ): Promise<string> {
   const embeddedRoot = getEmbeddedT3Root(context);
   const indexPath = path.join(embeddedRoot.fsPath, "index.html");
   const assetRootUri = await workspaceAssetServer.getRootUrl("t3-embed");
+  const assetServerOrigin = new URL(assetRootUri).origin;
   const iframeHostScriptUri = await workspaceAssetServer.getUrl("workspace", "t3-frame-host.js");
 
   let html: string;
@@ -32,16 +35,18 @@ export async function createT3IframeSource(
     return createMissingIframeHtml();
   }
 
+  const embedBootstrap = await runtime.createEmbedBootstrap(sessionRecord.t3.workspaceRoot);
   const payload: T3IframeBootstrapPayload = {
     bootstrapScriptSrc: iframeHostScriptUri.toString(),
+    browserBootstrapToken: embedBootstrap.browserBootstrapToken,
     scriptSrc,
-    serverOrigin: sessionRecord.t3.serverOrigin,
+    serverOrigin: assetServerOrigin,
     sessionId: sessionRecord.sessionId,
     sessionRecordTitle: sessionRecord.title,
     styleHref: resolveEmbeddedAssetUrl(assetRootUri, stylePathMatch?.[1]),
     threadId: sessionRecord.t3.threadId,
     workspaceRoot: sessionRecord.t3.workspaceRoot,
-    wsUrl: toWebSocketOrigin(sessionRecord.t3.serverOrigin),
+    wsUrl: toWebSocketOrigin(assetServerOrigin),
   };
 
   return createT3IframeHtml(payload);
@@ -55,7 +60,10 @@ function createMissingIframeHtml(): string {
   return createStatusIframeHtml("T3 Code", "Embedded T3 assets are missing.");
 }
 
-function resolveEmbeddedAssetUrl(assetRootUri: string, assetPath: string | undefined): string | undefined {
+function resolveEmbeddedAssetUrl(
+  assetRootUri: string,
+  assetPath: string | undefined,
+): string | undefined {
   if (!assetPath) {
     return undefined;
   }
@@ -69,6 +77,7 @@ function resolveEmbeddedAssetUrl(assetRootUri: string, assetPath: string | undef
 
 type T3IframeBootstrapPayload = {
   bootstrapScriptSrc: string;
+  browserBootstrapToken: string;
   scriptSrc: string;
   serverOrigin: string;
   sessionId: string;
@@ -160,10 +169,7 @@ function escapeHtmlAttribute(value: string): string {
 }
 
 function escapeHtmlText(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function toWebSocketOrigin(serverOrigin: string): string {

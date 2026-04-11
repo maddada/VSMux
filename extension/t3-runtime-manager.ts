@@ -41,6 +41,7 @@ const MANAGED_T3_HOME_DIR_NAME = "managed-home";
 const LEASES_DIR_NAME = "leases";
 const SUPERVISOR_STATE_FILE = "supervisor.json";
 const SUPERVISOR_LAUNCH_LOCK_FILE = "supervisor-launch.lock";
+const AUTH_STATE_FILE = "auth-state.json";
 
 type T3ModelSelection = {
   model: string;
@@ -86,6 +87,11 @@ type PendingRequest = {
   timeout: NodeJS.Timeout;
 };
 
+type T3RuntimeAuthState = {
+  ownerBearerToken?: string;
+  ownerBootstrapToken?: string;
+};
+
 export class T3RuntimeManager implements vscode.Disposable {
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly leaseId = randomUUID();
@@ -115,6 +121,32 @@ export class T3RuntimeManager implements vscode.Disposable {
 
   public getWebSocketUrl(): string {
     return getT3WebSocketUrl();
+  }
+
+  public async createAuthenticatedWebSocketUrl(
+    workspaceRoot = getDefaultWorkspaceCwd(),
+    startupCommand = DEFAULT_T3_COMMAND,
+  ): Promise<string> {
+    await this.ensureRunning(workspaceRoot, startupCommand);
+    return this.getAuthenticatedWebSocketUrl();
+  }
+
+  public async createEmbedBootstrap(
+    workspaceRoot = getDefaultWorkspaceCwd(),
+    startupCommand = DEFAULT_T3_COMMAND,
+  ): Promise<{
+    browserBootstrapToken: string;
+    serverOrigin: string;
+    wsUrl: string;
+  }> {
+    await this.ensureRunning(workspaceRoot, startupCommand);
+    const authState = await this.ensureAuthStateReady();
+    const browserBootstrapToken = await this.issueBrowserBootstrapToken(authState.ownerBearerToken);
+    return {
+      browserBootstrapToken,
+      serverOrigin: this.getServerOrigin(),
+      wsUrl: this.getWebSocketUrl(),
+    };
   }
 
   public async setLeaseActive(active: boolean): Promise<void> {
@@ -256,12 +288,15 @@ export class T3RuntimeManager implements vscode.Disposable {
     const hasManagedSupervisor = await this.hasActiveManagedSupervisor(resolvedStartupCommand);
     if (await isOriginResponsive(origin)) {
       if (hasManagedSupervisor) {
-        if (await isT3TransportResponsive(origin, this.getWebSocketUrl())) {
-          await this.startLeaseHeartbeat();
-          return origin;
+        try {
+          await this.ensureAuthStateReady();
+          if (await this.isTransportResponsive()) {
+            await this.startLeaseHeartbeat();
+            return origin;
+          }
+        } catch {
+          // Fall through and restart the managed runtime below.
         }
-      }
-      if (isManagedStartupCommand(resolvedStartupCommand)) {
         await this.stopStaleManagedRuntime();
       } else {
         return origin;
@@ -275,8 +310,15 @@ export class T3RuntimeManager implements vscode.Disposable {
 
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      if (await isT3TransportResponsive(origin, this.getWebSocketUrl())) {
-        return origin;
+      if (await isOriginResponsive(origin)) {
+        try {
+          await this.ensureAuthStateReady();
+          if (await this.isTransportResponsive()) {
+            return origin;
+          }
+        } catch {
+          // Keep polling until the runtime becomes ready or we time out.
+        }
       }
       await delay(250);
     }
@@ -371,7 +413,10 @@ export class T3RuntimeManager implements vscode.Disposable {
     let lastError: Error | undefined;
     while (Date.now() < deadline) {
       try {
-        const socket = await openWebSocket(this.getWebSocketUrl(), SOCKET_CONNECT_TIMEOUT_MS);
+        const socket = await openWebSocket(
+          await this.getAuthenticatedWebSocketUrl(),
+          SOCKET_CONNECT_TIMEOUT_MS,
+        );
         const handleMessage = (event: MessageEvent) => {
           this.handleMessage(event.data);
         };
@@ -464,6 +509,7 @@ export class T3RuntimeManager implements vscode.Disposable {
       const supervisorScriptPath = join(__dirname, "t3-runtime-supervisor.js");
       const shellPath = getDefaultShell();
       const nodeRuntimePath = getNodeRuntimePath();
+      const bootstrapEnvelope = await this.createManagedBootstrapEnvelope();
       const child = spawn(
         nodeRuntimePath,
         [
@@ -484,12 +530,15 @@ export class T3RuntimeManager implements vscode.Disposable {
           shellPath,
           "--state-file",
           this.getSupervisorStatePath(),
+          "--bootstrap-json",
+          JSON.stringify(bootstrapEnvelope),
         ],
         {
           detached: true,
           env: {
             ...process.env,
             T3CODE_HOME: this.getManagedT3HomePath(),
+            T3CODE_DESKTOP_BOOTSTRAP_TOKEN: String(bootstrapEnvelope.desktopBootstrapToken),
           },
           stdio: "ignore",
         },
@@ -558,6 +607,174 @@ export class T3RuntimeManager implements vscode.Disposable {
     });
   }
 
+  private async createManagedBootstrapEnvelope(): Promise<
+    Record<string, string | boolean | number>
+  > {
+    const ownerBootstrapToken = randomUUID();
+    const authState: T3RuntimeAuthState = {
+      ownerBootstrapToken,
+    };
+    await this.writeAuthState(authState);
+    return {
+      desktopBootstrapToken: ownerBootstrapToken,
+      host: T3_HOST,
+      mode: "desktop",
+      noBrowser: true,
+      port: T3_PORT,
+      t3Home: this.getManagedT3HomePath(),
+    };
+  }
+
+  private async ensureAuthStateReady(): Promise<
+    Required<Pick<T3RuntimeAuthState, "ownerBearerToken">>
+  > {
+    const current = await this.readAuthState();
+    if (current?.ownerBearerToken && (await this.isBearerSessionValid(current.ownerBearerToken))) {
+      return {
+        ownerBearerToken: current.ownerBearerToken,
+      };
+    }
+
+    const bootstrapToken = current?.ownerBootstrapToken;
+    if (!bootstrapToken) {
+      throw new Error("Missing managed T3 bootstrap token.");
+    }
+
+    const ownerBearerToken = await this.bootstrapOwnerBearerSession(bootstrapToken);
+    const nextState: T3RuntimeAuthState = {
+      ownerBearerToken,
+    };
+    await this.writeAuthState(nextState);
+    return {
+      ownerBearerToken,
+    };
+  }
+
+  private async readAuthState(): Promise<T3RuntimeAuthState | undefined> {
+    try {
+      const raw = await readFile(this.getAuthStatePath(), "utf8");
+      const parsed = JSON.parse(raw) as T3RuntimeAuthState;
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        (parsed.ownerBearerToken !== undefined && typeof parsed.ownerBearerToken !== "string") ||
+        (parsed.ownerBootstrapToken !== undefined && typeof parsed.ownerBootstrapToken !== "string")
+      ) {
+        return undefined;
+      }
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async writeAuthState(state: T3RuntimeAuthState): Promise<void> {
+    await writeFile(this.getAuthStatePath(), JSON.stringify(state, null, 2), "utf8");
+  }
+
+  private async bootstrapOwnerBearerSession(bootstrapToken: string): Promise<string> {
+    const response = await fetch(`${getT3Origin()}/api/auth/bootstrap/bearer`, {
+      body: JSON.stringify({
+        credential: bootstrapToken,
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(2_500),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to bootstrap managed T3 bearer session (${response.status}).`);
+    }
+    const payload = (await response.json()) as {
+      sessionToken?: string;
+    };
+    if (!payload.sessionToken || payload.sessionToken.trim().length === 0) {
+      throw new Error("Managed T3 bearer bootstrap did not return a session token.");
+    }
+    return payload.sessionToken;
+  }
+
+  private async issueBrowserBootstrapToken(ownerBearerToken: string): Promise<string> {
+    const response = await fetch(`${getT3Origin()}/api/auth/pairing-token`, {
+      body: JSON.stringify({
+        label: "VSmux embed",
+      }),
+      headers: {
+        authorization: `Bearer ${ownerBearerToken}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(2_500),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to issue T3 browser bootstrap token (${response.status}).`);
+    }
+    const payload = (await response.json()) as {
+      credential?: string;
+    };
+    if (!payload.credential || payload.credential.trim().length === 0) {
+      throw new Error("Managed T3 pairing token response did not include a credential.");
+    }
+    return payload.credential;
+  }
+
+  private async issueWebSocketToken(ownerBearerToken: string): Promise<string> {
+    const response = await fetch(`${getT3Origin()}/api/auth/ws-token`, {
+      headers: {
+        authorization: `Bearer ${ownerBearerToken}`,
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(2_500),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to issue T3 websocket token (${response.status}).`);
+    }
+    const payload = (await response.json()) as {
+      token?: string;
+    };
+    if (!payload.token || payload.token.trim().length === 0) {
+      throw new Error("Managed T3 websocket token response did not include a token.");
+    }
+    return payload.token;
+  }
+
+  private async isBearerSessionValid(ownerBearerToken: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${getT3Origin()}/api/auth/session`, {
+        headers: {
+          authorization: `Bearer ${ownerBearerToken}`,
+        },
+        method: "GET",
+        signal: AbortSignal.timeout(2_500),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  private async getAuthenticatedWebSocketUrl(): Promise<string> {
+    const authState = await this.ensureAuthStateReady();
+    const wsToken = await this.issueWebSocketToken(authState.ownerBearerToken);
+    const url = new URL(getT3WebSocketUrl());
+    url.searchParams.set("wsToken", wsToken);
+    return url.toString();
+  }
+
+  private async isTransportResponsive(): Promise<boolean> {
+    try {
+      const socket = await openWebSocket(
+        await this.getAuthenticatedWebSocketUrl(),
+        SOCKET_CONNECT_TIMEOUT_MS,
+      );
+      socket.close();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private getRuntimeStoragePath(): string {
     return join(this.context.globalStorageUri.fsPath, RUNTIME_STORAGE_DIR_NAME);
   }
@@ -580,6 +797,10 @@ export class T3RuntimeManager implements vscode.Disposable {
 
   private getSupervisorLaunchLockPath(): string {
     return join(this.getRuntimeStoragePath(), SUPERVISOR_LAUNCH_LOCK_FILE);
+  }
+
+  private getAuthStatePath(): string {
+    return join(this.getRuntimeStoragePath(), AUTH_STATE_FILE);
   }
 
   private async hasActiveManagedSupervisor(expectedCommand?: string): Promise<boolean> {
@@ -653,6 +874,7 @@ export class T3RuntimeManager implements vscode.Disposable {
       }
     }
     await rm(this.getSupervisorStatePath(), { force: true });
+    await rm(this.getAuthStatePath(), { force: true });
   }
 
   private resolveStartupCommand(startupCommand: string): string {
@@ -672,7 +894,7 @@ function getT3Origin(): string {
 function createManagedStartupCommand(): string {
   const bunPath = shellQuote(getBunRuntimePath());
   const entrypoint = shellQuote(getManagedT3EntrypointPath());
-  return `${bunPath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser`;
+  return `${bunPath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser --bootstrap-fd 3`;
 }
 
 function getNodeRuntimePath(): string {
@@ -741,19 +963,6 @@ async function isOriginResponsive(origin: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function isT3TransportResponsive(origin: string, webSocketUrl: string): Promise<boolean> {
-  if (!(await isOriginResponsive(origin))) {
-    return false;
-  }
-
-  return openWebSocket(webSocketUrl, SOCKET_CONNECT_TIMEOUT_MS)
-    .then((socket) => {
-      socket.close();
-      return true;
-    })
-    .catch(() => false);
 }
 
 function openWebSocket(url: string, timeoutMs: number): Promise<WebSocket> {
@@ -833,10 +1042,6 @@ function shellQuote(value: string): string {
 function getManagedT3EntrypointPath(): string {
   const repoRoot = process.env.VSMUX_T3_REPO_ROOT?.trim() || DEFAULT_MANAGED_T3_REPO_ROOT;
   return join(repoRoot, ...MANAGED_T3_ENTRYPOINT_SEGMENTS);
-}
-
-function isManagedStartupCommand(command: string): boolean {
-  return command === createManagedStartupCommand();
 }
 
 function getListeningProcessId(port: number): number | undefined {

@@ -1,4 +1,5 @@
 type T3FrameBootstrap = {
+  browserBootstrapToken: string;
   scriptSrc: string;
   sessionId: string;
   sessionRecordTitle: string;
@@ -30,6 +31,62 @@ declare global {
       workspaceRoot: string;
       wsUrl: string;
     };
+    desktopBridge?: {
+      confirm: (message: string) => Promise<boolean>;
+      getClientSettings: () => Promise<null>;
+      getLocalEnvironmentBootstrap: () => {
+        bootstrapToken?: string;
+        httpBaseUrl: string;
+        label: string;
+        wsBaseUrl: string;
+      };
+      getSavedEnvironmentRegistry: () => Promise<readonly []>;
+      getSavedEnvironmentSecret: () => Promise<null>;
+      getServerExposureState: () => Promise<{
+        advertisedHost: null;
+        endpointUrl: null;
+        mode: "local-only";
+      }>;
+      getUpdateState: () => Promise<{
+        canRetry: false;
+        checkedAt: null;
+        checkedVersion: null;
+        downloadPercent: null;
+        downloadedVersion: null;
+        errorContext: null;
+        message: null;
+        phase: "idle";
+      }>;
+      installUpdate: () => Promise<{
+        accepted: false;
+        completed: false;
+        state: Awaited<ReturnType<NonNullable<Window["desktopBridge"]>["getUpdateState"]>>;
+      }>;
+      checkForUpdate: () => Promise<{
+        checked: false;
+        state: Awaited<ReturnType<NonNullable<Window["desktopBridge"]>["getUpdateState"]>>;
+      }>;
+      downloadUpdate: () => Promise<{
+        accepted: false;
+        completed: false;
+        state: Awaited<ReturnType<NonNullable<Window["desktopBridge"]>["getUpdateState"]>>;
+      }>;
+      onMenuAction: (_listener: (action: string) => void) => () => void;
+      onUpdateState: (_listener: (state: unknown) => void) => () => void;
+      openExternal: (url: string) => Promise<boolean>;
+      pickFolder: () => Promise<null>;
+      removeSavedEnvironmentSecret: () => Promise<void>;
+      setClientSettings: () => Promise<void>;
+      setSavedEnvironmentRegistry: () => Promise<void>;
+      setSavedEnvironmentSecret: () => Promise<boolean>;
+      setServerExposureMode: () => Promise<{
+        advertisedHost: null;
+        endpointUrl: null;
+        mode: "local-only";
+      }>;
+      setTheme: () => Promise<void>;
+      showContextMenu: () => Promise<null>;
+    };
   }
 }
 
@@ -43,6 +100,7 @@ window.__VSMUX_T3_BOOTSTRAP__ = {
   workspaceRoot: bootstrap.workspaceRoot,
   wsUrl: bootstrap.wsUrl,
 };
+installDesktopBridge();
 
 if (bootstrap.styleHref) {
   const stylesheet = document.createElement("link");
@@ -98,15 +156,14 @@ window.addEventListener("message", (event) => {
   pendingClipboardReads.delete(requestId);
   resolver({
     files: Array.isArray(event.data.files)
-      ? event.data.files
-          .filter((entry): entry is T3ClipboardFilePayload => {
-            return (
-              entry != null &&
-              typeof entry.name === "string" &&
-              typeof entry.type === "string" &&
-              entry.buffer instanceof ArrayBuffer
-            );
-          })
+      ? event.data.files.filter((entry): entry is T3ClipboardFilePayload => {
+          return (
+            entry != null &&
+            typeof entry.name === "string" &&
+            typeof entry.type === "string" &&
+            entry.buffer instanceof ArrayBuffer
+          );
+        })
       : [],
     text: typeof event.data.text === "string" ? event.data.text : "",
   });
@@ -115,7 +172,9 @@ window.addEventListener("message", (event) => {
 document.addEventListener(
   "keydown",
   (event) => {
-    const primaryModifier = navigator.platform.toLowerCase().includes("mac") ? event.metaKey : event.ctrlKey;
+    const primaryModifier = navigator.platform.toLowerCase().includes("mac")
+      ? event.metaKey
+      : event.ctrlKey;
     if (!primaryModifier || event.altKey) {
       return;
     }
@@ -257,6 +316,56 @@ function notifyParentFocus() {
   );
 }
 
+function installDesktopBridge() {
+  const updateState = {
+    canRetry: false,
+    checkedAt: null,
+    checkedVersion: null,
+    downloadPercent: null,
+    downloadedVersion: null,
+    errorContext: null,
+    message: null,
+    phase: "idle" as const,
+  };
+  const serverExposureState = {
+    advertisedHost: null,
+    endpointUrl: null,
+    mode: "local-only" as const,
+  };
+
+  window.desktopBridge = {
+    confirm: async (message: string) => window.confirm(message),
+    getClientSettings: async () => null,
+    getLocalEnvironmentBootstrap: () => ({
+      bootstrapToken: bootstrap.browserBootstrapToken,
+      httpBaseUrl: bootstrap.serverOrigin,
+      label: bootstrap.sessionRecordTitle || "T3 Code",
+      wsBaseUrl: bootstrap.wsUrl,
+    }),
+    getSavedEnvironmentRegistry: async () => [],
+    getSavedEnvironmentSecret: async () => null,
+    getServerExposureState: async () => serverExposureState,
+    getUpdateState: async () => updateState,
+    installUpdate: async () => ({ accepted: false, completed: false, state: updateState }),
+    checkForUpdate: async () => ({ checked: false, state: updateState }),
+    downloadUpdate: async () => ({ accepted: false, completed: false, state: updateState }),
+    onMenuAction: () => () => undefined,
+    onUpdateState: () => () => undefined,
+    openExternal: async (url: string) => {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return true;
+    },
+    pickFolder: async () => null,
+    removeSavedEnvironmentSecret: async () => undefined,
+    setClientSettings: async () => undefined,
+    setSavedEnvironmentRegistry: async () => undefined,
+    setSavedEnvironmentSecret: async () => false,
+    setServerExposureMode: async () => serverExposureState,
+    setTheme: async () => undefined,
+    showContextMenu: async () => null,
+  };
+}
+
 function writeClipboard(text: string) {
   window.parent?.postMessage(
     {
@@ -331,7 +440,9 @@ async function pasteFromClipboardBridge() {
   insertTextIntoActiveTarget(payload.text);
 }
 
-function isEditableTarget(target: Element | null): target is HTMLInputElement | HTMLTextAreaElement | HTMLElement {
+function isEditableTarget(
+  target: Element | null,
+): target is HTMLInputElement | HTMLTextAreaElement | HTMLElement {
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
@@ -361,7 +472,10 @@ function insertTextIntoActiveTarget(text: string) {
 
   if (activeElement instanceof HTMLElement && activeElement.isContentEditable) {
     activeElement.focus();
-    if (typeof document.execCommand === "function" && document.execCommand("insertText", false, text)) {
+    if (
+      typeof document.execCommand === "function" &&
+      document.execCommand("insertText", false, text)
+    ) {
       return;
     }
 
