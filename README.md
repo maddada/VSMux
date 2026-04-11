@@ -6,10 +6,10 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 3.1.1
+## Latest Release: 3.2.0
 
-- Opencode running and done indicators work more reliably in the UI.
-- Completion sounds for Opencode sessions now trigger properly when work finishes.
+- VSmux startup is more reliable, with a fix for blank workspace tabs on launch.
+- Workspace webview initialization and message handling are steadier, so the workspace loads more consistently.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

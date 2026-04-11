@@ -2,6 +2,11 @@
 
 All notable user-facing changes are documented in this file.
 
+## 3.2.0 - 2026-04-11
+
+- Startup is more reliable now: VSmux is less likely to open into a blank tab, especially during initial workspace load.
+- Workspace webview message handling is more robust, with better timing around HTML assignment and webview initialization so the workspace comes up more consistently.
+
 ## 3.1.1 - 2026-04-11
 
 - Opencode session status is more reliable now, with the running and done indicator working more consistently in the UI.
