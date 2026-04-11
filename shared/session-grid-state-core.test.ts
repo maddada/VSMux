@@ -393,6 +393,8 @@ describe("visible primary titles", () => {
     expect(normalizeTerminalTitle("◇ agent-tiler")).toBe("agent-tiler");
     expect(normalizeTerminalTitle("🤖 Copilot fix")).toBe("Copilot fix");
     expect(normalizeTerminalTitle("🔔 Copilot fix")).toBe("Copilot fix");
+    expect(normalizeTerminalTitle("OC | Review repository")).toBe("Review repository");
+    expect(normalizeTerminalTitle("⠸ OC | Review repository")).toBe("Review repository");
   });
 
   test("should hide generated Session N placeholder titles in sidebar items", () => {

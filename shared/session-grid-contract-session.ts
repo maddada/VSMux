@@ -24,6 +24,7 @@ import {
 } from "./session-grid-contract-core";
 
 const LEADING_TERMINAL_TITLE_STATUS_MARKER_PATTERN = /^[\s\u2800-\u28ff·•⋅◦✳*✦◇🤖🔔]+/u;
+const LEADING_TERMINAL_TITLE_PREFIX_PATTERN = /^(?:OC\s*\|\s*)+/iu;
 const DEFAULT_TERMINAL_ENGINE: TerminalEngine = "ghostty";
 
 export function clampVisibleSessionCount(value: number): VisibleSessionCount {
@@ -322,6 +323,7 @@ export function normalizeTerminalTitle(title: string | undefined): string | unde
 
   const sanitizedTitle = normalizedTitle
     .replace(LEADING_TERMINAL_TITLE_STATUS_MARKER_PATTERN, "")
+    .replace(LEADING_TERMINAL_TITLE_PREFIX_PATTERN, "")
     .trim();
   return sanitizedTitle || undefined;
 }

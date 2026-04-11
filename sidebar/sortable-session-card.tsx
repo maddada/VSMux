@@ -710,7 +710,11 @@ function supportsFork(session: SidebarSessionItem): boolean {
 }
 
 function supportsFullReload(session: SidebarSessionItem): boolean {
-  return session.agentIcon === "codex" || session.agentIcon === "claude";
+  return (
+    session.agentIcon === "codex" ||
+    session.agentIcon === "claude" ||
+    session.agentIcon === "opencode"
+  );
 }
 
 let sidebarDebugInstanceCounter = 0;

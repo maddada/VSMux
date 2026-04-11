@@ -258,7 +258,11 @@ opencode() {
 `;
 }
 
-export function getOpenCodePluginContent(notifyPath: string, nodePath: string): string {
+export function getOpenCodePluginContent(
+  notifyPath: string,
+  nodePath: string,
+  logPath: string,
+): string {
   return `/**
  * VSmux notification plugin for OpenCode.
  */
@@ -266,19 +270,50 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
   if (globalThis.__vsmuxNotifyPluginV1) return {};
   globalThis.__vsmuxNotifyPluginV1 = true;
 
-  if (!process?.env?.VSMUX_SESSION_ID) return {};
+  const currentSessionId = process?.env?.VSMUX_SESSION_ID;
+  if (!currentSessionId) return {};
 
   const notifyPath = ${JSON.stringify(notifyPath)};
   const nodePath = ${JSON.stringify(nodePath)};
+  const logPath = ${JSON.stringify(logPath)};
   let currentState = "idle";
   let rootSessionId = null;
   let stopSent = false;
   const childSessionCache = new Map();
 
+  const logDebug = async (eventName, details = {}) => {
+    try {
+      const [{ appendFile, mkdir }, { dirname }] = await Promise.all([
+        import("node:fs/promises"),
+        import("node:path"),
+      ]);
+      await mkdir(dirname(logPath), { recursive: true });
+      await appendFile(
+        logPath,
+        \`\${new Date().toISOString()} \${eventName} \${JSON.stringify({
+          ...details,
+          currentSessionId,
+          currentState,
+          rootSessionId,
+          stopSent,
+        })}\\n\`,
+        "utf8",
+      );
+    } catch {
+      // best effort only
+    }
+  };
+
+  await logDebug("plugin.init");
+
   const notify = async (eventName) => {
     const payload = JSON.stringify({
       agent: "opencode",
       hook_event_name: eventName,
+    });
+
+    await logDebug("notify.dispatch", {
+      eventName,
     });
 
     try {
@@ -292,19 +327,48 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
           },
           stdio: "ignore",
         });
-        child.once("error", () => resolve(undefined));
-        child.once("exit", () => resolve(undefined));
+        child.once("error", async (error) => {
+          await logDebug("notify.error", {
+            eventName,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          resolve(undefined);
+        });
+        child.once("exit", async (code, signal) => {
+          await logDebug("notify.exit", {
+            code,
+            eventName,
+            signal,
+          });
+          resolve(undefined);
+        });
       });
     } catch {
+      await logDebug("notify.importError", {
+        eventName,
+      });
       // best effort only
     }
   };
 
   const isChildSession = async (sessionId) => {
-    if (!sessionId) return true;
-    if (!client?.session?.list) return true;
+    if (!sessionId) {
+      await logDebug("session.child.skipMissingSessionId");
+      return true;
+    }
+    if (!client?.session?.list) {
+      await logDebug("session.child.skipMissingList", {
+        sessionId,
+      });
+      return true;
+    }
     if (childSessionCache.has(sessionId)) {
-      return childSessionCache.get(sessionId);
+      const cachedResult = childSessionCache.get(sessionId);
+      await logDebug("session.child.cacheHit", {
+        isChild: cachedResult,
+        sessionId,
+      });
+      return cachedResult;
     }
 
     try {
@@ -312,11 +376,21 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
       const session = sessions.data?.find((candidate) => candidate.id === sessionId);
       const isChild = !!session?.parentID;
       childSessionCache.set(sessionId, isChild);
+      await logDebug("session.child.resolved", {
+        hasParentId: Boolean(session?.parentID),
+        isChild,
+        sessionId,
+      });
       return isChild;
     } catch {
+      await logDebug("session.child.error", {
+        sessionId,
+      });
       return true;
     }
   };
+
+  const isSessionActive = (status) => status?.type && status.type !== "idle";
 
   const handleBusy = async (sessionId) => {
     if (!rootSessionId) {
@@ -324,18 +398,32 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
     }
 
     if (sessionId !== rootSessionId) {
+      await logDebug("session.busy.ignoredNonRoot", {
+        sessionId,
+      });
       return;
     }
 
     if (currentState === "idle") {
       currentState = "busy";
       stopSent = false;
+      await logDebug("session.busy.transition", {
+        sessionId,
+      });
       await notify("Start");
+      return;
     }
+
+    await logDebug("session.busy.noopAlreadyBusy", {
+      sessionId,
+    });
   };
 
   const handleStop = async (sessionId) => {
     if (rootSessionId && sessionId !== rootSessionId) {
+      await logDebug("session.stop.ignoredNonRoot", {
+        sessionId,
+      });
       return;
     }
 
@@ -343,20 +431,77 @@ export const VSmuxNotifyPlugin = async ({ client }) => {
       currentState = "idle";
       stopSent = true;
       rootSessionId = null;
+      await logDebug("session.stop.transition", {
+        sessionId,
+      });
       await notify("Stop");
+      return;
+    }
+
+    await logDebug("session.stop.noopAlreadyIdle", {
+      sessionId,
+    });
+  };
+
+  const syncInitialStatus = async () => {
+    if (!client?.session?.status) {
+      await logDebug("session.status.skipMissingStatusApi");
+      return;
+    }
+
+    if (await isChildSession(currentSessionId)) {
+      await logDebug("session.status.skipChildSession", {
+        sessionId: currentSessionId,
+      });
+      return;
+    }
+
+    try {
+      const statuses = await client.session.status();
+      const status = statuses.data?.[currentSessionId];
+      await logDebug("session.status.initial", {
+        sessionId: currentSessionId,
+        statusType: status?.type,
+      });
+      if (isSessionActive(status)) {
+        await handleBusy(currentSessionId);
+        return;
+      }
+
+      if (status?.type === "idle") {
+        await handleStop(currentSessionId);
+      }
+    } catch {
+      await logDebug("session.status.initialError", {
+        sessionId: currentSessionId,
+      });
+      // best effort only
     }
   };
+
+  setTimeout(() => {
+    void syncInitialStatus();
+  }, 0);
 
   return {
     event: async ({ event }) => {
       const sessionId = event.properties?.sessionID;
+      await logDebug("session.event.received", {
+        eventType: event.type,
+        sessionId,
+        statusType: event.properties?.status?.type,
+      });
       if (await isChildSession(sessionId)) {
+        await logDebug("session.event.ignoredChild", {
+          eventType: event.type,
+          sessionId,
+        });
         return;
       }
 
       if (event.type === "session.status") {
         const status = event.properties?.status;
-        if (status?.type === "busy") {
+        if (isSessionActive(status)) {
           await handleBusy(sessionId);
         } else if (status?.type === "idle") {
           await handleStop(sessionId);

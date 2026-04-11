@@ -24,6 +24,30 @@ describe("getTitleDerivedSessionActivity", () => {
     expect(getInterestingTitleSymbols("plain words 123")).toEqual([]);
   });
 
+  test("should detect OpenCode titles for agent persistence without marking them active", () => {
+    expect(getTitleDerivedSessionActivity("OC | Review repository")).toEqual({
+      activity: "idle",
+      agentName: "opencode",
+      hasSeenWorking: false,
+      isAcknowledged: false,
+      lastTitleChangeAt: undefined,
+    });
+    expect(getTitleDerivedSessionActivity("⠸ OC | Review repository")).toEqual({
+      activity: "idle",
+      agentName: "opencode",
+      hasSeenWorking: false,
+      isAcknowledged: false,
+      lastTitleChangeAt: undefined,
+    });
+    expect(getTitleDerivedSessionActivity("OC | Review repository", undefined, "opencode")).toEqual({
+      activity: "idle",
+      agentName: "opencode",
+      hasSeenWorking: false,
+      isAcknowledged: false,
+      lastTitleChangeAt: undefined,
+    });
+  });
+
   test("should detect Codex spinner titles as working", () => {
     const firstActivity = getTitleDerivedSessionActivityFromTransition(undefined, "⠸ OpenAI Codex");
     expect(getTitleDerivedSessionActivity("⠸ OpenAI Codex", firstActivity)).toEqual({

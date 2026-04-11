@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { getPreferredSessionTitle, normalizeTerminalTitle } from "../shared/session-grid-contract";
 import {
@@ -9,6 +10,10 @@ import { getDefaultAgentCommand } from "./native-terminal-workspace/settings";
 import { getWorkspaceStorageKey } from "./terminal-workspace-helpers";
 
 const SESSION_AGENT_COMMANDS_KEY = "VSmux.sessionAgentCommands";
+export const OPENCODE_SESSION_LOOKUP_RUNNER_PATH = path.join(
+  __dirname,
+  "opencode-session-lookup-runner.js",
+);
 
 export type StoredSessionAgentLaunch = {
   agentId: string;
@@ -18,6 +23,17 @@ export type StoredSessionAgentLaunch = {
 export type DetachedResumeAction = {
   shouldExecute: boolean;
   text: string;
+};
+
+export type ProgrammaticTerminalResumeStep = {
+  data?: string;
+  postDelayMs?: number;
+  shouldExecute?: boolean;
+  waitForAgentId?: "codex" | "claude" | "copilot" | "gemini" | "opencode";
+};
+
+export type ProgrammaticTerminalResumeAction = {
+  steps: ProgrammaticTerminalResumeStep[];
 };
 
 const MOVE_CURSOR_TO_LINE_START_CONTROL = "\u0001";
@@ -39,6 +55,8 @@ export function buildResumeAgentCommand(
       return appendResumeTarget(`${agentCommand} resume`, sessionTitle, terminalTitle);
     case "claude":
       return appendResumeTarget(`${agentCommand} -r`, sessionTitle, terminalTitle);
+    case "opencode":
+      return buildOpenCodeResumeCommand(agentCommand, sessionTitle, terminalTitle, false);
     default:
       return undefined;
   }
@@ -68,6 +86,46 @@ export function buildForkAgentCommand(
   }
 }
 
+export function buildProgrammaticResumeAction(
+  agentLaunch: StoredSessionAgentLaunch | undefined,
+  agentIconId: SidebarAgentIcon | undefined,
+  sessionTitle: string | undefined,
+  terminalTitle?: string,
+): ProgrammaticTerminalResumeAction | undefined {
+  const agentId = resolveBuiltInAgentId(agentLaunch, agentIconId);
+  const agentCommand = resolveAgentCommand(agentLaunch, agentIconId);
+  if (!agentId || !agentCommand) {
+    return undefined;
+  }
+
+  switch (agentId) {
+    case "codex": {
+      const text = appendResumeTarget(`${agentCommand} resume`, sessionTitle, terminalTitle);
+      return {
+        steps: [{ data: text, shouldExecute: true }],
+      };
+    }
+    case "claude": {
+      const text = appendResumeTarget(`${agentCommand} -r`, sessionTitle, terminalTitle);
+      return {
+        steps: [{ data: text, shouldExecute: true }],
+      };
+    }
+    case "opencode": {
+      const text = buildOpenCodeResumeCommand(agentCommand, sessionTitle, terminalTitle, false);
+      if (!text) {
+        return undefined;
+      }
+
+      return {
+        steps: [{ data: text, shouldExecute: true }],
+      };
+    }
+    default:
+      return undefined;
+  }
+}
+
 export function buildCopyResumeCommandText(
   agentLaunch: StoredSessionAgentLaunch | undefined,
   agentIconId: SidebarAgentIcon | undefined,
@@ -88,7 +146,7 @@ export function buildCopyResumeCommandText(
     case "gemini":
       return `${agentCommand} --list-sessions && echo 'Enter ${agentCommand} -r id' to resume a session`;
     case "opencode":
-      return `${agentCommand} list && echo 'Enter ${agentCommand} -s id' to resume a session`;
+      return buildOpenCodeResumeCommand(agentCommand, sessionTitle, terminalTitle, true);
     case "copilot":
       return `${agentCommand} --continue && echo 'Or use ${agentCommand} --resume to pick a session, or ${agentCommand} --resume SESSION-ID if you know it'`;
     default:
@@ -132,10 +190,7 @@ export function buildDetachedResumeAction(
         text: `${agentCommand} -r `,
       };
     case "opencode":
-      return {
-        shouldExecute: false,
-        text: `${agentCommand} -s `,
-      };
+      return buildDetachedOpenCodeResumeAction(agentCommand, sessionTitle, terminalTitle);
     case "copilot":
       return {
         shouldExecute: false,
@@ -242,6 +297,43 @@ function appendResumeTarget(
   return resumeTitle
     ? `${commandPrefix} ${quoteForSingleShellArgument(resumeTitle)}`
     : commandPrefix;
+}
+
+function buildOpenCodeResumeCommand(
+  agentCommand: string,
+  sessionTitle: string | undefined,
+  terminalTitle?: string,
+  allowManualFallback = false,
+): string | undefined {
+  const resumeTitle = resolveResumeTitle(sessionTitle, terminalTitle);
+  if (!resumeTitle) {
+    return allowManualFallback
+      ? `${agentCommand} session list && echo 'Enter ${agentCommand} -s id' to resume a session`
+      : undefined;
+  }
+
+  return `${agentCommand} -s "$(${agentCommand} session list --format json | ${quoteForSingleShellArgument(process.execPath)} ${quoteForSingleShellArgument(OPENCODE_SESSION_LOOKUP_RUNNER_PATH)} ${quoteForSingleShellArgument(resumeTitle)})"`;
+}
+
+function buildDetachedOpenCodeResumeAction(
+  agentCommand: string,
+  sessionTitle: string | undefined,
+  terminalTitle?: string,
+): DetachedResumeAction | undefined {
+  const resumeCommand = buildOpenCodeResumeCommand(
+    agentCommand,
+    sessionTitle,
+    terminalTitle,
+    false,
+  );
+  if (!resumeCommand) {
+    return undefined;
+  }
+
+  return {
+    shouldExecute: true,
+    text: resumeCommand,
+  };
 }
 
 function resolveResumeTitle(

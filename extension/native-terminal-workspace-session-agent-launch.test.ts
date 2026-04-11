@@ -4,10 +4,20 @@ import {
   buildManualResumePrefillAction,
   buildDetachedResumeAction,
   buildForkAgentCommand,
+  buildProgrammaticResumeAction,
   buildResumeAgentCommand,
+  OPENCODE_SESSION_LOOKUP_RUNNER_PATH,
 } from "./native-terminal-workspace-session-agent-launch";
 
 const configurationValues = new Map<string, unknown>();
+
+function quoteShellLiteral(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function buildExpectedOpenCodeResumeCommand(command: string, title: string): string {
+  return `${command} -s "$(${command} session list --format json | ${quoteShellLiteral(process.execPath)} ${quoteShellLiteral(OPENCODE_SESSION_LOOKUP_RUNNER_PATH)} ${quoteShellLiteral(title)})"`;
+}
 
 vi.mock("vscode", () => ({
   workspace: {
@@ -118,6 +128,32 @@ describe("buildResumeAgentCommand", () => {
       ),
     ).toBe("claude -r 'Fix sidebar card title'");
   });
+
+  test("should build an opencode resume command for titled sessions", () => {
+    expect(
+      buildResumeAgentCommand(
+        {
+          agentId: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Design pass",
+      ),
+    ).toBe(buildExpectedOpenCodeResumeCommand("oc", "Design pass"));
+  });
+
+  test("should return undefined for opencode resume commands without a visible title", () => {
+    expect(
+      buildResumeAgentCommand(
+        {
+          agentId: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Session 12",
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe("buildForkAgentCommand", () => {
@@ -219,6 +255,52 @@ describe("buildForkAgentCommand", () => {
         "codex",
         "Session 34",
         "/Users/madda/dev/_active/agent-tiler",
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("buildProgrammaticResumeAction", () => {
+  test("should build a single-step codex resume action", () => {
+    expect(
+      buildProgrammaticResumeAction(
+        {
+          agentId: "codex",
+          command: "codex",
+        },
+        "codex",
+        "Bug Fixing",
+      ),
+    ).toEqual({
+      steps: [{ data: "codex resume 'Bug Fixing'", shouldExecute: true }],
+    });
+  });
+
+  test("should build a command-based opencode resume action", () => {
+    expect(
+      buildProgrammaticResumeAction(
+        {
+          agentId: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Session 08",
+        "Project overview question",
+      ),
+    ).toEqual({
+      steps: [{ data: buildExpectedOpenCodeResumeCommand("oc", "Project overview question"), shouldExecute: true }],
+    });
+  });
+
+  test("should return undefined for opencode programmatic resume without a visible title", () => {
+    expect(
+      buildProgrammaticResumeAction(
+        {
+          agentId: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Session 08",
       ),
     ).toBeUndefined();
   });
@@ -330,7 +412,34 @@ describe("buildCopyResumeCommandText", () => {
         "opencode",
         "Session 05",
       ),
-    ).toBe("opencode list && echo 'Enter opencode -s id' to resume a session");
+    ).toBe("opencode session list && echo 'Enter opencode -s id' to resume a session");
+  });
+
+  test("should copy opencode auto-resume text for titled sessions", () => {
+    expect(
+      buildCopyResumeCommandText(
+        {
+          agentId: "opencode",
+          command: "opencode",
+        },
+        "opencode",
+        "Design pass",
+      ),
+    ).toBe(buildExpectedOpenCodeResumeCommand("opencode", "Design pass"));
+  });
+
+  test("should use the terminal title for opencode auto-resume text when available", () => {
+    expect(
+      buildCopyResumeCommandText(
+        {
+          agentId: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Session 05",
+        "Terminal bugfix",
+      ),
+    ).toBe(buildExpectedOpenCodeResumeCommand("oc", "Terminal bugfix"));
   });
 });
 
@@ -425,20 +534,34 @@ describe("buildDetachedResumeAction", () => {
     });
   });
 
-  test("should prefill opencode resume text without executing", () => {
+  test("should execute opencode resume automatically when a visible title is available", () => {
     expect(
       buildDetachedResumeAction(
         {
           agentId: "opencode",
-          command: "opencode",
+          command: "oc",
+        },
+        "opencode",
+        "Session 08",
+        "Terminal bugfix",
+      ),
+    ).toEqual({
+      shouldExecute: true,
+      text: buildExpectedOpenCodeResumeCommand("oc", "Terminal bugfix"),
+    });
+  });
+
+  test("should return undefined for opencode detached resume without a visible title", () => {
+    expect(
+      buildDetachedResumeAction(
+        {
+          agentId: "opencode",
+          command: "oc",
         },
         "opencode",
         "Session 08",
       ),
-    ).toEqual({
-      shouldExecute: false,
-      text: "opencode -s ",
-    });
+    ).toBeUndefined();
   });
 
   test("should prefill raw custom agent commands without executing", () => {

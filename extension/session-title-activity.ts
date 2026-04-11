@@ -9,6 +9,7 @@ const GEMINI_WORKING_MARKER = "✦";
 const GEMINI_IDLE_MARKER = "◇";
 const COPILOT_WORKING_MARKER = "🤖";
 const COPILOT_IDLE_MARKER = "🔔";
+const OPENCODE_TITLE_PREFIX_PATTERN = /^[\s\u2800-\u28ff·•⋅◦✳*✦◇🤖🔔]*OC\s*\|/iu;
 export const TITLE_ACTIVITY_WINDOW_MS = 1_000;
 export const SLOW_SPINNER_ACTIVITY_WINDOW_MS = 3_000;
 
@@ -164,8 +165,15 @@ export function getInterestingTitleSymbols(title: string): string[] {
 function getTitleState(
   title: string,
   knownAgentName?: string,
-): { agentName: "claude" | "codex" | "copilot" | "gemini"; state: "idle" | "working" } | undefined {
+): { agentName: "claude" | "codex" | "copilot" | "gemini" | "opencode"; state: "idle" | "working" } | undefined {
   const normalizedAgentName = normalizeKnownAgentName(knownAgentName);
+  const normalizedTitle = title.trim().replace(/\s+/g, " ");
+  if (hasOpenCodeTitlePrefix(normalizedTitle)) {
+    return {
+      agentName: "opencode",
+      state: "idle",
+    };
+  }
 
   const claudeCodeTitleState = getClaudeCodeTitleState(title, normalizedAgentName === "claude");
   if (claudeCodeTitleState) {
@@ -200,6 +208,10 @@ function getTitleState(
   }
 
   return undefined;
+}
+
+function hasOpenCodeTitlePrefix(title: string): boolean {
+  return OPENCODE_TITLE_PREFIX_PATTERN.test(title);
 }
 
 function getClaudeCodeTitleState(
@@ -327,7 +339,7 @@ function containsAnyMarker(title: string, markers: readonly string[]): boolean {
 
 function normalizeKnownAgentName(
   knownAgentName: string | undefined,
-): "claude" | "codex" | "copilot" | "gemini" | undefined {
+): "claude" | "codex" | "copilot" | "gemini" | "opencode" | undefined {
   const normalizedAgentName = knownAgentName?.trim().toLowerCase();
   if (normalizedAgentName === "claude code") {
     return "claude";
@@ -338,11 +350,15 @@ function normalizeKnownAgentName(
   if (normalizedAgentName === "github copilot") {
     return "copilot";
   }
+  if (normalizedAgentName === "open code") {
+    return "opencode";
+  }
   if (
     normalizedAgentName === "claude" ||
     normalizedAgentName === "codex" ||
     normalizedAgentName === "gemini" ||
-    normalizedAgentName === "copilot"
+    normalizedAgentName === "copilot" ||
+    normalizedAgentName === "opencode"
   ) {
     return normalizedAgentName;
   }
