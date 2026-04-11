@@ -29,6 +29,13 @@ type MockWebviewPanel = {
   webview: MockWebview;
 };
 
+type MockPanelOptions = {
+  active?: boolean;
+  onHtmlAssigned?: (panel: MockWebviewPanel) => void;
+  viewColumn?: number;
+  visible?: boolean;
+};
+
 let registeredSerializer: Serializer | undefined;
 let createdPanels: MockWebviewPanel[] = [];
 const { executeCommandMock } = vi.hoisted(() => ({
@@ -108,6 +115,26 @@ describe("WorkspacePanelManager", () => {
 
     expect(createdPanels).toHaveLength(0);
     expect(restoredPanel.reveal).toHaveBeenCalledWith(1, false);
+
+    manager.dispose();
+  });
+
+  test("should attach the webview message listener before assigning html", async () => {
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage: vi.fn(),
+    });
+    const restoredPanel = createMockPanel({
+      onHtmlAssigned: (panel) => {
+        panel.webview.messageListeners[0]?.({ type: "ready" });
+      },
+      viewColumn: 3,
+    });
+
+    await registeredSerializer?.deserializeWebviewPanel(restoredPanel);
+
+    expect(restoredPanel.webview.onDidReceiveMessage).toHaveBeenCalledTimes(1);
+    expect(restoredPanel.webview.messageListeners).toHaveLength(1);
 
     manager.dispose();
   });
@@ -450,15 +477,13 @@ function createMockContext() {
 
 function createMockPanel({
   active = false,
+  onHtmlAssigned,
   viewColumn,
   visible = false,
-}: {
-  active?: boolean;
-  viewColumn?: number;
-  visible?: boolean;
-} = {}): MockWebviewPanel {
+}: MockPanelOptions = {}): MockWebviewPanel {
   const disposables: Array<() => void> = [];
   const viewStateListeners: Array<(event: { webviewPanel: MockWebviewPanel }) => void> = [];
+  let html = "";
   const panel: MockWebviewPanel = {
     active,
     dispose: vi.fn(() => {
@@ -480,7 +505,6 @@ function createMockPanel({
     visible,
     webview: {
       asWebviewUri: vi.fn((value: unknown) => value),
-      html: "",
       messageListeners: [],
       onDidReceiveMessage: vi.fn((listener: (message: unknown) => void) => {
         panel.webview.messageListeners.push(listener);
@@ -495,6 +519,13 @@ function createMockPanel({
       for (const listener of viewStateListeners) {
         listener({ webviewPanel: panel });
       }
+    },
+  });
+  Object.defineProperty(panel.webview, "html", {
+    get: () => html,
+    set: (value: string) => {
+      html = value;
+      onHtmlAssigned?.(panel);
     },
   });
 

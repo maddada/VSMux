@@ -137,6 +137,23 @@ export class WorkspacePanelManager implements vscode.Disposable {
   private configurePanel(panel: vscode.WebviewPanel): void {
     panel.title = WORKSPACE_PANEL_TITLE;
     panel.iconPath = vscode.Uri.joinPath(this.options.context.extensionUri, "media", "icon.svg");
+    panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (!isWorkspaceMessage(message)) {
+        return;
+      }
+      if (message.type === "workspaceDebugLog") {
+        void this.options.onMessage(message);
+        return;
+      }
+      if (message.type === "ready") {
+        logVSmuxDebug("workspace.panel.ready", {
+          hasLatestMessage: this.latestMessage !== undefined,
+        });
+        void this.postBufferedMessages(panel.webview);
+        return;
+      }
+      void this.options.onMessage(message);
+    });
     panel.webview.html = getWorkspaceHtml(
       panel.webview,
       this.options.context.extensionUri,
@@ -161,23 +178,6 @@ export class WorkspacePanelManager implements vscode.Disposable {
         this.panel = undefined;
       }
       void this.setWorkspacePanelFocusContext(false);
-    });
-    panel.webview.onDidReceiveMessage((message: unknown) => {
-      if (!isWorkspaceMessage(message)) {
-        return;
-      }
-      if (message.type === "workspaceDebugLog") {
-        void this.options.onMessage(message);
-        return;
-      }
-      if (message.type === "ready") {
-        logVSmuxDebug("workspace.panel.ready", {
-          hasLatestMessage: this.latestMessage !== undefined,
-        });
-        void this.postBufferedMessages(panel.webview);
-        return;
-      }
-      void this.options.onMessage(message);
     });
   }
 

@@ -45,13 +45,11 @@ export const T3PaneActions: Story = {
       expect(
         within(workspacePane).getByRole("button", { name: "Confirm close session" }),
       ).toBeTruthy();
-      await expect(within(workspacePane).getByRole("status")).toHaveTextContent(
+      await expect(canvas.getByRole("status")).toHaveTextContent(
         "Click the X again within 3 seconds to close T3 Code.",
       );
 
-      fireEvent.click(
-        within(workspacePane).getByRole("button", { name: "Confirm close session" }),
-      );
+      fireEvent.click(within(workspacePane).getByRole("button", { name: "Confirm close session" }));
       await expectWorkspaceMessage({
         sessionId: "session-t3-1",
         type: "closeSession",
@@ -74,7 +72,9 @@ async function waitForWorkspaceReady(canvas: ReturnType<typeof within>) {
     () => {
       const workspacePane = getWorkspacePaneElement();
       expect(within(workspacePane).getByText("T3 Code")).toBeVisible();
-      expect(within(workspacePane).getByRole("button", { name: "Full reload session" })).toBeTruthy();
+      expect(
+        within(workspacePane).getByRole("button", { name: "Full reload session" }),
+      ).toBeTruthy();
       expect(within(workspacePane).getByRole("button", { name: "Close session" })).toBeTruthy();
     },
     { timeout: 3_000 },
@@ -82,7 +82,9 @@ async function waitForWorkspaceReady(canvas: ReturnType<typeof within>) {
 }
 
 function getWorkspacePaneElement() {
-  const paneElements = Array.from(document.querySelectorAll<HTMLElement>("#storybook-root .workspace-pane"));
+  const paneElements = Array.from(
+    document.querySelectorAll<HTMLElement>("#storybook-root .workspace-pane"),
+  );
   const paneElement = paneElements[paneElements.length - 1];
   if (!paneElement) {
     throw new Error("Expected a workspace pane inside #storybook-root.");

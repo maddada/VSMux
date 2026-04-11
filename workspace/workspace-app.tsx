@@ -130,6 +130,14 @@ const summarizeWorkspaceTerminalPanes = (panes: WorkspacePanelPane[]) =>
         ],
   );
 
+const isSameWorkspaceToast = (
+  left: WorkspaceToastState | undefined,
+  right: WorkspaceToastState | undefined,
+) =>
+  left?.expiresAt === right?.expiresAt &&
+  left?.title === right?.title &&
+  left?.message === right?.message;
+
 const summarizeTerminalLayerState = (
   panes: WorkspacePanelPane[],
   focusedSessionId: string | undefined,
@@ -229,6 +237,16 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
   const postToExtension = (message: Record<string, unknown>) => {
     vscode.postMessage(message);
+  };
+
+  const showWorkspaceToast = (toast: WorkspaceToastState) => {
+    setWorkspaceToast(toast);
+  };
+
+  const dismissWorkspaceToast = (toast: WorkspaceToastState) => {
+    setWorkspaceToast((currentToast) =>
+      isSameWorkspaceToast(currentToast, toast) ? undefined : currentToast,
+    );
   };
 
   const postWorkspaceReproLog = (event: string, payload?: Record<string, unknown>) => {
@@ -535,11 +553,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
     const timeout = window.setTimeout(() => {
       setWorkspaceToast((currentToast) =>
-        currentToast?.expiresAt === workspaceToast.expiresAt &&
-        currentToast.title === workspaceToast.title &&
-        currentToast.message === workspaceToast.message
-          ? undefined
-          : currentToast,
+        isSameWorkspaceToast(currentToast, workspaceToast) ? undefined : currentToast,
       );
     }, remainingMs);
 
@@ -1306,6 +1320,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
               type: "closeSession",
             })
           }
+          onConfirmToastDismissed={dismissWorkspaceToast}
+          onConfirmToastShown={showWorkspaceToast}
           onReload={() => {
             if (pane.kind === "terminal") {
               postToExtension({
@@ -1435,6 +1451,8 @@ type WorkspacePaneViewProps = {
   onLocalFocus: () => void;
   onFocus: () => void;
   onClose: () => void;
+  onConfirmToastDismissed: (toast: WorkspaceToastState) => void;
+  onConfirmToastShown: (toast: WorkspaceToastState) => void;
   onReload: () => void;
   onBoundsMeasured: (bounds: WorkspacePaneMeasuredBounds) => void;
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -1456,6 +1474,8 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onLocalFocus,
   onFocus,
   onClose,
+  onConfirmToastDismissed,
+  onConfirmToastShown,
   onBoundsMeasured,
   onReload,
   onHeaderPointerDown,
@@ -1566,6 +1586,8 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
             <WorkspacePaneRefreshButton onRefresh={onReload} />
             <WorkspacePaneCloseButton
               onConfirmClose={onClose}
+              onConfirmToastDismissed={onConfirmToastDismissed}
+              onConfirmToastShown={onConfirmToastShown}
               sessionLabel={primaryTitle}
             />
           </div>

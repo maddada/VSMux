@@ -72,15 +72,15 @@ body {
 
 .workspace-toast {
   backdrop-filter: blur(12px);
-  background: rgba(255, 251, 239, 0.98);
-  border: 1px solid rgba(214, 184, 117, 0.5);
-  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(13, 19, 29, 0.96), rgba(10, 15, 24, 0.95));
+  border: 1px solid rgba(102, 135, 192, 0.34);
+  border-radius: 16px;
   box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.26),
-    0 0 0 1px rgba(255, 255, 255, 0.34);
+    0 24px 56px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
   left: 50%;
-  max-width: min(520px, calc(100% - 32px));
-  padding: 12px 14px;
+  max-width: min(480px, calc(100% - 32px));
+  padding: 14px 16px;
   pointer-events: none;
   position: absolute;
   top: 50%;
@@ -91,17 +91,19 @@ body {
 .workspace-toast-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .workspace-toast-copy strong {
-  color: #473000;
+  color: #f2f7ff;
   font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .workspace-toast-copy span {
-  color: rgba(71, 48, 0, 0.82);
+  color: rgba(219, 230, 248, 0.82);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -520,28 +522,6 @@ body {
 .workspace-pane-close-control {
   align-items: center;
   display: inline-flex;
-}
-
-.workspace-pane-close-toast {
-  backdrop-filter: blur(12px);
-  background: rgba(11, 16, 24, 0.96);
-  border: 1px solid rgba(111, 132, 168, 0.42);
-  border-radius: 10px;
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.42),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  color: #edf4ff;
-  font-size: 11px;
-  line-height: 1.4;
-  max-width: min(240px, calc(100vw - 48px));
-  padding: 8px 10px;
-  pointer-events: none;
-  position: absolute;
-  right: 10px;
-  top: calc(100% + 8px);
-  white-space: normal;
-  width: min(240px, calc(100vw - 48px));
-  z-index: 4;
 }
 
 .workspace-pane-refresh-button {
