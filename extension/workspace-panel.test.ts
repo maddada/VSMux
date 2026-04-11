@@ -277,6 +277,7 @@ describe("WorkspacePanelManager", () => {
         letterSpacing: 0,
         lineHeight: 1,
         scrollToBottomWhenTyping: false,
+        xtermFrontendScrollback: 75_000,
       },
       type: "sessionState",
       viewMode: "grid",
@@ -362,6 +363,44 @@ describe("WorkspacePanelManager", () => {
       sessionId: "session-1",
       terminalTitle: "Claude is working",
       type: "terminalPresentationChanged",
+    });
+
+    manager.dispose();
+  });
+
+  test("should replay the latest workspace state before a buffered scroll request", async () => {
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage: vi.fn(),
+    });
+
+    await manager.postMessage(createWorkspaceStateMessage());
+    await manager.postMessage({
+      requestId: 7,
+      sessionId: "session-1",
+      type: "scrollTerminalToBottom",
+    });
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+    expect(panel.webview.html).toContain('"type":"sessionState"');
+
+    panel.webview.postMessage.mockClear();
+    panel.webview.messageListeners[0]?.({ type: "ready" });
+    await Promise.resolve();
+
+    expect(panel.webview.postMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        focusedSessionId: "session-1",
+        type: "sessionState",
+      }),
+    );
+    expect(panel.webview.postMessage).toHaveBeenNthCalledWith(2, {
+      requestId: 7,
+      sessionId: "session-1",
+      type: "scrollTerminalToBottom",
     });
 
     manager.dispose();
@@ -501,6 +540,7 @@ function createWorkspaceStateMessage() {
           row: 0,
           sessionId: "session-1",
           slotIndex: 0,
+          terminalEngine: "xterm" as const,
           title: "Session 1",
         },
       },
@@ -513,6 +553,7 @@ function createWorkspaceStateMessage() {
       letterSpacing: 0,
       lineHeight: 1,
       scrollToBottomWhenTyping: false,
+      xtermFrontendScrollback: 75_000,
     },
     type: "sessionState" as const,
     viewMode: "grid" as const,

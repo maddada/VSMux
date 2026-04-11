@@ -188,7 +188,7 @@
   pointer-events: none;
   position: absolute;
   right: calc(10px * var(--sidebar-density-scale));
-  top: calc(10px * var(--sidebar-density-scale));
+  top: calc(9px * var(--sidebar-density-scale));
   transition:
     opacity 120ms ease,
     color 120ms ease;

@@ -1,18 +1,14 @@
+import { IconSearch } from "@tabler/icons-react";
 import { useEffect, useRef } from "react";
 import type { SidebarPreviousSessionItem } from "../shared/session-grid-contract";
 import { SessionHistoryCard } from "./session-history-card";
 
 export type SidebarSessionSearchFieldProps = {
-  onClose: () => void;
   query: string;
   setQuery: (query: string) => void;
 };
 
-export function SidebarSessionSearchField({
-  onClose,
-  query,
-  setQuery,
-}: SidebarSessionSearchFieldProps) {
+export function SidebarSessionSearchField({ query, setQuery }: SidebarSessionSearchFieldProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,36 +22,27 @@ export function SidebarSessionSearchField({
     };
   }, [query.length]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [onClose]);
-
   return (
     <div className="session-search-toolbar" data-empty-space-blocking="true">
-      <input
-        aria-label="Search current and previous sessions"
-        className="group-title-input session-search-input"
-        onChange={(event) => {
-          setQuery(event.target.value);
-        }}
-        placeholder="Search sessions"
-        ref={searchInputRef}
-        type="text"
-        value={query}
-      />
+      <div className="session-search-input-shell">
+        <input
+          aria-label="Search current and previous sessions"
+          className="group-title-input session-search-input"
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+          placeholder="Search sessions"
+          ref={searchInputRef}
+          type="text"
+          value={query}
+        />
+        <IconSearch
+          aria-hidden="true"
+          className="session-search-input-icon"
+          size={16}
+          stroke={1.9}
+        />
+      </div>
     </div>
   );
 }

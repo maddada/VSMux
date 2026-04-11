@@ -1,18 +1,29 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { IconX } from "@tabler/icons-react";
 
-const CONFIRM_TOOLTIP_DURATION_MS = 3_000;
+export const WORKSPACE_PANE_CLOSE_CONFIRM_DURATION_MS = 3_000;
+
+const getWorkspacePaneCloseConfirmToastMessage = (sessionLabel?: string) => {
+  const trimmedSessionLabel = sessionLabel?.trim();
+  if (!trimmedSessionLabel) {
+    return "Click the X again within 3 seconds to close this session.";
+  }
+
+  return `Click the X again within 3 seconds to close ${trimmedSessionLabel}.`;
+};
 
 export type WorkspacePaneCloseButtonProps = {
   onConfirmClose: () => void;
+  sessionLabel?: string;
 };
 
 export const WorkspacePaneCloseButton: React.FC<WorkspacePaneCloseButtonProps> = ({
   onConfirmClose,
+  sessionLabel,
 }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const confirmTimeoutRef = useRef<number | undefined>(undefined);
-  const tooltipId = useId();
+  const confirmToastId = useId();
 
   useEffect(
     () => () => {
@@ -32,7 +43,7 @@ export const WorkspacePaneCloseButton: React.FC<WorkspacePaneCloseButtonProps> =
     confirmTimeoutRef.current = window.setTimeout(() => {
       confirmTimeoutRef.current = undefined;
       setIsConfirming(false);
-    }, CONFIRM_TOOLTIP_DURATION_MS);
+    }, WORKSPACE_PANE_CLOSE_CONFIRM_DURATION_MS);
   };
 
   const clearConfirmation = () => {
@@ -46,7 +57,7 @@ export const WorkspacePaneCloseButton: React.FC<WorkspacePaneCloseButtonProps> =
   return (
     <div className="workspace-pane-close-control">
       <button
-        aria-describedby={isConfirming ? tooltipId : undefined}
+        aria-describedby={isConfirming ? confirmToastId : undefined}
         aria-label={isConfirming ? "Confirm close session" : "Close session"}
         className={`workspace-pane-close-button ${isConfirming ? "workspace-pane-close-button-confirming" : ""}`}
         draggable={false}
@@ -69,8 +80,13 @@ export const WorkspacePaneCloseButton: React.FC<WorkspacePaneCloseButtonProps> =
         <IconX aria-hidden size={14} stroke={1.8} />
       </button>
       {isConfirming ? (
-        <div className="workspace-pane-close-tooltip" id={tooltipId} role="tooltip">
-          Click again to confirm
+        <div
+          aria-live="polite"
+          className="workspace-pane-close-toast"
+          id={confirmToastId}
+          role="status"
+        >
+          {getWorkspacePaneCloseConfirmToastMessage(sessionLabel)}
         </div>
       ) : null}
     </div>

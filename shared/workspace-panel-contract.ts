@@ -23,6 +23,7 @@ export type WorkspacePanelTerminalAppearance = {
   letterSpacing: number;
   lineHeight: number;
   scrollToBottomWhenTyping: boolean;
+  xtermFrontendScrollback: number;
 };
 
 export type WorkspacePanelLayoutAppearance = {
@@ -90,6 +91,12 @@ export type WorkspacePanelDestroyTerminalRuntimeMessage = {
   type: "destroyTerminalRuntime";
 };
 
+export type WorkspacePanelScrollTerminalToBottomMessage = {
+  requestId: number;
+  sessionId: string;
+  type: "scrollTerminalToBottom";
+};
+
 export type WorkspacePanelShowWelcomeMessage = {
   mode?: WorkspaceWelcomeModalMode;
   type: "showWelcomeModal";
@@ -107,6 +114,7 @@ export type ExtensionToWorkspacePanelMessage =
   | WorkspacePanelSessionStateMessage
   | WorkspacePanelTerminalPresentationChangedMessage
   | WorkspacePanelDestroyTerminalRuntimeMessage
+  | WorkspacePanelScrollTerminalToBottomMessage
   | WorkspacePanelShowWelcomeMessage
   | WorkspacePanelShowToastMessage;
 
@@ -173,6 +181,7 @@ export function stripWorkspacePanelTransientFields(
   if (
     message.type === "showWelcomeModal" ||
     message.type === "showToast" ||
+    message.type === "scrollTerminalToBottom" ||
     message.type === "terminalPresentationChanged" ||
     message.type === "destroyTerminalRuntime" ||
     !message.autoFocusRequest

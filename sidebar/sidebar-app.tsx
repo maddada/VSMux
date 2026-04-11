@@ -28,6 +28,7 @@ import {
 import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 import { MAX_GROUP_COUNT, type ExtensionToSidebarMessage } from "../shared/session-grid-contract";
+import type { SidebarActionType } from "../shared/sidebar-commands";
 import { playCompletionSound, prepareCompletionSoundPlayback } from "./completion-sound-player";
 import { AgentsPanel } from "./agents-panel";
 import { CommandsPanel } from "./commands-panel";
@@ -118,6 +119,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   const [isStartupInteractionBlocked, setIsStartupInteractionBlocked] = useState(true);
   const [autoEditingGroupId, setAutoEditingGroupId] = useState<string>();
   const [agentCreateRequestId, setAgentCreateRequestId] = useState(0);
+  const [commandCreateActionType, setCommandCreateActionType] = useState<SidebarActionType>();
   const [commandCreateRequestId, setCommandCreateRequestId] = useState(0);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const [isDaemonSessionsOpen, setIsDaemonSessionsOpen] = useState(false);
@@ -303,6 +305,14 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       document.body.style.removeProperty("--vsmux-agent-manager-zoom");
     };
   }, [agentManagerZoomPercent]);
+
+  const closeGitCommitModal = useEffectEvent((requestId: string) => {
+    setGitCommitDraft(undefined);
+    vscode.postMessage({
+      requestId,
+      type: "cancelSidebarGitCommit",
+    });
+  });
 
   useEffect(() => {
     if (!sessionGroupsPanelRef.current) {
@@ -787,6 +797,92 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     setSessionSearchQuery("");
   };
 
+  const closeTopmostSidebarOverlay = useEffectEvent(() => {
+    if (gitCommitDraft) {
+      closeGitCommitModal(gitCommitDraft.requestId);
+      return true;
+    }
+
+    if (isDaemonSessionsOpen) {
+      setIsDaemonSessionsOpen(false);
+      return true;
+    }
+
+    if (isPreviousSessionsOpen) {
+      setIsPreviousSessionsOpen(false);
+      return true;
+    }
+
+    if (isScratchPadOpen) {
+      setIsScratchPadOpen(false);
+      return true;
+    }
+
+    if (isOverflowMenuOpen) {
+      setIsOverflowMenuOpen(false);
+      return true;
+    }
+
+    if (isSessionSearchOpen) {
+      closeSessionSearch();
+      return true;
+    }
+
+    return false;
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (!closeTopmostSidebarOverlay()) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (
+        event.defaultPrevented ||
+        gitCommitDraft !== undefined ||
+        isDaemonSessionsOpen ||
+        isPreviousSessionsOpen ||
+        isScratchPadOpen ||
+        isOverflowMenuOpen ||
+        isEditableSidebarKeyboardTarget(target) ||
+        !isSidebarSearchActivationKey(event)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setIsSessionSearchOpen(true);
+      setSessionSearchQuery((previous) =>
+        isSessionSearchOpen ? `${previous}${event.key}` : event.key,
+      );
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [
+    closeTopmostSidebarOverlay,
+    gitCommitDraft,
+    isDaemonSessionsOpen,
+    isOverflowMenuOpen,
+    isPreviousSessionsOpen,
+    isScratchPadOpen,
+    isSessionSearchOpen,
+  ]);
+
   const toggleSessionSearch = () => {
     setIsDaemonSessionsOpen(false);
     setIsPreviousSessionsOpen(false);
@@ -836,12 +932,14 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
 
   const openAddActionModal = () => {
     setIsOverflowMenuOpen(false);
+    setCommandCreateActionType("terminal");
     setCommandCreateRequestId((previous) => previous + 1);
   };
 
-  const openBrowserPage = () => {
+  const openAddBrowserModal = () => {
     setIsOverflowMenuOpen(false);
-    vscode.postMessage({ type: "openBrowser" });
+    setCommandCreateActionType("browser");
+    setCommandCreateRequestId((previous) => previous + 1);
   };
 
   const openWorkspaceWelcome = () => {
@@ -856,7 +954,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     onAddAction: openAddActionModal,
     onAddAgent: openAddAgentModal,
     onAdjustTerminalFontSize: adjustTerminalFontSize,
-    onAddBrowser: openBrowserPage,
+    onAddBrowser: openAddBrowserModal,
     onMoveSidebar: moveSidebar,
     onOpenHelp: openWorkspaceWelcome,
     onOpenSettings: openSidebarSettings,
@@ -878,6 +976,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       >
         <div className="sidebar-top-panels">
           <CommandsPanel
+            createActionType={commandCreateActionType}
             createRequestId={commandCreateRequestId}
             titlebarActions={
               shouldShowActionsPanel
@@ -925,71 +1024,69 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
           />
         </div>
         <section className="session-groups-panel" ref={sessionGroupsPanelRef}>
-          <SectionHeader
-            actions={
-              <>
-                <ToolbarIconButton
-                  ariaLabel={`Switch active sessions sort mode. Current: ${activeSessionsSortMode === "manual" ? "manual sort" : "last activity"}`}
-                  className="floating-toolbar-button section-titlebar-action-button"
-                  isSelected={!isManualActiveSessionsSort}
-                  onClick={() => {
-                    vscode.postMessage({ type: "toggleActiveSessionsSortMode" });
-                  }}
-                  tooltip={activeSessionsSortMode === "manual" ? "Manual Sort" : "Last Activity"}
-                >
-                  <IconArrowsSort aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
-                </ToolbarIconButton>
-                <ToolbarIconButton
-                  ariaExpanded={isSessionSearchOpen}
-                  ariaLabel="Search sessions"
-                  className="floating-toolbar-button section-titlebar-action-button"
-                  isSelected={isSessionSearchOpen}
-                  onClick={() => {
-                    toggleSessionSearch();
-                  }}
-                  tooltip="Search"
-                >
-                  <IconSearch aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
-                </ToolbarIconButton>
-                <ToolbarIconButton
-                  ariaExpanded={isPreviousSessionsOpen}
-                  ariaHasPopup="dialog"
-                  ariaLabel="Show previous sessions"
-                  className="floating-toolbar-button section-titlebar-action-button"
-                  isSelected={isPreviousSessionsOpen}
-                  onClick={() => {
-                    setIsDaemonSessionsOpen(false);
-                    setIsScratchPadOpen(false);
-                    setIsSessionSearchOpen(false);
-                    setSessionSearchQuery("");
-                    setIsPreviousSessionsOpen((previous) => !previous);
-                  }}
-                  tooltip="Previous Sessions"
-                >
-                  <IconHistory aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
-                </ToolbarIconButton>
-                {!shouldShowActionsPanel && !shouldShowAgentsPanel
-                  ? renderSidebarTopControls({
-                      ...topControlOptions,
-                      showScratchPad: true,
-                    })
-                  : null}
-              </>
-            }
-            isCollapsed={isSessionsCollapsed}
-            isCollapsible
-            onToggleCollapsed={() => setIsSessionsCollapsed((previous) => !previous)}
-            title="Active"
-          />
+          <div className="session-groups-top">
+            <SectionHeader
+              actions={
+                <>
+                  <ToolbarIconButton
+                    ariaLabel={`Switch active sessions sort mode. Current: ${activeSessionsSortMode === "manual" ? "manual sort" : "last activity"}`}
+                    className="floating-toolbar-button section-titlebar-action-button"
+                    isSelected={!isManualActiveSessionsSort}
+                    onClick={() => {
+                      vscode.postMessage({ type: "toggleActiveSessionsSortMode" });
+                    }}
+                    tooltip={activeSessionsSortMode === "manual" ? "Manual Sort" : "Last Activity"}
+                  >
+                    <IconArrowsSort aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
+                  </ToolbarIconButton>
+                  <ToolbarIconButton
+                    ariaExpanded={isSessionSearchOpen}
+                    ariaLabel="Search sessions"
+                    className="floating-toolbar-button section-titlebar-action-button"
+                    isSelected={isSessionSearchOpen}
+                    onClick={() => {
+                      toggleSessionSearch();
+                    }}
+                    tooltip="Search"
+                  >
+                    <IconSearch aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
+                  </ToolbarIconButton>
+                  <ToolbarIconButton
+                    ariaExpanded={isPreviousSessionsOpen}
+                    ariaHasPopup="dialog"
+                    ariaLabel="Show previous sessions"
+                    className="floating-toolbar-button section-titlebar-action-button"
+                    isSelected={isPreviousSessionsOpen}
+                    onClick={() => {
+                      setIsDaemonSessionsOpen(false);
+                      setIsScratchPadOpen(false);
+                      setIsSessionSearchOpen(false);
+                      setSessionSearchQuery("");
+                      setIsPreviousSessionsOpen((previous) => !previous);
+                    }}
+                    tooltip="Previous Sessions"
+                  >
+                    <IconHistory aria-hidden="true" className="toolbar-tabler-icon" stroke={1.8} />
+                  </ToolbarIconButton>
+                  {!shouldShowActionsPanel && !shouldShowAgentsPanel
+                    ? renderSidebarTopControls({
+                        ...topControlOptions,
+                        showScratchPad: true,
+                      })
+                    : null}
+                </>
+              }
+              isCollapsed={isSessionsCollapsed}
+              isCollapsible
+              onToggleCollapsed={() => setIsSessionsCollapsed((previous) => !previous)}
+              title="Active"
+            />
+            {isSessionSearchOpen && !isSessionsCollapsed ? (
+              <SidebarSessionSearchField query={sessionSearchQuery} setQuery={setSessionSearchQuery} />
+            ) : null}
+          </div>
           {!isSessionsCollapsed ? (
             <div className="session-groups-content">
-              {isSessionSearchOpen ? (
-                <SidebarSessionSearchField
-                  onClose={closeSessionSearch}
-                  query={sessionSearchQuery}
-                  setQuery={setSessionSearchQuery}
-                />
-              ) : null}
               {displayedBrowserGroupIds.length > 0 ? (
                 <div className="group-list">
                   {displayedBrowserGroupIds.map((groupId) => (
@@ -1109,11 +1206,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
           }
           isOpen={gitCommitDraft !== undefined}
           onCancel={(requestId) => {
-            setGitCommitDraft(undefined);
-            vscode.postMessage({
-              requestId,
-              type: "cancelSidebarGitCommit",
-            });
+            closeGitCommitModal(requestId);
           }}
           onConfirm={(requestId, message) => {
             setGitCommitDraft(undefined);
@@ -1383,7 +1476,6 @@ function renderSidebarTopControls({
                   }}
                 >
                   <div className="session-context-menu-group">
-                    <div className="session-context-menu-group-label">Terminal Zoom</div>
                     <div
                       className="session-context-menu-split-row"
                       role="group"
@@ -1417,97 +1509,102 @@ function renderSidebarTopControls({
                         />
                       </button>
                     </div>
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onToggleBell}
+                      role="menuitem"
+                      type="button"
+                    >
+                      {completionBellEnabled ? (
+                        <IconBellOff
+                          aria-hidden="true"
+                          className="session-context-menu-icon"
+                          size={14}
+                        />
+                      ) : (
+                        <IconBell
+                          aria-hidden="true"
+                          className="session-context-menu-icon"
+                          size={14}
+                        />
+                      )}
+                      {getCompletionBellMenuLabel(completionBellEnabled)}
+                    </button>
                   </div>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onToggleBell}
-                    role="menuitem"
-                    type="button"
-                  >
-                    {completionBellEnabled ? (
-                      <IconBellOff
+                  <div className="session-context-menu-divider" role="separator" />
+                  <div className="session-context-menu-group">
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onAddAgent}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                      Add Agent
+                    </button>
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onAddAction}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                      Add Action
+                    </button>
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onAddBrowser}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                      Add Webpage
+                    </button>
+                  </div>
+                  <div className="session-context-menu-divider" role="separator" />
+                  <div className="session-context-menu-group">
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onShowRunning}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconHistory
                         aria-hidden="true"
                         className="session-context-menu-icon"
                         size={14}
                       />
-                    ) : (
-                      <IconBell
+                      Running
+                    </button>
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onOpenHelp}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconHelpCircle
                         aria-hidden="true"
                         className="session-context-menu-icon"
                         size={14}
+                        stroke={1.8}
                       />
-                    )}
-                    {getCompletionBellMenuLabel(completionBellEnabled)}
-                  </button>
-                  <div aria-hidden="true" className="session-context-menu-divider" />
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onAddAgent}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
-                    Add Agent
-                  </button>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onAddAction}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
-                    Add Action
-                  </button>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onAddBrowser}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconWorld aria-hidden="true" className="session-context-menu-icon" size={14} />
-                    Add Webpage
-                  </button>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onShowRunning}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconHistory
-                      aria-hidden="true"
-                      className="session-context-menu-icon"
-                      size={14}
-                    />
-                    Running
-                  </button>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onOpenHelp}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconHelpCircle
-                      aria-hidden="true"
-                      className="session-context-menu-icon"
-                      size={14}
-                      stroke={1.8}
-                    />
-                    Help
-                  </button>
-                  <button
-                    className="session-context-menu-item"
-                    onClick={onOpenSettings}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconSettings
-                      aria-hidden="true"
-                      className="session-context-menu-icon"
-                      size={14}
-                      stroke={1.8}
-                    />
-                    VSmux Settings
-                  </button>
+                      Tips &amp; Tricks
+                    </button>
+                    <button
+                      className="session-context-menu-item"
+                      onClick={onOpenSettings}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <IconSettings
+                        aria-hidden="true"
+                        className="session-context-menu-icon"
+                        size={14}
+                        stroke={1.8}
+                      />
+                      VSmux Settings
+                    </button>
+                  </div>
                 </div>,
                 document.body,
               )
@@ -1720,4 +1817,26 @@ function createDisplayedGroupIds(
   }
 
   return groupIds.filter((groupId) => (sessionIdsByGroup[groupId] ?? []).length > 0);
+}
+
+function isSidebarSearchActivationKey(event: KeyboardEvent): boolean {
+  return (
+    event.key.length === 1 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    /^[\p{L}\p{N}]$/u.test(event.key)
+  );
+}
+
+function isEditableSidebarKeyboardTarget(target: Node): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable]"));
 }

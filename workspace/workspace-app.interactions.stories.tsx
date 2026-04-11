@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, waitFor, within } from "storybook/test";
+import { expect, fireEvent, waitFor, within } from "storybook/test";
 import type { SidebarHydrateMessage } from "../shared/session-grid-contract";
 import {
   getWorkspaceStoryMessages,
@@ -17,14 +17,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const T3PaneActions: Story = {
-  play: async ({ canvas, step, userEvent }) => {
-    await waitForWorkspaceReady();
+  play: async ({ canvas, step }) => {
+    await waitForWorkspaceReady(canvas);
     resetWorkspaceStoryMessages();
 
     await step(
       "reload the T3 pane by reloading the workspace panel to the same session",
       async () => {
-        await userEvent.click(canvas.getByRole("button", { name: "Full reload session" }));
+        const workspacePane = getWorkspacePaneElement();
+        fireEvent.click(within(workspacePane).getByRole("button", { name: "Full reload session" }));
         await expectWorkspaceMessage({
           sessionId: "session-t3-1",
           type: "reloadWorkspacePanel",
@@ -35,14 +36,22 @@ export const T3PaneActions: Story = {
     await step("require confirmation before closing the T3 pane", async () => {
       resetWorkspaceStoryMessages();
 
-      await userEvent.click(canvas.getByRole("button", { name: "Close session" }));
+      const workspacePane = getWorkspacePaneElement();
+      fireEvent.click(within(workspacePane).getByRole("button", { name: "Close session" }));
       await expectWorkspaceMessageAbsent({
         sessionId: "session-t3-1",
         type: "closeSession",
       });
-      await expect(canvas.getByRole("button", { name: "Confirm close session" })).toBeVisible();
+      expect(
+        within(workspacePane).getByRole("button", { name: "Confirm close session" }),
+      ).toBeTruthy();
+      await expect(within(workspacePane).getByRole("status")).toHaveTextContent(
+        "Click the X again within 3 seconds to close T3 Code.",
+      );
 
-      await userEvent.click(canvas.getByRole("button", { name: "Confirm close session" }));
+      fireEvent.click(
+        within(workspacePane).getByRole("button", { name: "Confirm close session" }),
+      );
       await expectWorkspaceMessage({
         sessionId: "session-t3-1",
         type: "closeSession",
@@ -51,7 +60,7 @@ export const T3PaneActions: Story = {
   },
 };
 
-async function waitForWorkspaceReady() {
+async function waitForWorkspaceReady(canvas: ReturnType<typeof within>) {
   await waitFor(
     () => {
       expect(
@@ -63,13 +72,23 @@ async function waitForWorkspaceReady() {
 
   await waitFor(
     () => {
-      const body = within(document.body);
-      expect(body.getByText("T3 Code")).toBeVisible();
-      expect(body.getByRole("button", { name: "Full reload session" })).toBeVisible();
-      expect(body.getByRole("button", { name: "Close session" })).toBeVisible();
+      const workspacePane = getWorkspacePaneElement();
+      expect(within(workspacePane).getByText("T3 Code")).toBeVisible();
+      expect(within(workspacePane).getByRole("button", { name: "Full reload session" })).toBeTruthy();
+      expect(within(workspacePane).getByRole("button", { name: "Close session" })).toBeTruthy();
     },
     { timeout: 3_000 },
   );
+}
+
+function getWorkspacePaneElement() {
+  const paneElements = Array.from(document.querySelectorAll<HTMLElement>("#storybook-root .workspace-pane"));
+  const paneElement = paneElements[paneElements.length - 1];
+  if (!paneElement) {
+    throw new Error("Expected a workspace pane inside #storybook-root.");
+  }
+
+  return paneElement;
 }
 
 async function expectWorkspaceMessage(expectedMessage: Record<string, unknown>) {

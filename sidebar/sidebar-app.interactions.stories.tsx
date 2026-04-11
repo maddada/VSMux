@@ -342,6 +342,67 @@ export const InlineSearchFiltersGroupsInPlace: Story = {
   },
 };
 
+export const TypingAnywhereStartsSearchAndEscapePrefersModals: Story = {
+  args: {
+    fixture: "sort-toggle-demo",
+    highlightedVisibleCount: 2,
+    showCloseButtonOnSessionCards: true,
+    showHotkeysOnSessionCards: true,
+    showLastInteractionTimeOnSessionCards: true,
+    visibleCount: 2,
+  },
+  play: async ({ canvas, canvasElement, step, userEvent }) => {
+    const storyDocument = canvasElement.ownerDocument;
+    const storyWindow = storyDocument.defaultView;
+
+    await waitForReadyMessage();
+
+    await step("typing on a non-input target opens search without dropping characters", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: /older draft first/i }));
+      await userEvent.keyboard("re");
+
+      await expect(
+        canvas.getByRole("textbox", { name: "Search current and previous sessions" }),
+      ).toHaveValue("re");
+    });
+
+    await step("escape closes a modal before it closes search", async () => {
+      storyWindow?.postMessage(
+        {
+          action: "commit",
+          confirmLabel: "Commit",
+          description: "Storybook prompt",
+          requestId: "storybook-request",
+          suggestedSubject: "Storybook commit",
+          type: "promptGitCommit",
+        },
+        "*",
+      );
+
+      await waitFor(() => {
+        expect(storyDocument.body.textContent).toContain("Review Suggested Commit");
+      });
+
+      await userEvent.keyboard("{Escape}");
+
+      await waitFor(() => {
+        expect(storyDocument.body.textContent).not.toContain("Review Suggested Commit");
+      });
+      await expect(
+        canvas.getByRole("textbox", { name: "Search current and previous sessions" }),
+      ).toHaveValue("re");
+
+      await userEvent.keyboard("{Escape}");
+
+      await waitFor(() => {
+        expect(
+          canvas.queryByRole("textbox", { name: "Search current and previous sessions" }),
+        ).toBeNull();
+      });
+    });
+  },
+};
+
 export const EmptySidebarDoubleClick: Story = {
   play: async ({ canvasElement, step }) => {
     await waitForReadyMessage();

@@ -15,11 +15,18 @@ export type CommandConfigDraft = {
 export type CommandConfigModalProps = {
   draft: CommandConfigDraft;
   isOpen: boolean;
+  lockedActionType?: SidebarActionType;
   onCancel: () => void;
   onSave: (draft: CommandConfigDraft) => void;
 };
 
-export function CommandConfigModal({ draft, isOpen, onCancel, onSave }: CommandConfigModalProps) {
+export function CommandConfigModal({
+  draft,
+  isOpen,
+  lockedActionType,
+  onCancel,
+  onSave,
+}: CommandConfigModalProps) {
   const [actionType, setActionType] = useState<SidebarActionType>(draft.actionType);
   const [closeTerminalOnExit, setCloseTerminalOnExit] = useState(draft.closeTerminalOnExit);
   const [command, setCommand] = useState(draft.command ?? "");
@@ -28,18 +35,22 @@ export function CommandConfigModal({ draft, isOpen, onCancel, onSave }: CommandC
   const checkboxId = useId();
   const descriptionId = useId();
   const titleId = useId();
+  const isActionTypeLocked = lockedActionType !== undefined;
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    setActionType(draft.actionType);
+    setActionType(lockedActionType ?? draft.actionType);
     setCloseTerminalOnExit(draft.closeTerminalOnExit);
     setCommand(draft.command ?? "");
     setName(draft.name);
-    setUrl(draft.url ?? (draft.actionType === "browser" ? DEFAULT_BROWSER_ACTION_URL : ""));
-  }, [draft, isOpen]);
+    setUrl(
+      draft.url ??
+        ((lockedActionType ?? draft.actionType) === "browser" ? DEFAULT_BROWSER_ACTION_URL : ""),
+    );
+  }, [draft, isOpen, lockedActionType]);
 
   useEffect(() => {
     if (actionType !== "browser" || url.trim().length > 0) {
@@ -104,19 +115,21 @@ export function CommandConfigModal({ draft, isOpen, onCancel, onSave }: CommandC
           </div>
         </div>
         <div className="command-config-fields">
-          <label className="command-config-field">
-            <span className="command-config-label">Type</span>
-            <select
-              className="group-title-input command-config-input"
-              onChange={(event) =>
-                setActionType(event.currentTarget.value === "browser" ? "browser" : "terminal")
-              }
-              value={actionType}
-            >
-              <option value="terminal">Terminal</option>
-              <option value="browser">Browser</option>
-            </select>
-          </label>
+          {isActionTypeLocked ? null : (
+            <label className="command-config-field">
+              <span className="command-config-label">Type</span>
+              <select
+                className="group-title-input command-config-input"
+                onChange={(event) =>
+                  setActionType(event.currentTarget.value === "browser" ? "browser" : "terminal")
+                }
+                value={actionType}
+              >
+                <option value="terminal">Terminal</option>
+                <option value="browser">Browser</option>
+              </select>
+            </label>
+          )}
           <label className="command-config-field">
             <span className="command-config-label">Name</span>
             <input

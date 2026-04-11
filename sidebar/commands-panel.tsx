@@ -12,7 +12,11 @@ import {
   type ReactNode,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { SidebarCommandButton, SidebarCommandRunMode } from "../shared/sidebar-commands";
+import type {
+  SidebarActionType,
+  SidebarCommandButton,
+  SidebarCommandRunMode,
+} from "../shared/sidebar-commands";
 import { GitActionRow } from "./git-action-row";
 import { SectionHeader } from "./section-header";
 import { useSidebarStore } from "./sidebar-store";
@@ -26,6 +30,7 @@ const CONTEXT_MENU_VERTICAL_PADDING_PX = 24;
 const CONTEXT_MENU_ITEM_HEIGHT_PX = 43;
 
 type CommandsPanelProps = {
+  createActionType?: SidebarActionType;
   createRequestId: number;
   isCollapsed: boolean;
   isVisible: boolean;
@@ -102,6 +107,7 @@ function getCommandDragData(candidate: unknown): CommandDragData | undefined {
 }
 
 export function CommandsPanel({
+  createActionType,
   createRequestId,
   isCollapsed,
   isVisible,
@@ -210,14 +216,14 @@ export function CommandsPanel({
 
     setContextMenu(undefined);
     setEditingCommand({
-      actionType: "terminal",
+      actionType: createActionType ?? "terminal",
       closeTerminalOnExit: false,
-      command: "",
+      command: createActionType === "browser" ? undefined : "",
       commandId: undefined,
       name: "",
-      url: "",
+      url: createActionType === "browser" ? undefined : "",
     });
-  }, [createRequestId]);
+  }, [createActionType, createRequestId]);
 
   const orderedCommands = useMemo(() => {
     const commandById = new Map<string, SidebarCommandButton>(
@@ -385,6 +391,7 @@ export function CommandsPanel({
         <CommandConfigModal
           draft={editingCommand}
           isOpen
+          lockedActionType={editingCommand.commandId ? undefined : createActionType}
           onCancel={() => setEditingCommand(undefined)}
           onSave={(draft) => {
             setEditingCommand(undefined);

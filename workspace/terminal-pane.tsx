@@ -51,6 +51,7 @@ export type TerminalPaneProps = {
   onActivate: (source: "focusin" | "pointer") => void;
   pane: WorkspacePanelTerminalPane;
   refreshRequestId: number;
+  scrollToBottomRequestId?: number;
   terminalAppearance: WorkspacePanelTerminalAppearance;
 };
 
@@ -70,6 +71,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   onActivate,
   pane,
   refreshRequestId,
+  scrollToBottomRequestId,
   terminalAppearance,
 }) => {
   if (pane.sessionRecord.terminalEngine === "xterm") {
@@ -84,6 +86,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         onActivate={onActivate}
         pane={pane}
         refreshRequestId={refreshRequestId}
+        scrollToBottomRequestId={scrollToBottomRequestId}
         terminalAppearance={terminalAppearance}
       />
     );
@@ -101,6 +104,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const lagDetectedHandlerRef = useRef(onLagDetected);
   const handledAutoFocusRequestIdRef = useRef<number | undefined>(undefined);
   const handledRefreshRequestIdRef = useRef(refreshRequestId);
+  const handledScrollToBottomRequestIdRef = useRef<number | undefined>(undefined);
   const boundScrollHostRef = useRef<HTMLElement | null>(null);
   const scrollHostListenerRef = useRef<EventListener>(() => {
     scrollVisibilityUpdaterRef.current();
@@ -630,7 +634,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const scrollTerminalToBottom = () => {
     const scrollHost = getScrollHost();
     if (!scrollHost) {
-      return;
+      return false;
     }
 
     scrollHost.scrollTop = scrollHost.scrollHeight;
@@ -639,6 +643,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       updateTerminalSize();
       updateScrollToBottomVisibility();
     });
+    return true;
   };
 
   const noteRapidTypingAndMaybeScrollToBottom = (event: KeyboardEvent | React.KeyboardEvent) => {
@@ -1529,6 +1534,56 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     activePane.setSearchQuery(searchQuery);
   }, [isSearchOpen, searchQuery]);
+
+  useEffect(() => {
+    if (
+      scrollToBottomRequestId === undefined ||
+      handledScrollToBottomRequestIdRef.current === scrollToBottomRequestId ||
+      !isVisible
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 12;
+
+    const tryScrollToBottom = () => {
+      if (cancelled || !isVisibleRef.current) {
+        return;
+      }
+
+      attempts += 1;
+      const didScroll = scrollTerminalToBottom();
+      if (didScroll) {
+        handledScrollToBottomRequestIdRef.current = scrollToBottomRequestId;
+        focusTerminal();
+        reportDebug("terminal.scrollToBottomRequestApplied", {
+          attempts,
+          requestId: scrollToBottomRequestId,
+          sessionId: pane.sessionId,
+        });
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        reportDebug("terminal.scrollToBottomRequestTimedOut", {
+          attempts,
+          requestId: scrollToBottomRequestId,
+          sessionId: pane.sessionId,
+        });
+        return;
+      }
+
+      requestAnimationFrame(tryScrollToBottom);
+    };
+
+    tryScrollToBottom();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isVisible, pane.sessionId, scrollToBottomRequestId]);
 
   useEffect(() => {
     if (

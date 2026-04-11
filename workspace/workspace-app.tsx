@@ -15,6 +15,7 @@ import type {
   WorkspacePanelHydrateMessage,
   WorkspaceWelcomeModalMode,
   WorkspacePanelPane,
+  WorkspacePanelScrollTerminalToBottomMessage,
   WorkspacePanelSessionStateMessage,
   WorkspacePanelShowToastMessage,
 } from "../shared/workspace-panel-contract";
@@ -76,6 +77,7 @@ type WorkspaceAutoFocusGuard = {
 };
 
 type WorkspaceToastState = WorkspacePanelShowToastMessage;
+type WorkspaceTerminalScrollRequestState = WorkspacePanelScrollTerminalToBottomMessage;
 
 const AUTO_FOCUS_ACTIVATION_GUARD_MS = 400;
 const AUTO_RELOAD_ON_LAG = true;
@@ -170,6 +172,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const [paneMeasuredBoundsVersion, setPaneMeasuredBoundsVersion] = useState(0);
   const [, setTerminalPortalVersion] = useState(0);
   const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToastState | undefined>();
+  const [terminalScrollRequest, setTerminalScrollRequest] = useState<
+    WorkspaceTerminalScrollRequestState | undefined
+  >();
   const focusRequestSequenceRef = useRef(0);
   const debuggingModeRef = useRef<boolean | undefined>(undefined);
   const lagAutoReloadRequestedRef = useRef(false);
@@ -462,6 +467,11 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
         }
 
         setWorkspaceToast(nextMessage);
+        return;
+      }
+
+      if (nextMessage.type === "scrollTerminalToBottom") {
+        setTerminalScrollRequest(nextMessage);
         return;
       }
 
@@ -1385,6 +1395,11 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
             onActivate={(source) => handleTerminalActivate(pane.sessionId, source)}
             pane={pane}
             refreshRequestId={0}
+            scrollToBottomRequestId={
+              terminalScrollRequest?.sessionId === pane.sessionId
+                ? terminalScrollRequest.requestId
+                : undefined
+            }
             terminalAppearance={workspaceState.terminalAppearance}
           />,
           target,
@@ -1549,7 +1564,10 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
         {pane.kind === "terminal" || pane.kind === "t3" ? (
           <div className="workspace-pane-header-actions">
             <WorkspacePaneRefreshButton onRefresh={onReload} />
-            <WorkspacePaneCloseButton onConfirmClose={onClose} />
+            <WorkspacePaneCloseButton
+              onConfirmClose={onClose}
+              sessionLabel={primaryTitle}
+            />
           </div>
         ) : null}
       </header>
