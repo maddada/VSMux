@@ -36,6 +36,7 @@ export async function createT3IframeSource(
   }
 
   const embedBootstrap = await runtime.createEmbedBootstrap(sessionRecord.t3.workspaceRoot);
+  workspaceAssetServer.setT3ProxyAuthorizationToken(embedBootstrap.ownerBearerToken);
   const payload: T3IframeBootstrapPayload = {
     bootstrapScriptSrc: iframeHostScriptUri.toString(),
     browserBootstrapToken: embedBootstrap.browserBootstrapToken,

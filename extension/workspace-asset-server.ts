@@ -35,6 +35,7 @@ export class WorkspaceAssetServer implements vscode.Disposable {
   });
   private listenPromise: Promise<number> | undefined;
   private port: number | undefined;
+  private t3ProxyAuthorizationToken: string | undefined;
 
   public constructor(context: vscode.ExtensionContext) {
     this.roots = {
@@ -61,6 +62,10 @@ export class WorkspaceAssetServer implements vscode.Disposable {
   public async getRootUrl(scope: AssetScope): Promise<string> {
     const port = await this.ensureListening();
     return `http://127.0.0.1:${String(port)}/${scope}`;
+  }
+
+  public setT3ProxyAuthorizationToken(token: string | undefined): void {
+    this.t3ProxyAuthorizationToken = token?.trim() ? token : undefined;
   }
 
   private async ensureListening(): Promise<number> {
@@ -145,7 +150,7 @@ export class WorkspaceAssetServer implements vscode.Disposable {
     try {
       proxiedResponse = await fetch(targetUrl, {
         body: body ? new Uint8Array(body) : undefined,
-        headers: createProxyRequestHeaders(request.headers),
+        headers: createProxyRequestHeaders(request.headers, this.t3ProxyAuthorizationToken),
         method,
         redirect: "manual",
       });
@@ -185,7 +190,7 @@ export class WorkspaceAssetServer implements vscode.Disposable {
       }
 
       const upstreamSocket = connect(T3_PROXY_PORT, T3_PROXY_HOST, () => {
-        upstreamSocket.write(createProxyUpgradeRequest(request, url));
+        upstreamSocket.write(createProxyUpgradeRequest(request, url, this.t3ProxyAuthorizationToken));
         if (head.length > 0) {
           upstreamSocket.write(head);
         }
@@ -281,7 +286,10 @@ async function readRequestBody(request: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function createProxyRequestHeaders(headers: IncomingHttpHeaders): Headers {
+function createProxyRequestHeaders(
+  headers: IncomingHttpHeaders,
+  authorizationToken: string | undefined,
+): Headers {
   const proxiedHeaders = new Headers();
   for (const [key, rawValue] of Object.entries(headers)) {
     if (!rawValue) {
@@ -306,6 +314,10 @@ function createProxyRequestHeaders(headers: IncomingHttpHeaders): Headers {
     }
 
     proxiedHeaders.set(key, rawValue);
+  }
+
+  if (authorizationToken && !proxiedHeaders.has("authorization")) {
+    proxiedHeaders.set("authorization", `Bearer ${authorizationToken}`);
   }
 
   return proxiedHeaders;
@@ -348,7 +360,11 @@ function createProxyResponseHeaders(
   return headers;
 }
 
-function createProxyUpgradeRequest(request: IncomingMessage, url: URL): string {
+function createProxyUpgradeRequest(
+  request: IncomingMessage,
+  url: URL,
+  authorizationToken: string | undefined,
+): string {
   const headerLines = [
     `Host: ${T3_PROXY_HOST}:${String(T3_PROXY_PORT)}`,
     `Origin: ${getT3ProxyOrigin()}`,
@@ -367,6 +383,10 @@ function createProxyUpgradeRequest(request: IncomingMessage, url: URL): string {
     }
 
     headerLines.push(`${headerName}: ${headerValue}`);
+  }
+
+  if (authorizationToken) {
+    headerLines.push(`Authorization: Bearer ${authorizationToken}`);
   }
 
   return `${request.method ?? "GET"} ${url.pathname}${url.search} HTTP/${request.httpVersion}\r\n${headerLines.join("\r\n")}\r\n\r\n`;

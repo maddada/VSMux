@@ -136,6 +136,7 @@ export class T3RuntimeManager implements vscode.Disposable {
     startupCommand = DEFAULT_T3_COMMAND,
   ): Promise<{
     browserBootstrapToken: string;
+    ownerBearerToken: string;
     serverOrigin: string;
     wsUrl: string;
   }> {
@@ -144,6 +145,7 @@ export class T3RuntimeManager implements vscode.Disposable {
     const browserBootstrapToken = await this.issueBrowserBootstrapToken(authState.ownerBearerToken);
     return {
       browserBootstrapToken,
+      ownerBearerToken: authState.ownerBearerToken,
       serverOrigin: this.getServerOrigin(),
       wsUrl: this.getWebSocketUrl(),
     };
