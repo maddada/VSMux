@@ -2,8 +2,10 @@ import {
   IconCheck,
   IconArrowLeft,
   IconArrowRight,
+  IconBrandGithub,
   IconBolt,
   IconBulb,
+  IconLayoutSidebarRight,
   IconRocket,
   IconSparkles,
   IconTerminal2,
@@ -128,6 +130,28 @@ const WELCOME_PAGES: WelcomePage[] = [
     icon: IconBulb,
     kicker: "Page 6",
     title: "Tips & Tricks",
+  },
+  {
+    bullets: [
+      "VSmux works especially well with Agent Manager X: github.com/maddada/agent-manager-x",
+      "It lets you keep an always-visible view of your running agent sessions at the side of your screen across all projects.",
+      "That makes it a great companion if you want a bigger-picture view while VSmux stays focused inside VS Code.",
+      "Help is especially welcome for porting Agent Manager X to Windows and Linux.",
+    ],
+    icon: IconLayoutSidebarRight,
+    kicker: "Page 7",
+    title: "Agent Manager X",
+  },
+  {
+    bullets: [
+      "Please send GitHub issues and PRs for problems you run into or improvements you want to see.",
+      "Contributions are also very welcome for support for more agents and better indicators support.",
+      "Extra help is especially needed for Windows and Linux support.",
+      "If you want to help VSmux grow, even small fixes, bug reports, and agent integrations make a real difference.",
+    ],
+    icon: IconBrandGithub,
+    kicker: "Page 8",
+    title: "Contribute",
   },
 ];
 

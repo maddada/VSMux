@@ -84,8 +84,27 @@ body {
   pointer-events: none;
   position: absolute;
   top: 50%;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
   transform: translate(-50%, -50%);
   z-index: 30;
+}
+
+.workspace-toast-confirmed {
+  background: linear-gradient(180deg, rgba(16, 93, 54, 0.98), rgba(11, 73, 42, 0.97));
+  border-color: rgba(121, 235, 164, 0.72);
+  box-shadow:
+    0 24px 56px rgba(6, 48, 25, 0.48),
+    0 0 0 1px rgba(196, 255, 219, 0.08);
+}
+
+.workspace-toast-fading {
+  opacity: 0;
+  transform: translate(-50%, -53%);
 }
 
 .workspace-toast-copy {
@@ -106,6 +125,14 @@ body {
   color: rgba(219, 230, 248, 0.82);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.workspace-toast-confirmed .workspace-toast-copy strong {
+  color: #f0fff7;
+}
+
+.workspace-toast-confirmed .workspace-toast-copy span {
+  color: rgba(229, 255, 239, 0.9);
 }
 
 .workspace-lag-notice-copy {

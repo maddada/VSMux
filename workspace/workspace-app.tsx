@@ -76,7 +76,10 @@ type WorkspaceAutoFocusGuard = {
   sessionId: string;
 };
 
-type WorkspaceToastState = WorkspacePanelShowToastMessage;
+type WorkspaceToastPhase = "confirmed" | "fading" | "pending";
+type WorkspaceToastState = WorkspacePanelShowToastMessage & {
+  phase: WorkspaceToastPhase;
+};
 type WorkspaceTerminalScrollRequestState = WorkspacePanelScrollTerminalToBottomMessage;
 type WorkspaceCodexSettingConfirmationState = {
   setting: "statusLine" | "terminalTitle";
@@ -85,6 +88,8 @@ type WorkspaceCodexSettingConfirmationState = {
 
 const AUTO_FOCUS_ACTIVATION_GUARD_MS = 400;
 const AUTO_RELOAD_ON_LAG = true;
+const WORKSPACE_TOAST_CONFIRM_DISPLAY_MS = 2_800;
+const WORKSPACE_TOAST_CONFIRM_FADE_MS = 300;
 let nextWorkspaceBootId = 0;
 let nextWorkspacePaneViewInstanceId = 0;
 let nextWorkspacePortalTargetId = 0;
@@ -117,6 +122,8 @@ const describeActiveElement = () => {
   };
 };
 
+type WorkspaceToastComparable = WorkspacePanelShowToastMessage | WorkspaceToastState | undefined;
+
 const summarizeWorkspaceTerminalPanes = (panes: WorkspacePanelPane[]) =>
   panes.flatMap((pane) =>
     pane.kind !== "terminal"
@@ -134,13 +141,13 @@ const summarizeWorkspaceTerminalPanes = (panes: WorkspacePanelPane[]) =>
         ],
   );
 
-const isSameWorkspaceToast = (
-  left: WorkspaceToastState | undefined,
-  right: WorkspaceToastState | undefined,
-) =>
+const isSameWorkspaceToast = (left: WorkspaceToastComparable, right: WorkspaceToastComparable) =>
+  left?.confirmOnTerminalEnterSessionId === right?.confirmOnTerminalEnterSessionId &&
+  left?.confirmedMessage === right?.confirmedMessage &&
+  left?.confirmedTitle === right?.confirmedTitle &&
   left?.expiresAt === right?.expiresAt &&
-  left?.title === right?.title &&
-  left?.message === right?.message;
+  left?.message === right?.message &&
+  left?.title === right?.title;
 
 const summarizeTerminalLayerState = (
   panes: WorkspacePanelPane[],
@@ -246,14 +253,36 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     vscode.postMessage(message);
   };
 
-  const showWorkspaceToast = (toast: WorkspaceToastState) => {
-    setWorkspaceToast(toast);
+  const showWorkspaceToast = (toast: WorkspacePanelShowToastMessage) => {
+    setWorkspaceToast({
+      ...toast,
+      phase: "pending",
+    });
   };
 
-  const dismissWorkspaceToast = (toast: WorkspaceToastState) => {
+  const dismissWorkspaceToast = (toast: WorkspacePanelShowToastMessage) => {
     setWorkspaceToast((currentToast) =>
       isSameWorkspaceToast(currentToast, toast) ? undefined : currentToast,
     );
+  };
+
+  const confirmWorkspaceToastForSession = (sessionId: string) => {
+    setWorkspaceToast((currentToast) => {
+      if (
+        !currentToast ||
+        currentToast.phase !== "pending" ||
+        currentToast.confirmOnTerminalEnterSessionId !== sessionId
+      ) {
+        return currentToast;
+      }
+
+      return {
+        ...currentToast,
+        message: currentToast.confirmedMessage ?? currentToast.message,
+        phase: "confirmed",
+        title: currentToast.confirmedTitle ?? currentToast.title,
+      };
+    });
   };
 
   const postWorkspaceReproLog = (event: string, payload?: Record<string, unknown>) => {
@@ -491,7 +520,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           return;
         }
 
-        setWorkspaceToast(nextMessage);
+        showWorkspaceToast(nextMessage);
         return;
       }
 
@@ -558,6 +587,35 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   useEffect(() => {
     if (!workspaceToast) {
       return;
+    }
+
+    if (workspaceToast.phase === "confirmed") {
+      const timeout = window.setTimeout(() => {
+        setWorkspaceToast((currentToast) =>
+          isSameWorkspaceToast(currentToast, workspaceToast) && currentToast?.phase === "confirmed"
+            ? {
+                ...currentToast,
+                phase: "fading",
+              }
+            : currentToast,
+        );
+      }, WORKSPACE_TOAST_CONFIRM_DISPLAY_MS);
+
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    if (workspaceToast.phase === "fading") {
+      const timeout = window.setTimeout(() => {
+        setWorkspaceToast((currentToast) =>
+          isSameWorkspaceToast(currentToast, workspaceToast) ? undefined : currentToast,
+        );
+      }, WORKSPACE_TOAST_CONFIRM_FADE_MS);
+
+      return () => {
+        window.clearTimeout(timeout);
+      };
     }
 
     const remainingMs = workspaceToast.expiresAt - Date.now();
@@ -1315,7 +1373,19 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       style={workspaceShellStyle}
     >
       {workspaceToast ? (
-        <div aria-live="polite" className="workspace-toast" role="status">
+        <div
+          aria-live="polite"
+          className={[
+            "workspace-toast",
+            workspaceToast.phase === "confirmed" || workspaceToast.phase === "fading"
+              ? "workspace-toast-confirmed"
+              : "",
+            workspaceToast.phase === "fading" ? "workspace-toast-fading" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          role="status"
+        >
           <div className="workspace-toast-copy">
             <strong>{workspaceToast.title}</strong>
             <span>{workspaceToast.message}</span>
@@ -1442,6 +1512,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
             onActivate={(source) => handleTerminalActivate(pane.sessionId, source)}
             pane={pane}
             refreshRequestId={0}
+            onTerminalEnter={() => confirmWorkspaceToastForSession(pane.sessionId)}
             scrollToBottomRequestId={
               terminalScrollRequest?.sessionId === pane.sessionId
                 ? terminalScrollRequest.requestId
@@ -1489,8 +1560,8 @@ type WorkspacePaneViewProps = {
   onLocalFocus: () => void;
   onFocus: () => void;
   onClose: () => void;
-  onConfirmToastDismissed: (toast: WorkspaceToastState) => void;
-  onConfirmToastShown: (toast: WorkspaceToastState) => void;
+  onConfirmToastDismissed: (toast: WorkspacePanelShowToastMessage) => void;
+  onConfirmToastShown: (toast: WorkspacePanelShowToastMessage) => void;
   onReload: () => void;
   onBoundsMeasured: (bounds: WorkspacePaneMeasuredBounds) => void;
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;

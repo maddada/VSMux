@@ -43,6 +43,7 @@ export type TerminalPaneProps = {
   debuggingMode: boolean;
   isFocused: boolean;
   isVisible: boolean;
+  onTerminalEnter?: () => void;
   onLagDetected?: (payload: {
     overshootMs: number;
     sessionId: string;
@@ -67,6 +68,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   debuggingMode,
   isFocused,
   isVisible,
+  onTerminalEnter,
   onLagDetected,
   onActivate,
   pane,
@@ -84,6 +86,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         isFocused={isFocused}
         isVisible={isVisible}
         onActivate={onActivate}
+        onTerminalEnter={onTerminalEnter}
         pane={pane}
         refreshRequestId={refreshRequestId}
         scrollToBottomRequestId={scrollToBottomRequestId}
@@ -1664,6 +1667,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           event.stopPropagation();
           openSearch();
           return;
+        }
+
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey
+        ) {
+          onTerminalEnter?.();
         }
 
         if (event.key === "Enter" && event.shiftKey) {

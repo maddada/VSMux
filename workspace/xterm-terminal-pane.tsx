@@ -74,6 +74,7 @@ export type XtermTerminalPaneProps = {
   debuggingMode: boolean;
   isFocused: boolean;
   isVisible: boolean;
+  onTerminalEnter?: () => void;
   onActivate: (source: "focusin" | "pointer") => void;
   pane: WorkspacePanelTerminalPane;
   refreshRequestId: number;
@@ -144,6 +145,7 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
   debuggingMode,
   isFocused,
   isVisible,
+  onTerminalEnter,
   onActivate,
   pane,
   refreshRequestId,
@@ -166,9 +168,7 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
   const isTerminalOpenRef = useRef(false);
   const lastMeasuredSizeRef = useRef<{ height: number; width: number } | undefined>(undefined);
   const nudgeTerminalHeightRef = useRef<((afterNudge?: () => void) => void) | null>(null);
-  const preserveTerminalBottomLockRef = useRef<(<T>(applyLayoutChange: () => T) => T) | null>(
-    null,
-  );
+  const preserveTerminalBottomLockRef = useRef<(<T>(applyLayoutChange: () => T) => T) | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const streamAttachAddonRef = useRef<AttachAddon | null>(null);
@@ -484,7 +484,9 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
       };
       preserveTerminalBottomLock(() => {
         fit.fit();
-        sendSocketMessage(createTerminalResizeMessage(pane.sessionId, terminal.cols, terminal.rows));
+        sendSocketMessage(
+          createTerminalResizeMessage(pane.sessionId, terminal.cols, terminal.rows),
+        );
         terminal.refresh(0, terminal.rows - 1);
       });
     };
@@ -1191,6 +1193,16 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
         onActivate("focusin");
       }}
       onKeyDownCapture={(event) => {
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey
+        ) {
+          onTerminalEnter?.();
+        }
+
         const primaryModifier = IS_MAC ? event.metaKey : event.ctrlKey;
         if (!primaryModifier || event.key.toLowerCase() !== "f") {
           return;
