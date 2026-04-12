@@ -448,6 +448,14 @@
           ],
           "description": "Choose the default engine for new VSmux terminal sessions. xterm.js is the stable default; Ghostty is still beta and may occasionally need a refresh after reloads."
         },
+        "VSmux.xtermHeadlessScrollback": {
+          "title": "xterm.js Reconnect Scrollback",
+          "type": "number",
+          "minimum": 100,
+          "maximum": 100000,
+          "default": 50000,
+          "description": "Controls how many lines the daemon-side xterm.js headless terminal keeps for reconnects. The frontend uses a derived larger buffer automatically. Higher values preserve more history but can make reconnecting take some time."
+        },
         "VSmux.terminalScrollToBottomWhenTyping": {
           "title": "Scroll To Bottom When Typing",
           "type": "boolean",
