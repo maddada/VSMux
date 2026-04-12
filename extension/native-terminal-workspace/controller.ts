@@ -63,6 +63,7 @@ import {
 } from "./activity";
 import { createGroupFocusPlan } from "./group-focus";
 import { shouldPreserveLastActivityForTerminalWrite } from "./last-activity-control-command";
+import { createSessionFocusPlan } from "./session-focus";
 import { createSessionRenamePlan } from "./session-rename";
 import {
   PreviousSessionHistory,
@@ -3839,7 +3840,12 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   private async revealWorkspacePanelForSidebarFocus(
     source: "sidebar" | "workspace" | undefined,
   ): Promise<void> {
-    if (source !== "sidebar") {
+    const focusPlan = createSessionFocusPlan({
+      isWorkspacePanelVisible: this.workspacePanel.isVisible(),
+      source,
+    });
+
+    if (!focusPlan.shouldRevealWorkspacePanel) {
       return;
     }
 
