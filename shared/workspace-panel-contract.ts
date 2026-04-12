@@ -147,6 +147,22 @@ export type WorkspacePanelFullReloadSessionMessage = {
   sessionId: string;
 };
 
+export type WorkspacePanelPromptRenameSessionMessage = {
+  type: "promptRenameSession";
+  sessionId: string;
+};
+
+export type WorkspacePanelForkSessionMessage = {
+  type: "forkSession";
+  sessionId: string;
+};
+
+export type WorkspacePanelSetSessionSleepingMessage = {
+  type: "setSessionSleeping";
+  sessionId: string;
+  sleeping: boolean;
+};
+
 export type WorkspacePanelSyncSessionOrderMessage = {
   type: "syncSessionOrder";
   groupId: string;
@@ -190,6 +206,9 @@ export type WorkspacePanelToExtensionMessage =
   | WorkspacePanelFocusSessionMessage
   | WorkspacePanelCloseSessionMessage
   | WorkspacePanelFullReloadSessionMessage
+  | WorkspacePanelPromptRenameSessionMessage
+  | WorkspacePanelForkSessionMessage
+  | WorkspacePanelSetSessionSleepingMessage
   | WorkspacePanelSyncPaneOrderMessage
   | WorkspacePanelSyncSessionOrderMessage
   | WorkspacePanelDebugLogMessage

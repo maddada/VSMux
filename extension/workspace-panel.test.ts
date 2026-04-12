@@ -264,6 +264,83 @@ describe("WorkspacePanelManager", () => {
     manager.dispose();
   });
 
+  test("should forward prompt rename session messages from the workspace webview", async () => {
+    const onMessage = vi.fn();
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage,
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.webview.messageListeners[0]?.({
+      sessionId: "session-1",
+      type: "promptRenameSession",
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      type: "promptRenameSession",
+    });
+
+    manager.dispose();
+  });
+
+  test("should forward fork session messages from the workspace webview", async () => {
+    const onMessage = vi.fn();
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage,
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.webview.messageListeners[0]?.({
+      sessionId: "session-1",
+      type: "forkSession",
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      type: "forkSession",
+    });
+
+    manager.dispose();
+  });
+
+  test("should forward set session sleeping messages from the workspace webview", async () => {
+    const onMessage = vi.fn();
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage,
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.webview.messageListeners[0]?.({
+      sessionId: "session-1",
+      sleeping: true,
+      type: "setSessionSleeping",
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      sleeping: true,
+      type: "setSessionSleeping",
+    });
+
+    manager.dispose();
+  });
+
   test("should forward pane reorder messages from the workspace webview", async () => {
     const onMessage = vi.fn();
     const manager = new WorkspacePanelManager({
@@ -626,6 +703,7 @@ function createMockPanel({
     visible,
     webview: {
       asWebviewUri: vi.fn((value: unknown) => value),
+      html: "",
       messageListeners: [],
       onDidReceiveMessage: vi.fn((listener: (message: unknown) => void) => {
         panel.webview.messageListeners.push(listener);

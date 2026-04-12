@@ -27,7 +27,10 @@ import {
 } from "../shared/sidebar-agents";
 import { logWorkspaceDebug } from "./workspace-debug";
 import { WorkspacePaneCloseButton } from "./workspace-pane-close-button";
+import { WorkspacePaneForkButton } from "./workspace-pane-fork-button";
+import { WorkspacePaneRenameButton } from "./workspace-pane-rename-button";
 import { WorkspacePaneRefreshButton } from "./workspace-pane-refresh-button";
+import { WorkspacePaneSleepButton } from "./workspace-pane-sleep-button";
 import {
   buildFullSessionOrderFromVisiblePaneOrder,
   buildVisiblePaneOrderForDrop,
@@ -1423,6 +1426,18 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
           }
           onConfirmToastDismissed={dismissWorkspaceToast}
           onConfirmToastShown={showWorkspaceToast}
+          onRename={() =>
+            postToExtension({
+              sessionId: pane.sessionId,
+              type: "promptRenameSession",
+            })
+          }
+          onFork={() =>
+            postToExtension({
+              sessionId: pane.sessionId,
+              type: "forkSession",
+            })
+          }
           onReload={() => {
             if (pane.kind === "terminal") {
               postToExtension({
@@ -1437,6 +1452,13 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
               type: "reloadWorkspacePanel",
             });
           }}
+          onToggleSleeping={() =>
+            postToExtension({
+              sessionId: pane.sessionId,
+              sleeping: pane.sessionRecord.isSleeping !== true,
+              type: "setSessionSleeping",
+            })
+          }
           pane={pane}
           registerTerminalPortalTarget={
             pane.kind === "terminal" ? getTerminalPortalTargetRef(pane.sessionId) : undefined
@@ -1562,7 +1584,10 @@ type WorkspacePaneViewProps = {
   onClose: () => void;
   onConfirmToastDismissed: (toast: WorkspacePanelShowToastMessage) => void;
   onConfirmToastShown: (toast: WorkspacePanelShowToastMessage) => void;
+  onFork: () => void;
+  onRename: () => void;
   onReload: () => void;
+  onToggleSleeping: () => void;
   onBoundsMeasured: (bounds: WorkspacePaneMeasuredBounds) => void;
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onHeaderNativeDragStart: (event: ReactDragEvent<HTMLElement>) => void;
@@ -1585,8 +1610,11 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onClose,
   onConfirmToastDismissed,
   onConfirmToastShown,
+  onFork,
+  onRename,
   onBoundsMeasured,
   onReload,
+  onToggleSleeping,
   onHeaderPointerDown,
   onHeaderNativeDragStart,
   pane,
@@ -1595,6 +1623,8 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   const paneViewInstanceIdRef = useRef(`workspace-pane-view-${++nextWorkspacePaneViewInstanceId}`);
   const sectionRef = useRef<HTMLElement | null>(null);
   const primaryTitle = getWorkspacePanePrimaryTitle(pane);
+  const canFork = supportsWorkspacePaneFork(pane);
+  const canReload = supportsWorkspacePaneFullReload(pane);
 
   useEffect(() => {
     debugLog("workspace.paneViewMount", {
@@ -1692,7 +1722,13 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
         <div className="workspace-pane-title">{primaryTitle}</div>
         {pane.kind === "terminal" || pane.kind === "t3" ? (
           <div className="workspace-pane-header-actions">
-            <WorkspacePaneRefreshButton onRefresh={onReload} />
+            {pane.kind === "terminal" ? <WorkspacePaneRenameButton onRename={onRename} /> : null}
+            {canFork ? <WorkspacePaneForkButton onFork={onFork} /> : null}
+            {canReload ? <WorkspacePaneRefreshButton onRefresh={onReload} /> : null}
+            <WorkspacePaneSleepButton
+              isSleeping={pane.sessionRecord.isSleeping === true}
+              onToggleSleeping={onToggleSleeping}
+            />
             <WorkspacePaneCloseButton
               onConfirmClose={onClose}
               onConfirmToastDismissed={onConfirmToastDismissed}
@@ -1745,6 +1781,27 @@ function getWorkspacePanePrimaryTitle(pane: WorkspacePanelPane): string {
   }
 
   return pane.sessionRecord.alias;
+}
+
+function supportsWorkspacePaneFork(pane: WorkspacePanelPane): boolean {
+  if (pane.kind !== "terminal") {
+    return false;
+  }
+
+  const agentIcon = getSidebarAgentIconById(pane.snapshot?.agentName);
+  return agentIcon === "codex" || agentIcon === "claude";
+}
+
+function supportsWorkspacePaneFullReload(pane: WorkspacePanelPane): boolean {
+  if (pane.kind === "t3") {
+    return true;
+  }
+  if (pane.kind !== "terminal") {
+    return false;
+  }
+
+  const agentIcon = getSidebarAgentIconById(pane.snapshot?.agentName);
+  return agentIcon === "codex" || agentIcon === "claude" || agentIcon === "opencode";
 }
 
 function preventWorkspacePaneNativeDrag(event: ReactDragEvent<HTMLElement>): void {

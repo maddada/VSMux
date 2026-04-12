@@ -318,9 +318,18 @@ function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToEx
   if (
     message.type === "focusSession" ||
     message.type === "closeSession" ||
-    message.type === "fullReloadSession"
+    message.type === "fullReloadSession" ||
+    message.type === "promptRenameSession" ||
+    message.type === "forkSession"
   ) {
     return typeof message.sessionId === "string" && message.sessionId.length > 0;
+  }
+  if (message.type === "setSessionSleeping") {
+    return (
+      typeof message.sessionId === "string" &&
+      message.sessionId.length > 0 &&
+      typeof message.sleeping === "boolean"
+    );
   }
   if (message.type === "syncPaneOrder" || message.type === "syncSessionOrder") {
     return (

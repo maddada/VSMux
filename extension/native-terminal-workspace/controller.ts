@@ -253,6 +253,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     {
       activity: string;
       activityLabel: string | undefined;
+      isPrimaryTitleTerminalTitle: boolean | undefined;
       lastInteractionAt: string | undefined;
       primaryTitle: string | undefined;
       terminalTitle: string | undefined;
@@ -361,6 +362,21 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
         if (message.type === "fullReloadSession") {
           await this.fullReloadSession(message.sessionId);
+          return;
+        }
+
+        if (message.type === "promptRenameSession") {
+          await this.promptRenameSession(message.sessionId);
+          return;
+        }
+
+        if (message.type === "forkSession") {
+          await this.forkSession(message.sessionId);
+          return;
+        }
+
+        if (message.type === "setSessionSleeping") {
+          await this.setSessionSleeping(message.sessionId, message.sleeping);
           return;
         }
 
@@ -2321,6 +2337,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       const nextSidebarPresentation = {
         activity: sidebarSession.activity,
         activityLabel: sidebarSession.activityLabel,
+        isPrimaryTitleTerminalTitle: sidebarSession.isPrimaryTitleTerminalTitle,
         lastInteractionAt: sidebarSession.lastInteractionAt,
         primaryTitle: sidebarSession.primaryTitle,
         terminalTitle: sidebarSession.terminalTitle,
@@ -2328,6 +2345,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       const payloadChanged =
         previousSidebarPresentation?.activity !== nextSidebarPresentation.activity ||
         previousSidebarPresentation?.activityLabel !== nextSidebarPresentation.activityLabel ||
+        previousSidebarPresentation?.isPrimaryTitleTerminalTitle !==
+          nextSidebarPresentation.isPrimaryTitleTerminalTitle ||
         previousSidebarPresentation?.lastInteractionAt !==
           nextSidebarPresentation.lastInteractionAt ||
         previousSidebarPresentation?.primaryTitle !== nextSidebarPresentation.primaryTitle ||
@@ -2338,6 +2357,10 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         activityLabel: sidebarSession.activityLabel,
         activityLabelChanged:
           previousSidebarPresentation?.activityLabel !== nextSidebarPresentation.activityLabel,
+        isPrimaryTitleTerminalTitle: sidebarSession.isPrimaryTitleTerminalTitle,
+        isPrimaryTitleTerminalTitleChanged:
+          previousSidebarPresentation?.isPrimaryTitleTerminalTitle !==
+          nextSidebarPresentation.isPrimaryTitleTerminalTitle,
         payloadChanged,
         previousSidebarPresentation,
         primaryTitle: sidebarSession.primaryTitle,
