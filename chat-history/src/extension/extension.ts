@@ -228,20 +228,36 @@ async function sendConversationToWebview(
   panel: vscode.WebviewPanel,
   conversationFile: ConversationFile,
 ) {
+  panel.title = `VSmux Search - ${conversationFile.name}`;
+  void panel.webview.postMessage({
+    command: "conversationLoadStarted",
+    fileName: conversationFile.name,
+    filePath: conversationFile.path,
+  });
+
   try {
     const content = await readJsonlFileAsync(conversationFile.path);
     if (content === null) {
+      void panel.webview.postMessage({
+        command: "conversationLoadFailed",
+        fileName: conversationFile.name,
+        filePath: conversationFile.path,
+      });
       // vscode.window.showErrorMessage('Failed to read conversation file: File is too large or could not be read');
       return;
     }
-    panel.title = `VSmux Search - ${conversationFile.name}`;
-    panel.webview.postMessage({
+    void panel.webview.postMessage({
       command: "loadConversation",
       fileName: conversationFile.name,
       filePath: conversationFile.path,
       content: content,
     });
-  } catch (error) {
+  } catch {
+    void panel.webview.postMessage({
+      command: "conversationLoadFailed",
+      fileName: conversationFile.name,
+      filePath: conversationFile.path,
+    });
     // vscode.window.showErrorMessage(`Failed to read conversation file: ${error}`);
   }
 }

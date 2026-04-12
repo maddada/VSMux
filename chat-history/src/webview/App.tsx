@@ -115,6 +115,7 @@ export function App() {
   const [conversations, setConversations] = useState<ParsedLine[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [filePath, setFilePath] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -139,9 +140,21 @@ export function App() {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       switch (message.command) {
+        case "conversationLoadStarted":
+          setIsLoading(true);
+          setLoadError(null);
+          setFileName(message.fileName);
+          setFilePath(message.filePath);
+          return;
+        case "conversationLoadFailed":
+          setIsLoading(false);
+          setIsRefreshing(false);
+          setLoadError("Could not load this conversation.");
+          return;
         case "loadConversation":
           setIsLoading(true);
           setIsRefreshing(false);
+          setLoadError(null);
           try {
             const parsed = parseJsonlContent(message.content);
             setConversations(parsed);
@@ -382,7 +395,7 @@ export function App() {
               <MessageSquareText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-lg font-medium mb-2">No Conversation Loaded</p>
               <p className="text-sm text-muted-foreground mb-4">
-                Select a conversation from the sidebar to view it here.
+                {loadError ?? "Select a conversation from the sidebar to view it here."}
               </p>
               <div className="text-xs text-muted-foreground space-y-1 mt-4">
                 <p className="font-medium text-foreground/80">What you'll see:</p>
