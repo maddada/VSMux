@@ -89,10 +89,10 @@ export const ToolbarActions: Story = {
 
     await step("collapse the sidebar menu from its trigger", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
-      await body.findByRole("menuitem", { name: "Add Agent" });
+      await body.findByRole("menuitem", { name: "Running" });
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await waitFor(() => {
-        expect(body.queryByRole("menuitem", { name: "Add Agent" })).toBeNull();
+        expect(body.queryByRole("menuitem", { name: "Running" })).toBeNull();
       });
     });
 
@@ -357,14 +357,17 @@ export const TypingAnywhereStartsSearchAndEscapePrefersModals: Story = {
 
     await waitForReadyMessage();
 
-    await step("typing on a non-input target opens search without dropping characters", async () => {
-      await userEvent.click(canvas.getByRole("button", { name: /older draft first/i }));
-      await userEvent.keyboard("re");
+    await step(
+      "typing on a non-input target opens search without dropping characters",
+      async () => {
+        await userEvent.click(canvas.getByRole("button", { name: /older draft first/i }));
+        await userEvent.keyboard("re");
 
-      await expect(
-        canvas.getByRole("textbox", { name: "Search current and previous sessions" }),
-      ).toHaveValue("re");
-    });
+        await expect(
+          canvas.getByRole("textbox", { name: "Search current and previous sessions" }),
+        ).toHaveValue("re");
+      },
+    );
 
     await step("escape closes a modal before it closes search", async () => {
       storyWindow?.postMessage(

@@ -573,7 +573,7 @@
 .command-icon-picker-fields {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 144px);
+  grid-template-columns: 1fr;
 }
 
 .command-icon-picker-field {
@@ -625,6 +625,10 @@
   z-index: 2;
 }
 
+.command-icon-picker-search {
+  margin-bottom: 4px;
+}
+
 .command-icon-picker-option {
   align-items: center;
   background: transparent;
@@ -652,6 +656,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.command-icon-picker-empty-state {
+  color: color-mix(in srgb, var(--app-muted) 88%, var(--app-foreground) 12%);
+  font-size: 12px;
+  padding: 10px;
+  text-align: center;
 }
 
 .command-icon-color-row {
@@ -725,10 +736,6 @@
 @media (max-width: 280px) {
   .confirm-modal-root {
     padding: 8px;
-  }
-
-  .command-icon-picker-fields {
-    grid-template-columns: 1fr;
   }
 
   .confirm-modal {

@@ -951,10 +951,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     completionBellEnabled,
     isOverflowMenuOpen,
     isScratchPadOpen,
-    onAddAction: openAddActionModal,
-    onAddAgent: openAddAgentModal,
     onAdjustTerminalFontSize: adjustTerminalFontSize,
-    onAddBrowser: openAddBrowserModal,
     onMoveSidebar: moveSidebar,
     onOpenHelp: openWorkspaceWelcome,
     onOpenSettings: openSidebarSettings,
@@ -1379,9 +1376,6 @@ type RenderSidebarTopControlsOptions = {
   completionBellEnabled: boolean;
   isOverflowMenuOpen: boolean;
   isScratchPadOpen: boolean;
-  onAddAction: () => void;
-  onAddAgent: () => void;
-  onAddBrowser: () => void;
   onAdjustTerminalFontSize: (delta: -1 | 1) => void;
   onMoveSidebar: () => void;
   onOpenHelp: () => void;
@@ -1400,9 +1394,6 @@ function renderSidebarTopControls({
   completionBellEnabled,
   isOverflowMenuOpen,
   isScratchPadOpen,
-  onAddAction,
-  onAddAgent,
-  onAddBrowser,
   onAdjustTerminalFontSize,
   onMoveSidebar,
   onOpenHelp,
@@ -1536,48 +1527,6 @@ function renderSidebarTopControls({
                         />
                       )}
                       {getCompletionBellMenuLabel(completionBellEnabled)}
-                    </button>
-                  </div>
-                  <div className="session-context-menu-divider" role="separator" />
-                  <div className="session-context-menu-group">
-                    <button
-                      className="session-context-menu-item"
-                      onClick={onAddAgent}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <IconPlus
-                        aria-hidden="true"
-                        className="session-context-menu-icon"
-                        size={14}
-                      />
-                      Add Agent
-                    </button>
-                    <button
-                      className="session-context-menu-item"
-                      onClick={onAddAction}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <IconPlus
-                        aria-hidden="true"
-                        className="session-context-menu-icon"
-                        size={14}
-                      />
-                      Add Action
-                    </button>
-                    <button
-                      className="session-context-menu-item"
-                      onClick={onAddBrowser}
-                      role="menuitem"
-                      type="button"
-                    >
-                      <IconPlus
-                        aria-hidden="true"
-                        className="session-context-menu-icon"
-                        size={14}
-                      />
-                      Add Webpage
                     </button>
                   </div>
                   <div className="session-context-menu-divider" role="separator" />

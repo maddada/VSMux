@@ -1,21 +1,28 @@
-import { Tooltip } from '@base-ui/react/tooltip';
-import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/react';
-import { isSortableOperation, useSortable } from '@dnd-kit/react/sortable';
-import { IconCodeDots, IconLoader2, IconPencil, IconTrash } from '@tabler/icons-react';
-import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import type { SidebarAgentButton } from '../shared/sidebar-agents';
-import { AGENT_LOGOS } from './agent-logos';
-import { SectionHeader } from './section-header';
-import { useSidebarStore } from './sidebar-store';
-import { TOOLTIP_DELAY_MS } from './tooltip-delay';
-import { AgentConfigModal, type AgentConfigDraft } from './agent-config-modal';
-import type { WebviewApi } from './webview-api';
+import { Tooltip } from "@base-ui/react/tooltip";
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
+import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
+import { IconCodeDots, IconLoader2, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { createPortal } from "react-dom";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
+import { useShallow } from "zustand/react/shallow";
+import type { SidebarAgentButton } from "../shared/sidebar-agents";
+import { AGENT_LOGOS } from "./agent-logos";
+import { SectionHeader } from "./section-header";
+import { useSidebarStore } from "./sidebar-store";
+import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
+import { AgentConfigModal, type AgentConfigDraft } from "./agent-config-modal";
+import type { WebviewApi } from "./webview-api";
 
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 180;
-const CONTEXT_MENU_HEIGHT_PX = 110;
+const CONTEXT_MENU_HEIGHT_PX = 166;
 
 type AgentsPanelProps = {
   createRequestId: number;
@@ -38,18 +45,27 @@ type AgentMenuState = {
 
 type AgentDragData = {
   agentId: string;
-  kind: 'sidebar-agent';
+  kind: "sidebar-agent";
 };
+
+function createAgentDraft(): AgentConfigDraft {
+  return {
+    agentId: undefined,
+    command: "",
+    icon: undefined,
+    name: "",
+  };
+}
 
 function clampContextMenuPosition(clientX: number, clientY: number): ContextMenuPosition {
   return {
     x: Math.max(
       CONTEXT_MENU_MARGIN_PX,
-      Math.min(clientX, window.innerWidth - CONTEXT_MENU_WIDTH_PX - CONTEXT_MENU_MARGIN_PX)
+      Math.min(clientX, window.innerWidth - CONTEXT_MENU_WIDTH_PX - CONTEXT_MENU_MARGIN_PX),
     ),
     y: Math.max(
       CONTEXT_MENU_MARGIN_PX,
-      Math.min(clientY, window.innerHeight - CONTEXT_MENU_HEIGHT_PX - CONTEXT_MENU_MARGIN_PX)
+      Math.min(clientY, window.innerHeight - CONTEXT_MENU_HEIGHT_PX - CONTEXT_MENU_MARGIN_PX),
     ),
   };
 }
@@ -57,7 +73,7 @@ function clampContextMenuPosition(clientX: number, clientY: number): ContextMenu
 function createAgentDragData(agentId: string): AgentDragData {
   return {
     agentId,
-    kind: 'sidebar-agent',
+    kind: "sidebar-agent",
   };
 }
 
@@ -67,14 +83,14 @@ function getAgentDragData(candidate: unknown): AgentDragData | undefined {
   }
 
   const data = candidate.data;
-  if (!isObjectRecord(data) || !('kind' in data)) {
+  if (!isObjectRecord(data) || !("kind" in data)) {
     return undefined;
   }
 
-  return data.kind === 'sidebar-agent' && typeof data.agentId === 'string'
+  return data.kind === "sidebar-agent" && typeof data.agentId === "string"
     ? {
         agentId: data.agentId,
-        kind: 'sidebar-agent',
+        kind: "sidebar-agent",
       }
     : undefined;
 }
@@ -91,7 +107,7 @@ export function AgentsPanel({
     useShallow((state) => ({
       agents: state.hud.agents,
       pendingAgentIds: state.hud.pendingAgentIds,
-    }))
+    })),
   );
   const [contextMenu, setContextMenu] = useState<AgentMenuState>();
   const [draftAgentIds, setDraftAgentIds] = useState<string[] | undefined>();
@@ -118,7 +134,7 @@ export function AgentsPanel({
       setContextMenu(undefined);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setContextMenu(undefined);
       }
     };
@@ -126,33 +142,37 @@ export function AgentsPanel({
       setContextMenu(undefined);
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') {
+      if (document.visibilityState !== "visible") {
         setContextMenu(undefined);
       }
     };
 
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleBlur);
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
 
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
     };
   }, [contextMenu]);
 
   const openAgentEditor = (agent: SidebarAgentButton) => {
     setEditingAgent({
       agentId: agent.agentId,
-      command: agent.command ?? '',
+      command: agent.command ?? "",
       icon: agent.icon,
       name: agent.name,
     });
+  };
+
+  const openCreateAgentEditor = () => {
+    setEditingAgent(createAgentDraft());
   };
 
   useEffect(() => {
@@ -165,20 +185,17 @@ export function AgentsPanel({
     }
 
     setContextMenu(undefined);
-    setEditingAgent({
-      agentId: undefined,
-      command: '',
-      icon: undefined,
-      name: '',
-    });
+    setEditingAgent(createAgentDraft());
   }, [createRequestId]);
 
   const orderedAgents = useMemo(() => {
-    const agentById = new Map<string, SidebarAgentButton>(agents.map((agent) => [agent.agentId, agent]));
+    const agentById = new Map<string, SidebarAgentButton>(
+      agents.map((agent) => [agent.agentId, agent]),
+    );
     const orderedAgentIds = draftAgentIds
       ? mergeAgentIds(
           draftAgentIds,
-          agents.map((agent) => agent.agentId)
+          agents.map((agent) => agent.agentId),
         )
       : agents.map((agent) => agent.agentId);
 
@@ -216,31 +233,31 @@ export function AgentsPanel({
     const nextAgentIds = moveAgentId(
       orderedAgents.map((agent) => agent.agentId),
       initialIndex,
-      targetIndex
+      targetIndex,
     );
     setDraftAgentIds(nextAgentIds);
     vscode.postMessage({
       agentIds: nextAgentIds,
-      type: 'syncSidebarAgentOrder',
+      type: "syncSidebarAgentOrder",
     });
-  }) satisfies DragDropEventHandlers['onDragEnd'];
+  }) satisfies DragDropEventHandlers["onDragEnd"];
 
   return (
     <>
       {isVisible ? (
-        <section className='commands-section'>
+        <section className="commands-section">
           <SectionHeader
             actions={titlebarActions}
             isCollapsed={isCollapsed}
             isCollapsible
             onToggleCollapsed={() => onToggleCollapsed(!isCollapsed)}
-            title='Agents'
+            title="Agents"
           />
           {!isCollapsed ? (
-            <div className='card commands-panel'>
+            <div className="card commands-panel">
               <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
                 <DragDropProvider onDragEnd={handleDragEnd}>
-                  <div className='agents-grid'>
+                  <div className="agents-grid">
                     {orderedAgents.map((agent, index) => (
                       <SortableAgentButton
                         agent={agent}
@@ -264,7 +281,7 @@ export function AgentsPanel({
 
                           vscode.postMessage({
                             agentId: agent.agentId,
-                            type: 'runSidebarAgent',
+                            type: "runSidebarAgent",
                           });
                         }}
                       />
@@ -279,14 +296,14 @@ export function AgentsPanel({
       {contextMenu
         ? createPortal(
             <div
-              className='session-context-menu'
+              className="session-context-menu"
               onClick={(event) => event.stopPropagation()}
               onContextMenu={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
               }}
               ref={menuRef}
-              role='menu'
+              role="menu"
               style={{
                 left: `${contextMenu.position.x}px`,
                 top: `${contextMenu.position.y}px`,
@@ -294,34 +311,47 @@ export function AgentsPanel({
               }}
             >
               <button
-                className='session-context-menu-item'
+                className="session-context-menu-item"
                 onClick={() => {
                   setContextMenu(undefined);
                   openAgentEditor(contextMenu.agent);
                 }}
-                role='menuitem'
-                type='button'
+                role="menuitem"
+                type="button"
               >
-                <IconPencil aria-hidden='true' className='session-context-menu-icon' size={14} />
+                <IconPencil aria-hidden="true" className="session-context-menu-icon" size={14} />
                 Configure Agent
               </button>
+              <div className="session-context-menu-divider" role="separator" />
               <button
-                className='session-context-menu-item session-context-menu-item-danger'
+                className="session-context-menu-item"
+                onClick={() => {
+                  setContextMenu(undefined);
+                  openCreateAgentEditor();
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Add Agent
+              </button>
+              <button
+                className="session-context-menu-item session-context-menu-item-danger"
                 onClick={() => {
                   setContextMenu(undefined);
                   vscode.postMessage({
                     agentId: contextMenu.agent.agentId,
-                    type: 'deleteSidebarAgent',
+                    type: "deleteSidebarAgent",
                   });
                 }}
-                role='menuitem'
-                type='button'
+                role="menuitem"
+                type="button"
               >
-                <IconTrash aria-hidden='true' className='session-context-menu-icon' size={14} />
+                <IconTrash aria-hidden="true" className="session-context-menu-icon" size={14} />
                 Delete Agent
               </button>
             </div>,
-            document.body
+            document.body,
           )
         : null}
       {editingAgent ? (
@@ -336,7 +366,7 @@ export function AgentsPanel({
               command: draft.command,
               icon: draft.icon,
               name: draft.name,
-              type: 'saveSidebarAgent',
+              type: "saveSidebarAgent",
             });
           }}
         />
@@ -363,13 +393,13 @@ function SortableAgentButton({
   onRun,
 }: SortableAgentButtonProps) {
   const sortable = useSortable({
-    accept: 'sidebar-agent',
+    accept: "sidebar-agent",
     data: createAgentDragData(agent.agentId),
     disabled: isContextMenuOpen || isLaunching,
-    group: 'sidebar-agents',
+    group: "sidebar-agents",
     id: agent.agentId,
     index,
-    type: 'sidebar-agent',
+    type: "sidebar-agent",
   });
 
   return (
@@ -379,32 +409,44 @@ function SortableAgentButton({
           <button
             aria-busy={isLaunching}
             aria-label={isLaunching ? `Starting ${agent.name}` : `Launch ${agent.name}`}
-            className='agent-button'
+            className="agent-button"
             data-dragging={String(Boolean(sortable.isDragging))}
-            data-empty-space-blocking='true'
-            data-icon-only='true'
+            data-empty-space-blocking="true"
+            data-icon-only="true"
             data-loading={String(isLaunching)}
             disabled={isLaunching}
+            draggable={false}
             onClick={isLaunching ? undefined : onRun}
             onContextMenu={isLaunching ? undefined : onContextMenu}
             ref={sortable.ref}
-            type='button'
+            type="button"
           >
-            <span className='agent-button-icon-shell'>
+            <span className="agent-button-icon-shell">
               {isLaunching ? (
-                <IconLoader2 aria-hidden='true' className='agent-button-loading-icon' size={18} stroke={1.8} />
+                <IconLoader2
+                  aria-hidden="true"
+                  className="agent-button-loading-icon"
+                  size={18}
+                  stroke={1.8}
+                />
               ) : (
                 <>
                   {agent.icon ? (
                     <img
-                      alt=''
-                      aria-hidden='true'
-                      className='agent-button-icon'
+                      alt=""
+                      aria-hidden="true"
+                      className="agent-button-icon"
                       data-agent-icon={agent.icon}
+                      draggable={false}
                       src={AGENT_LOGOS[agent.icon]}
                     />
                   ) : (
-                    <IconCodeDots aria-hidden='true' className='agent-button-fallback-icon' size={18} stroke={1.8} />
+                    <IconCodeDots
+                      aria-hidden="true"
+                      className="agent-button-fallback-icon"
+                      size={18}
+                      stroke={1.8}
+                    />
                   )}
                 </>
               )}
@@ -413,9 +455,13 @@ function SortableAgentButton({
         }
       />
       <Tooltip.Portal>
-        <Tooltip.Positioner className='tooltip-positioner' sideOffset={8}>
-          <Tooltip.Popup className='tooltip-popup'>
-            {isLaunching ? `Starting ${agent.name}` : agent.command ? agent.name : `Configure ${agent.name}`}
+        <Tooltip.Positioner className="tooltip-positioner" sideOffset={8}>
+          <Tooltip.Popup className="tooltip-popup">
+            {isLaunching
+              ? `Starting ${agent.name}`
+              : agent.command
+                ? agent.name
+                : `Configure ${agent.name}`}
           </Tooltip.Popup>
         </Tooltip.Positioner>
       </Tooltip.Portal>
@@ -435,7 +481,10 @@ function moveAgentId(agentIds: readonly string[], initialIndex: number, index: n
   return nextAgentIds;
 }
 
-function mergeAgentIds(draftAgentIds: readonly string[], syncedAgentIds: readonly string[]): string[] {
+function mergeAgentIds(
+  draftAgentIds: readonly string[],
+  syncedAgentIds: readonly string[],
+): string[] {
   const syncedAgentIdSet = new Set(syncedAgentIds);
   const mergedAgentIds = draftAgentIds.filter((agentId) => syncedAgentIdSet.has(agentId));
 
@@ -450,7 +499,7 @@ function mergeAgentIds(draftAgentIds: readonly string[], syncedAgentIds: readonl
 
 function reconcileDraftAgentIds(
   draftAgentIds: readonly string[] | undefined,
-  agents: readonly SidebarAgentButton[]
+  agents: readonly SidebarAgentButton[],
 ): string[] | undefined {
   if (!draftAgentIds) {
     return undefined;
@@ -470,7 +519,7 @@ function haveSameAgentOrder(left: readonly string[], right: readonly string[]): 
 }
 
 function hasData(candidate: unknown): candidate is { data?: unknown } {
-  return isObjectRecord(candidate) && 'data' in candidate;
+  return isObjectRecord(candidate) && "data" in candidate;
 }
 
 function isNode(value: EventTarget | null): value is Node {
@@ -478,5 +527,5 @@ function isNode(value: EventTarget | null): value is Node {
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 }

@@ -1,5 +1,5 @@
 import { IconChevronDown } from "@tabler/icons-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_SIDEBAR_COMMAND_ICON_COLOR,
   getSidebarCommandIconLabel,
@@ -23,14 +23,36 @@ export function CommandIconPicker({
 }: CommandIconPickerProps) {
   const [colorText, setColorText] = useState(iconColor);
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const labelId = useId();
   const listboxId = useId();
   const pickerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const isColorDisabled = icon === undefined;
+
+  const filteredOptions = useMemo(() => {
+    const trimmedQuery = query.trim().toLowerCase();
+    if (trimmedQuery.length === 0) {
+      return SIDEBAR_COMMAND_ICON_OPTIONS;
+    }
+
+    return SIDEBAR_COMMAND_ICON_OPTIONS.filter((option) =>
+      option.label.toLowerCase().includes(trimmedQuery),
+    );
+  }, [query]);
 
   useEffect(() => {
     setColorText(iconColor);
   }, [iconColor]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+      return;
+    }
+
+    searchInputRef.current?.focus();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -118,6 +140,20 @@ export function CommandIconPicker({
               id={listboxId}
               role="listbox"
             >
+              <input
+                aria-label="Filter icons"
+                className="group-title-input command-config-input command-icon-picker-search"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") {
+                    event.stopPropagation();
+                  }
+                }}
+                placeholder="Search icons"
+                ref={searchInputRef}
+                spellCheck={false}
+                value={query}
+              />
               <button
                 aria-selected={icon === undefined}
                 className="command-icon-picker-option"
@@ -131,7 +167,7 @@ export function CommandIconPicker({
               >
                 <span className="command-icon-picker-option-copy">No icon</span>
               </button>
-              {SIDEBAR_COMMAND_ICON_OPTIONS.map((option) => (
+              {filteredOptions.map((option) => (
                 <button
                   aria-selected={icon === option.icon}
                   className="command-icon-picker-option"
@@ -159,6 +195,9 @@ export function CommandIconPicker({
                   <span className="command-icon-picker-option-copy">{option.label}</span>
                 </button>
               ))}
+              {filteredOptions.length === 0 ? (
+                <div className="command-icon-picker-empty-state">No matching icons</div>
+              ) : null}
             </div>
           ) : null}
         </div>

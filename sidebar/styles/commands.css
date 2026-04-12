@@ -258,6 +258,16 @@
   outline-offset: -3px;
   padding: 0 calc(12px * var(--sidebar-density-scale));
   box-sizing: border-box;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.agent-button *,
+.command-button * {
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .agent-button:hover,

@@ -1,7 +1,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
 import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
-import { IconBug, IconPencil, IconPlayerPlay, IconTrash, IconWorld } from "@tabler/icons-react";
+import {
+  IconBug,
+  IconPencil,
+  IconPlayerPlayFilled,
+  IconPlus,
+  IconTrash,
+  IconWorldFilled,
+} from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -30,6 +37,8 @@ const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 188;
 const CONTEXT_MENU_VERTICAL_PADDING_PX = 24;
 const CONTEXT_MENU_ITEM_HEIGHT_PX = 43;
+const CONTEXT_MENU_DIVIDER_HEIGHT_PX = 13;
+const CONTEXT_MENU_DIVIDER_COUNT = 2;
 
 type CommandsPanelProps = {
   createActionType?: SidebarActionType;
@@ -79,8 +88,23 @@ function clampContextMenuPosition(
 function getContextMenuHeight(command: SidebarCommandButton): number {
   return (
     CONTEXT_MENU_VERTICAL_PADDING_PX +
-    CONTEXT_MENU_ITEM_HEIGHT_PX * (command.actionType === "terminal" ? 3 : 2)
+    CONTEXT_MENU_ITEM_HEIGHT_PX * (command.actionType === "terminal" ? 5 : 4) +
+    CONTEXT_MENU_DIVIDER_HEIGHT_PX * CONTEXT_MENU_DIVIDER_COUNT
   );
+}
+
+function createCommandDraft(actionType: SidebarActionType): CommandConfigDraft {
+  return {
+    actionType,
+    closeTerminalOnExit: false,
+    command: actionType === "browser" ? undefined : "",
+    commandId: undefined,
+    icon: undefined,
+    iconColor: undefined,
+    name: "",
+    playCompletionSound: actionType === "browser" ? false : true,
+    url: actionType === "browser" ? undefined : "",
+  };
 }
 
 function createCommandDragData(commandId: string): CommandDragData {
@@ -191,6 +215,10 @@ export function CommandsPanel({
     });
   };
 
+  const openCreateCommandEditor = (actionType: SidebarActionType) => {
+    setEditingCommand(createCommandDraft(actionType));
+  };
+
   const runOrConfigureCommand = (
     command: SidebarCommandButton,
     runMode: SidebarCommandRunMode = "default",
@@ -220,17 +248,7 @@ export function CommandsPanel({
     }
 
     setContextMenu(undefined);
-    setEditingCommand({
-      actionType: createActionType ?? "terminal",
-      closeTerminalOnExit: false,
-      command: createActionType === "browser" ? undefined : "",
-      commandId: undefined,
-      icon: undefined,
-      iconColor: undefined,
-      name: "",
-      playCompletionSound: createActionType === "browser" ? false : true,
-      url: createActionType === "browser" ? undefined : "",
-    });
+    setEditingCommand(createCommandDraft(createActionType ?? "terminal"));
   }, [createActionType, createRequestId]);
 
   const orderedCommands = useMemo(() => {
@@ -362,6 +380,32 @@ export function CommandsPanel({
                 <IconPencil aria-hidden="true" className="session-context-menu-icon" size={14} />
                 Configure
               </button>
+              <div className="session-context-menu-divider" role="separator" />
+              <button
+                className="session-context-menu-item"
+                onClick={() => {
+                  setContextMenu(undefined);
+                  openCreateCommandEditor("terminal");
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Add Action
+              </button>
+              <button
+                className="session-context-menu-item"
+                onClick={() => {
+                  setContextMenu(undefined);
+                  openCreateCommandEditor("browser");
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
+                Add Webpage
+              </button>
+              <div className="session-context-menu-divider" role="separator" />
               {contextMenu.command.actionType === "terminal" ? (
                 <button
                   className="session-context-menu-item"
@@ -467,6 +511,7 @@ function SortableCommandButton({
             data-empty-space-blocking="true"
             data-has-icon={String(command.icon !== undefined)}
             data-icon-only={String(isIconOnly)}
+            draggable={false}
             onClick={onRun}
             onContextMenu={onContextMenu}
             ref={sortable.ref}
@@ -508,10 +553,10 @@ function ActionButtonIcon({ command }: ActionButtonIconProps) {
   const className = "command-button-kind-icon";
 
   if (command.actionType === "browser") {
-    return <IconWorld aria-hidden="true" className={className} size={15} stroke={1.8} />;
+    return <IconWorldFilled aria-hidden="true" className={className} size={15} stroke={1.8} />;
   }
 
-  return <IconPlayerPlay aria-hidden="true" className={className} size={15} stroke={1.8} />;
+  return <IconPlayerPlayFilled aria-hidden="true" className={className} size={15} stroke={1.8} />;
 }
 
 function moveCommandId(
