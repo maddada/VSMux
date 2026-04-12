@@ -6,16 +6,14 @@ import {
   type T3ThreadActivityState,
 } from "./t3-activity-state";
 import {
-  createT3RpcAckMessage,
-  createT3RpcPongMessage,
   createT3RpcRequestMessage,
   createT3RpcRequestId,
-  formatT3RpcDefect,
   formatT3RpcFailure,
   parseT3RpcIncomingMessage,
 } from "./t3-rpc-protocol";
 
 const DEFAULT_T3_WEBSOCKET_URL = "ws://127.0.0.1:3774/ws";
+const DOMAIN_EVENT_CHANNEL = "orchestration.domainEvent";
 const REQUEST_TIMEOUT_MS = 15_000;
 const RECONNECT_DELAY_MS = 1_500;
 const REFRESH_DEBOUNCE_MS = 100;
@@ -42,8 +40,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
   private connectPromise: Promise<WebSocket> | undefined;
   private refreshPromise: Promise<void> | undefined;
   private pendingSnapshotRequest: PendingSnapshotRequest | undefined;
-  private domainEventsRequestId: string | undefined;
-  private subscribedToDomainEvents = false;
 
   public readonly onDidChange = this.changeEmitter.event;
 
@@ -56,8 +52,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
     this.rejectPendingSnapshotRequest(new Error("T3 activity monitor disposed."));
     this.socket?.close();
     this.socket = undefined;
-    this.domainEventsRequestId = undefined;
-    this.subscribedToDomainEvents = false;
     this.threadStateByThreadId.clear();
     this.acknowledgedCompletionMarkerByThreadId.clear();
     this.changeEmitter.dispose();
@@ -75,8 +69,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
       this.rejectPendingSnapshotRequest(new Error("T3 activity monitor disabled."));
       this.socket?.close();
       this.socket = undefined;
-      this.domainEventsRequestId = undefined;
-      this.subscribedToDomainEvents = false;
       const changed = this.threadStateByThreadId.size > 0;
       this.threadStateByThreadId.clear();
       this.acknowledgedCompletionMarkerByThreadId.clear();
@@ -176,7 +168,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
           this.socket = socket;
           socket.addEventListener("message", handleMessage);
           socket.addEventListener("close", handleClose);
-          this.subscribeToDomainEvents();
           resolve(socket);
         };
 
@@ -188,8 +179,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
           if (this.socket === socket) {
             this.socket = undefined;
           }
-          this.domainEventsRequestId = undefined;
-          this.subscribedToDomainEvents = false;
           this.rejectPendingSnapshotRequest(new Error("T3 activity websocket closed."));
           if (this.enabled) {
             this.scheduleReconnect();
@@ -216,42 +205,14 @@ export class T3ActivityMonitor implements vscode.Disposable {
       return;
     }
 
-    if (message._tag === "Ping") {
-      this.socket?.send(JSON.stringify(createT3RpcPongMessage()));
-      return;
-    }
-
-    if (message._tag === "Defect") {
-      this.rejectPendingSnapshotRequest(
-        new Error(
-          formatT3RpcDefect(
-            message.defect,
-            "The T3 activity websocket reported an unexpected defect.",
-          ),
-        ),
-      );
-      this.scheduleReconnect();
-      return;
-    }
-
-    if (message._tag === "Chunk") {
-      if (message.requestId === this.domainEventsRequestId) {
-        this.socket?.send(JSON.stringify(createT3RpcAckMessage(message.requestId)));
+    if (message._tag === "Push") {
+      if (message.channel === DOMAIN_EVENT_CHANNEL) {
         this.scheduleSnapshotRefresh();
       }
       return;
     }
 
     if (message._tag !== "Exit") {
-      return;
-    }
-
-    if (message.requestId === this.domainEventsRequestId) {
-      this.domainEventsRequestId = undefined;
-      this.subscribedToDomainEvents = false;
-      if (message.exit._tag === "Failure") {
-        this.scheduleReconnect();
-      }
       return;
     }
 
@@ -387,28 +348,6 @@ export class T3ActivityMonitor implements vscode.Disposable {
 
   private async getWebSocketUrl(): Promise<string> {
     return (await this.options.getWebSocketUrl?.()) ?? DEFAULT_T3_WEBSOCKET_URL;
-  }
-
-  private subscribeToDomainEvents(): void {
-    if (
-      !this.socket ||
-      this.socket.readyState !== WebSocket.OPEN ||
-      this.subscribedToDomainEvents
-    ) {
-      return;
-    }
-
-    const requestId = createT3RpcRequestId();
-    this.domainEventsRequestId = requestId;
-    this.subscribedToDomainEvents = true;
-    try {
-      this.socket.send(
-        JSON.stringify(createT3RpcRequestMessage(requestId, "subscribeOrchestrationDomainEvents")),
-      );
-    } catch {
-      this.domainEventsRequestId = undefined;
-      this.subscribedToDomainEvents = false;
-    }
   }
 }
 

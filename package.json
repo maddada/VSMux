@@ -18,7 +18,7 @@
     "media/**",
     "chat-history/media/**",
     "chat-history/dist/**",
-    "forks/t3code-embed/dist/**",
+    "forks/dpcode-embed/apps/web/dist/**",
     "out/workspace/**",
     "out/**"
   ],

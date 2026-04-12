@@ -128,7 +128,14 @@ export class WorkspacePanelManager implements vscode.Disposable {
         retainContextWhenHidden: false,
         localResourceRoots: [
           vscode.Uri.joinPath(this.options.context.extensionUri, "out", "workspace"),
-          vscode.Uri.joinPath(this.options.context.extensionUri, "forks", "t3code-embed", "dist"),
+          vscode.Uri.joinPath(
+            this.options.context.extensionUri,
+            "forks",
+            "dpcode-embed",
+            "apps",
+            "web",
+            "dist",
+          ),
         ],
       },
     );

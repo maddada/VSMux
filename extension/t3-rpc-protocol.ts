@@ -1,15 +1,15 @@
 export type T3RpcRequestMessage = {
-  _tag: "Request";
-  headers: Array<[string, string]>;
   id: string;
-  payload: Record<string, unknown>;
-  tag: string;
+  body: {
+    _tag: string;
+    [key: string]: unknown;
+  };
 };
 
-export type T3RpcChunkMessage = {
-  _tag: "Chunk";
-  requestId: string;
-  values: unknown[];
+export type T3RpcPushMessage = {
+  _tag: "Push";
+  channel: string;
+  data: unknown;
 };
 
 export type T3RpcExitMessage = {
@@ -24,11 +24,6 @@ export type T3RpcExitMessage = {
         cause: unknown;
       };
   requestId: string;
-};
-
-export type T3RpcDefectMessage = {
-  _tag: "Defect";
-  defect: unknown;
 };
 
 export type T3RpcAckMessage = {
@@ -50,8 +45,7 @@ export type T3RpcPongMessage = {
 };
 
 export type T3RpcIncomingMessage =
-  | T3RpcChunkMessage
-  | T3RpcDefectMessage
+  | T3RpcPushMessage
   | T3RpcExitMessage
   | T3RpcPingMessage
   | T3RpcPongMessage;
@@ -62,11 +56,11 @@ export function createT3RpcRequestMessage(
   payload: Record<string, unknown> = {},
 ): T3RpcRequestMessage {
   return {
-    _tag: "Request",
-    headers: [],
     id,
-    payload,
-    tag,
+    body: {
+      _tag: tag,
+      ...payload,
+    },
   };
 }
 
@@ -105,7 +99,40 @@ export function parseT3RpcIncomingMessage(
   }
 
   try {
-    return JSON.parse(raw) as T3RpcIncomingMessage;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    if (parsed && typeof parsed === "object" && parsed.type === "push") {
+      return {
+        _tag: "Push",
+        channel: typeof parsed.channel === "string" ? parsed.channel : "",
+        data: parsed.data,
+      };
+    }
+
+    if (parsed && typeof parsed === "object" && typeof parsed.id === "string") {
+      const responseError = parsed.error;
+      if (responseError && typeof responseError === "object") {
+        return {
+          _tag: "Exit",
+          exit: {
+            _tag: "Failure",
+            cause: responseError,
+          },
+          requestId: parsed.id,
+        };
+      }
+
+      return {
+        _tag: "Exit",
+        exit: {
+          _tag: "Success",
+          value: parsed.result,
+        },
+        requestId: parsed.id,
+      };
+    }
+
+    return undefined;
   } catch {
     return undefined;
   }

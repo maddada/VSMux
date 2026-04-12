@@ -39,7 +39,7 @@ export class WorkspaceAssetServer implements vscode.Disposable {
 
   public constructor(context: vscode.ExtensionContext) {
     this.roots = {
-      "t3-embed": path.join(context.extensionPath, "forks", "t3code-embed", "dist"),
+      "t3-embed": path.join(context.extensionPath, "forks", "dpcode-embed", "apps", "web", "dist"),
       workspace: path.join(context.extensionPath, "out", "workspace"),
     };
     this.server.on("upgrade", (request, socket, head) => {

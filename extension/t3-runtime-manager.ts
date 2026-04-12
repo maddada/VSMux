@@ -6,10 +6,8 @@ import { spawnSync } from "node:child_process";
 import * as vscode from "vscode";
 import type { T3SessionMetadata } from "../shared/session-grid-contract";
 import {
-  createT3RpcPongMessage,
   createT3RpcRequestMessage,
   createT3RpcRequestId,
-  formatT3RpcDefect,
   formatT3RpcFailure,
   parseT3RpcIncomingMessage,
 } from "./t3-rpc-protocol";
@@ -21,12 +19,11 @@ const DEFAULT_T3_COMMAND = LEGACY_T3_COMMAND;
 const DEFAULT_MANAGED_T3_REPO_ROOT = "/Users/madda/dev/_active/agent-tiler";
 const MANAGED_T3_ENTRYPOINT_SEGMENTS = [
   "forks",
-  "t3code-embed",
-  "upstream",
+  "dpcode-embed",
   "apps",
   "server",
   "src",
-  "bin.ts",
+  "index.ts",
 ] as const;
 const T3_HOST = "127.0.0.1";
 const T3_PORT = 3774;
@@ -37,7 +34,7 @@ const SOCKET_CONNECT_RETRY_DELAY_MS = 250;
 const LEASE_HEARTBEAT_MS = 30_000;
 const LEASE_GRACE_MS = 180_000;
 const RUNTIME_STORAGE_DIR_NAME = "t3-runtime";
-const MANAGED_T3_HOME_DIR_NAME = "managed-home";
+const MANAGED_T3_HOME_DIR_NAME = "managed-home-dpcode-0.0.17";
 const LEASES_DIR_NAME = "leases";
 const SUPERVISOR_STATE_FILE = "supervisor.json";
 const SUPERVISOR_LAUNCH_LOCK_FILE = "supervisor-launch.lock";
@@ -89,7 +86,6 @@ type PendingRequest = {
 
 type T3RuntimeAuthState = {
   ownerBearerToken?: string;
-  ownerBootstrapToken?: string;
 };
 
 export class T3RuntimeManager implements vscode.Disposable {
@@ -364,7 +360,7 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private async dispatchCommand(command: Record<string, unknown>): Promise<unknown> {
-    return this.request("orchestration.dispatchCommand", command);
+    return this.request("orchestration.dispatchCommand", { command });
   }
 
   private async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
@@ -446,26 +442,6 @@ export class T3RuntimeManager implements vscode.Disposable {
       return;
     }
 
-    if (message._tag === "Ping") {
-      this.socket?.send(JSON.stringify(createT3RpcPongMessage()));
-      return;
-    }
-
-    if (message._tag === "Defect") {
-      const error = new Error(
-        formatT3RpcDefect(
-          message.defect,
-          "The T3 runtime reported an unexpected websocket defect.",
-        ),
-      );
-      for (const pending of this.pendingRequests.values()) {
-        clearTimeout(pending.timeout);
-        pending.reject(error);
-      }
-      this.pendingRequests.clear();
-      return;
-    }
-
     if (message._tag !== "Exit") {
       return;
     }
@@ -540,7 +516,7 @@ export class T3RuntimeManager implements vscode.Disposable {
           env: {
             ...process.env,
             T3CODE_HOME: this.getManagedT3HomePath(),
-            T3CODE_DESKTOP_BOOTSTRAP_TOKEN: String(bootstrapEnvelope.desktopBootstrapToken),
+            T3CODE_AUTH_TOKEN: String(bootstrapEnvelope.authToken),
           },
           stdio: "ignore",
         },
@@ -603,7 +579,7 @@ export class T3RuntimeManager implements vscode.Disposable {
         [
           "The updated T3 runtime source is missing from the main repo checkout.",
           `Expected: ${entrypoint}`,
-          "Sync forks/t3code-embed/upstream in /Users/madda/dev/_active/agent-tiler and reinstall the main-branch VSIX.",
+          "Sync forks/dpcode-embed in /Users/madda/dev/_active/agent-tiler and reinstall the main-branch VSIX.",
         ].join(" "),
       );
     });
@@ -612,13 +588,13 @@ export class T3RuntimeManager implements vscode.Disposable {
   private async createManagedBootstrapEnvelope(): Promise<
     Record<string, string | boolean | number>
   > {
-    const ownerBootstrapToken = randomUUID();
+    const authToken = randomUUID();
     const authState: T3RuntimeAuthState = {
-      ownerBootstrapToken,
+      ownerBearerToken: authToken,
     };
     await this.writeAuthState(authState);
     return {
-      desktopBootstrapToken: ownerBootstrapToken,
+      authToken,
       host: T3_HOST,
       mode: "desktop",
       noBrowser: true,
@@ -631,25 +607,17 @@ export class T3RuntimeManager implements vscode.Disposable {
     Required<Pick<T3RuntimeAuthState, "ownerBearerToken">>
   > {
     const current = await this.readAuthState();
-    if (current?.ownerBearerToken && (await this.isBearerSessionValid(current.ownerBearerToken))) {
+    if (!current?.ownerBearerToken) {
+      throw new Error("Managed T3 auth state is missing.");
+    }
+
+    if (await this.isBearerSessionValid(current.ownerBearerToken)) {
       return {
         ownerBearerToken: current.ownerBearerToken,
       };
     }
 
-    const bootstrapToken = current?.ownerBootstrapToken;
-    if (!bootstrapToken) {
-      throw new Error("Missing managed T3 bootstrap token.");
-    }
-
-    const ownerBearerToken = await this.bootstrapOwnerBearerSession(bootstrapToken);
-    const nextState: T3RuntimeAuthState = {
-      ownerBearerToken,
-    };
-    await this.writeAuthState(nextState);
-    return {
-      ownerBearerToken,
-    };
+    throw new Error("Managed T3 auth state is stale.");
   }
 
   private async readAuthState(): Promise<T3RuntimeAuthState | undefined> {
@@ -659,8 +627,7 @@ export class T3RuntimeManager implements vscode.Disposable {
       if (
         typeof parsed !== "object" ||
         parsed === null ||
-        (parsed.ownerBearerToken !== undefined && typeof parsed.ownerBearerToken !== "string") ||
-        (parsed.ownerBootstrapToken !== undefined && typeof parsed.ownerBootstrapToken !== "string")
+        (parsed.ownerBearerToken !== undefined && typeof parsed.ownerBearerToken !== "string")
       ) {
         return undefined;
       }
@@ -674,83 +641,21 @@ export class T3RuntimeManager implements vscode.Disposable {
     await writeFile(this.getAuthStatePath(), JSON.stringify(state, null, 2), "utf8");
   }
 
-  private async bootstrapOwnerBearerSession(bootstrapToken: string): Promise<string> {
-    const response = await fetch(`${getT3Origin()}/api/auth/bootstrap/bearer`, {
-      body: JSON.stringify({
-        credential: bootstrapToken,
-      }),
-      headers: {
-        "content-type": "application/json",
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(2_500),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to bootstrap managed T3 bearer session (${response.status}).`);
-    }
-    const payload = (await response.json()) as {
-      sessionToken?: string;
-    };
-    if (!payload.sessionToken || payload.sessionToken.trim().length === 0) {
-      throw new Error("Managed T3 bearer bootstrap did not return a session token.");
-    }
-    return payload.sessionToken;
-  }
-
   private async issueBrowserBootstrapToken(ownerBearerToken: string): Promise<string> {
-    const response = await fetch(`${getT3Origin()}/api/auth/pairing-token`, {
-      body: JSON.stringify({
-        label: "VSmux embed",
-      }),
-      headers: {
-        authorization: `Bearer ${ownerBearerToken}`,
-        "content-type": "application/json",
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(2_500),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to issue T3 browser bootstrap token (${response.status}).`);
-    }
-    const payload = (await response.json()) as {
-      credential?: string;
-    };
-    if (!payload.credential || payload.credential.trim().length === 0) {
-      throw new Error("Managed T3 pairing token response did not include a credential.");
-    }
-    return payload.credential;
+    return ownerBearerToken;
   }
 
   private async issueWebSocketToken(ownerBearerToken: string): Promise<string> {
-    const response = await fetch(`${getT3Origin()}/api/auth/ws-token`, {
-      headers: {
-        authorization: `Bearer ${ownerBearerToken}`,
-      },
-      method: "POST",
-      signal: AbortSignal.timeout(2_500),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to issue T3 websocket token (${response.status}).`);
-    }
-    const payload = (await response.json()) as {
-      token?: string;
-    };
-    if (!payload.token || payload.token.trim().length === 0) {
-      throw new Error("Managed T3 websocket token response did not include a token.");
-    }
-    return payload.token;
+    return ownerBearerToken;
   }
 
   private async isBearerSessionValid(ownerBearerToken: string): Promise<boolean> {
     try {
-      const response = await fetch(`${getT3Origin()}/api/auth/session`, {
-        headers: {
-          authorization: `Bearer ${ownerBearerToken}`,
-        },
-        method: "GET",
-        signal: AbortSignal.timeout(2_500),
-      });
-      return response.ok;
+      const url = new URL(getT3WebSocketUrl());
+      url.searchParams.set("token", ownerBearerToken);
+      const socket = await openWebSocket(url.toString(), SOCKET_CONNECT_TIMEOUT_MS);
+      socket.close();
+      return true;
     } catch {
       return false;
     }
@@ -760,7 +665,7 @@ export class T3RuntimeManager implements vscode.Disposable {
     const authState = await this.ensureAuthStateReady();
     const wsToken = await this.issueWebSocketToken(authState.ownerBearerToken);
     const url = new URL(getT3WebSocketUrl());
-    url.searchParams.set("wsToken", wsToken);
+    url.searchParams.set("token", wsToken);
     return url.toString();
   }
 
@@ -896,7 +801,7 @@ function getT3Origin(): string {
 function createManagedStartupCommand(): string {
   const bunPath = shellQuote(getBunRuntimePath());
   const entrypoint = shellQuote(getManagedT3EntrypointPath());
-  return `${bunPath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser --bootstrap-fd 3`;
+  return `${bunPath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser`;
 }
 
 function getNodeRuntimePath(): string {

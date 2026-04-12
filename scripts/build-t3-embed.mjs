@@ -3,25 +3,15 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const repoRoot = process.cwd();
-const embedRoot = resolve(repoRoot, "forks", "t3code-embed");
-const vendorRoot = resolve(embedRoot, "upstream");
-const overlayRoot = resolve(embedRoot, "overlay");
-const distRoot = resolve(embedRoot, "dist");
-const vendorWebRoot = resolve(vendorRoot, "apps", "web");
-const vendorWebDistRoot = resolve(vendorWebRoot, "dist");
+const embedRoot = resolve(repoRoot, "forks", "dpcode-embed");
+const vendorWebRoot = resolve(embedRoot, "apps", "web");
+const distRoot = resolve(vendorWebRoot, "dist");
 
-if (!existsSync(vendorRoot)) {
-  throw new Error("Missing forks/t3code-embed/upstream. Refresh the local T3 vendor clone first.");
+if (!existsSync(vendorWebRoot)) {
+  throw new Error("Missing forks/dpcode-embed/apps/web. Sync the local DP Code vendor first.");
 }
 
-if (!existsSync(overlayRoot)) {
-  throw new Error(
-    "Missing forks/t3code-embed/overlay. Copy your local T3 patch overlay there first.",
-  );
-}
-
-copyTree(overlayRoot, vendorRoot);
-run("bun", ["install"], { cwd: vendorRoot });
+run("bun", ["install"], { cwd: embedRoot });
 run("bun", ["run", "build"], {
   cwd: vendorWebRoot,
   env: {
@@ -29,10 +19,6 @@ run("bun", ["run", "build"], {
     T3CODE_WEB_SOURCEMAP: "false",
   },
 });
-
-rmSync(distRoot, { force: true, recursive: true });
-mkdirSync(distRoot, { recursive: true });
-copyTree(vendorWebDistRoot, distRoot);
 pruneEmbedArtifacts(distRoot);
 
 function copyTree(source, destination) {

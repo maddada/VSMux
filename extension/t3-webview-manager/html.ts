@@ -6,7 +6,7 @@ import type { T3RuntimeManager } from "../t3-runtime-manager";
 import type { WorkspaceAssetServer } from "../workspace-asset-server";
 
 export function getEmbeddedT3Root(context: vscode.ExtensionContext): vscode.Uri {
-  return vscode.Uri.joinPath(context.extensionUri, "forks", "t3code-embed", "dist");
+  return vscode.Uri.joinPath(context.extensionUri, "forks", "dpcode-embed", "apps", "web", "dist");
 }
 
 export async function createT3IframeSource(
@@ -47,7 +47,10 @@ export async function createT3IframeSource(
     styleHref: resolveEmbeddedAssetUrl(assetRootUri, stylePathMatch?.[1]),
     threadId: sessionRecord.t3.threadId,
     workspaceRoot: sessionRecord.t3.workspaceRoot,
-    wsUrl: toWebSocketOrigin(assetServerOrigin),
+    wsUrl: appendTokenToWebSocketUrl(
+      toWebSocketOrigin(assetServerOrigin),
+      embedBootstrap.ownerBearerToken,
+    ),
   };
 
   return createT3IframeHtml(payload);
@@ -175,4 +178,14 @@ function escapeHtmlText(value: string): string {
 
 function toWebSocketOrigin(serverOrigin: string): string {
   return `${serverOrigin.replace(/^http/i, "ws").replace(/\/$/, "")}/ws`;
+}
+
+function appendTokenToWebSocketUrl(wsUrl: string, token: string): string {
+  if (!token.trim()) {
+    return wsUrl;
+  }
+
+  const nextUrl = new URL(wsUrl);
+  nextUrl.searchParams.set("token", token);
+  return nextUrl.toString();
 }

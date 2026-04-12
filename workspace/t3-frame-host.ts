@@ -32,6 +32,28 @@ declare global {
       wsUrl: string;
     };
     desktopBridge?: {
+      browser: {
+        close: (_input: unknown) => Promise<null>;
+        closeTab: (_input: unknown) => Promise<null>;
+        getState: (input: { threadId?: string } | undefined) => Promise<{
+          activeTabId: null;
+          lastError: null;
+          open: false;
+          tabs: [];
+          threadId: string;
+        }>;
+        goBack: (_input: unknown) => Promise<null>;
+        goForward: (_input: unknown) => Promise<null>;
+        hide: (_input: unknown) => Promise<void>;
+        navigate: (_input: unknown) => Promise<null>;
+        newTab: (_input: unknown) => Promise<null>;
+        onState: (_listener: (state: unknown) => void) => () => void;
+        open: (_input: unknown) => Promise<null>;
+        openDevTools: (_input: unknown) => Promise<void>;
+        reload: (_input: unknown) => Promise<null>;
+        selectTab: (_input: unknown) => Promise<null>;
+        setPanelBounds: (_input: unknown) => Promise<null>;
+      };
       confirm: (message: string) => Promise<boolean>;
       getClientSettings: () => Promise<null>;
       getLocalEnvironmentBootstrap: () => {
@@ -40,6 +62,7 @@ declare global {
         label: string;
         wsBaseUrl: string;
       };
+      getWsUrl: () => string;
       getSavedEnvironmentRegistry: () => Promise<readonly []>;
       getSavedEnvironmentSecret: () => Promise<null>;
       getServerExposureState: () => Promise<{
@@ -47,6 +70,10 @@ declare global {
         endpointUrl: null;
         mode: "local-only";
       }>;
+      notifications: {
+        isSupported: () => Promise<boolean>;
+        show: (_input: unknown) => Promise<boolean>;
+      };
       getUpdateState: () => Promise<{
         canRetry: false;
         checkedAt: null;
@@ -334,6 +361,28 @@ function installDesktopBridge() {
   };
 
   window.desktopBridge = {
+    browser: {
+      close: async () => null,
+      closeTab: async () => null,
+      getState: async (input) => ({
+        activeTabId: null,
+        lastError: null,
+        open: false,
+        tabs: [],
+        threadId: input?.threadId ?? bootstrap.threadId,
+      }),
+      goBack: async () => null,
+      goForward: async () => null,
+      hide: async () => undefined,
+      navigate: async () => null,
+      newTab: async () => null,
+      onState: () => () => undefined,
+      open: async () => null,
+      openDevTools: async () => undefined,
+      reload: async () => null,
+      selectTab: async () => null,
+      setPanelBounds: async () => null,
+    },
     confirm: async (message: string) => window.confirm(message),
     getClientSettings: async () => null,
     getLocalEnvironmentBootstrap: () => ({
@@ -342,9 +391,14 @@ function installDesktopBridge() {
       label: bootstrap.sessionRecordTitle || "T3 Code",
       wsBaseUrl: bootstrap.wsUrl,
     }),
+    getWsUrl: () => bootstrap.wsUrl,
     getSavedEnvironmentRegistry: async () => [],
     getSavedEnvironmentSecret: async () => null,
     getServerExposureState: async () => serverExposureState,
+    notifications: {
+      isSupported: async () => false,
+      show: async () => false,
+    },
     getUpdateState: async () => updateState,
     installUpdate: async () => ({ accepted: false, completed: false, state: updateState }),
     checkForUpdate: async () => ({ checked: false, state: updateState }),
