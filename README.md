@@ -6,11 +6,10 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 3.4.0
+## Latest Release: 3.4.1
 
-- Inline session search now supports keyboard selection for faster result picking.
-- Session rename and lifecycle handling are more reliable across workspace state changes.
-- Bundled dpcode server and terminal assets make the embedded runtime path more dependable.
+- Workspace terminals use a lighter default text weight and slightly taller line height for a cleaner reading experience.
+- Group summaries now reflect actual session activity more accurately.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

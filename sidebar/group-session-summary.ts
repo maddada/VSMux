@@ -12,18 +12,6 @@ export function getGroupSessionSummary(
   let doneCount = 0;
 
   for (const session of sessions) {
-    const lifecycleState = session.lifecycleState;
-
-    if (lifecycleState === "running") {
-      activeCount += 1;
-      continue;
-    }
-
-    if (lifecycleState === "done") {
-      doneCount += 1;
-      continue;
-    }
-
     if (session.activity === "working") {
       activeCount += 1;
       continue;

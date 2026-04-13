@@ -61,7 +61,7 @@ export const TERMINAL_SCROLL_TO_BOTTOM_WHEN_TYPING_SETTING = "terminalScrollToBo
 export const MIN_TERMINAL_FONT_SIZE = 8;
 export const MAX_TERMINAL_FONT_SIZE = 32;
 export const DEFAULT_TERMINAL_FONT_SIZE = 13;
-export const DEFAULT_TERMINAL_FONT_WEIGHT = 400;
+export const DEFAULT_TERMINAL_FONT_WEIGHT = 300;
 export const MIN_XTERM_HEADLESS_SCROLLBACK = 100;
 export const MAX_XTERM_HEADLESS_SCROLLBACK = 100_000;
 export const DEFAULT_XTERM_HEADLESS_SCROLLBACK = 50_000;
@@ -418,8 +418,8 @@ export function getTerminalLineHeight(): number {
   const value =
     vscode.workspace
       .getConfiguration(SETTINGS_SECTION)
-      .get<number>(TERMINAL_LINE_HEIGHT_SETTING, 1) ?? 1;
-  return clampNumber(value, 0.8, 2, 1);
+      .get<number>(TERMINAL_LINE_HEIGHT_SETTING, 1.1) ?? 1.1;
+  return clampNumber(value, 0.8, 2, 1.1);
 }
 
 export function getTerminalLetterSpacing(): number {

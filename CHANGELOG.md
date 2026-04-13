@@ -2,6 +2,11 @@
 
 All notable user-facing changes are documented in this file.
 
+## 3.4.1 - 2026-04-14
+
+- Workspace terminals now default to a lighter text weight and a slightly roomier line height, so the terminal view should feel easier to read out of the box.
+- Collapsed group summaries are more accurate now because they follow real session activity state instead of stale lifecycle-only state.
+
 ## 3.4.0 - 2026-04-13
 
 - Inline session search is easier to use now, with keyboard selection so you can move through search results without leaving the keyboard.

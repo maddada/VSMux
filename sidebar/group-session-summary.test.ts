@@ -3,12 +3,12 @@ import type { SidebarSessionItem } from "../shared/session-grid-contract";
 import { getGroupSessionSummary } from "./group-session-summary";
 
 describe("getGroupSessionSummary", () => {
-  test("should count running sessions as active and done sessions as done", () => {
+  test("should count working sessions as active and attention sessions as done", () => {
     expect(
       getGroupSessionSummary([
-        createSession("session-1", { lifecycleState: "running", isRunning: true }),
-        createSession("session-2", { lifecycleState: "running", isRunning: true }),
-        createSession("session-3", { lifecycleState: "done", isRunning: false }),
+        createSession("session-1", { activity: "working", lifecycleState: "running" }),
+        createSession("session-2", { activity: "working", lifecycleState: "running" }),
+        createSession("session-3", { activity: "attention", lifecycleState: "done" }),
       ]),
     ).toEqual({
       activeCount: 2,
@@ -16,12 +16,13 @@ describe("getGroupSessionSummary", () => {
     });
   });
 
-  test("should fall back to activity when lifecycle state is unavailable", () => {
+  test("should ignore lifecycle state when the card activity is idle", () => {
     expect(
       getGroupSessionSummary([
-        createSession("session-1", { activity: "working", lifecycleState: undefined }),
-        createSession("session-2", { activity: "attention", lifecycleState: undefined }),
-        createSession("session-3", { activity: "idle", lifecycleState: undefined }),
+        createSession("session-1", { activity: "idle", lifecycleState: "running" }),
+        createSession("session-2", { activity: "idle", lifecycleState: "done" }),
+        createSession("session-3", { activity: "working", lifecycleState: "done" }),
+        createSession("session-4", { activity: "attention", lifecycleState: "running" }),
       ]),
     ).toEqual({
       activeCount: 1,
@@ -33,21 +34,23 @@ describe("getGroupSessionSummary", () => {
     expect(
       getGroupSessionSummary([
         createSession("session-1", {
+          activity: "idle",
           lifecycleState: "sleeping",
           isRunning: true,
           isSleeping: true,
         }),
         createSession("session-2", {
+          activity: "idle",
           lifecycleState: "sleeping",
           isRunning: false,
           isSleeping: true,
         }),
-        createSession("session-3", { lifecycleState: "done", isRunning: false }),
-        createSession("session-4", { lifecycleState: "error", isRunning: false }),
+        createSession("session-3", { activity: "idle", lifecycleState: "done", isRunning: false }),
+        createSession("session-4", { activity: "idle", lifecycleState: "error", isRunning: false }),
       ]),
     ).toEqual({
       activeCount: 0,
-      doneCount: 1,
+      doneCount: 0,
     });
   });
 });
