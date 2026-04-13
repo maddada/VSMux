@@ -13,7 +13,15 @@ export type TextInputEditResult = {
 export function isTextEditingKey(
   event: Pick<KeyboardEvent, "altKey" | "ctrlKey" | "isComposing" | "key" | "metaKey">,
 ): boolean {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) {
+  if (event.altKey || event.isComposing) {
+    return false;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key === "Backspace") {
+    return true;
+  }
+
+  if (event.ctrlKey || event.metaKey) {
     return false;
   }
 
@@ -39,10 +47,28 @@ export function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 export function applyTextEditingKey(
   state: TextInputEditState,
   key: string,
+  modifiers?: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
 ): TextInputEditResult | undefined {
   const { selectionEnd, selectionStart, value } = normalizeSelection(state);
 
   if (key === "Backspace") {
+    if (selectionStart === selectionEnd && (modifiers?.ctrlKey || modifiers?.metaKey)) {
+      if (selectionStart === 0) {
+        return {
+          selectionEnd,
+          selectionStart,
+          value,
+        };
+      }
+
+      const nextSelectionStart = findPreviousWordBoundary(value, selectionStart);
+      return {
+        selectionEnd: nextSelectionStart,
+        selectionStart: nextSelectionStart,
+        value: `${value.slice(0, nextSelectionStart)}${value.slice(selectionEnd)}`,
+      };
+    }
+
     if (selectionStart === selectionEnd) {
       if (selectionStart === 0) {
         return {
@@ -129,4 +155,18 @@ function normalizeSelection({
 
 function clampSelectionIndex(index: number, valueLength: number): number {
   return Math.min(Math.max(index, 0), valueLength);
+}
+
+function findPreviousWordBoundary(value: string, selectionStart: number): number {
+  let index = selectionStart;
+
+  while (index > 0 && /\s/u.test(value[index - 1] ?? "")) {
+    index -= 1;
+  }
+
+  while (index > 0 && !/\s/u.test(value[index - 1] ?? "")) {
+    index -= 1;
+  }
+
+  return index;
 }

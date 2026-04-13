@@ -155,8 +155,8 @@ export const GroupCollapse: Story = {
       );
 
       await expectNoMessage({ type: "focusGroup" });
-      await expect(within(group).getByText("2 active")).toBeVisible();
-      await expect(within(group).getByText("1 done")).toBeVisible();
+      await expect(within(group).getByLabelText("1 active")).toBeVisible();
+      await expect(within(group).getByLabelText("1 done")).toBeVisible();
       await waitFor(() => {
         expect(group.querySelector('[data-sidebar-session-id="session-1"]')).toBeNull();
       });
@@ -174,8 +174,8 @@ export const GroupCollapse: Story = {
       await waitFor(() => {
         expect(group.querySelector('[data-sidebar-session-id="session-1"]')).not.toBeNull();
       });
-      await expect(within(group).queryByText("2 active")).toBeNull();
-      await expect(within(group).queryByText("1 done")).toBeNull();
+      await expect(within(group).queryByLabelText("1 active")).toBeNull();
+      await expect(within(group).queryByLabelText("1 done")).toBeNull();
     });
   },
 };
@@ -452,6 +452,134 @@ export const TypingAnywhereStartsSearchAndEscapePrefersModals: Story = {
         expect(
           canvas.queryByRole("textbox", { name: "Search current and previous sessions" }),
         ).toBeNull();
+      });
+    });
+  },
+};
+
+export const InlineSearchKeyboardSelection: Story = {
+  args: {
+    fixture: "sort-toggle-demo",
+    highlightedVisibleCount: 2,
+    showCloseButtonOnSessionCards: true,
+    showHotkeysOnSessionCards: true,
+    showLastInteractionTimeOnSessionCards: true,
+    visibleCount: 2,
+  },
+  play: async ({ canvas, canvasElement, step, userEvent }) => {
+    const storyDocument = canvasElement.ownerDocument;
+    const storyRoot = storyDocument.body;
+
+    await waitForReadyMessage();
+
+    await step("filter sessions inline", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Search sessions" }));
+      const searchInput = canvas.getByRole("textbox", {
+        name: "Search current and previous sessions",
+      });
+
+      await userEvent.type(searchInput, "re");
+
+      await expectSessionMembership(storyRoot, "group-1", ["session-2"]);
+      await expectSessionMembership(storyRoot, "group-2", ["session-5"]);
+      await expect(
+        canvas.getByRole("button", { name: "Restore recent retrospective" }),
+      ).toBeVisible();
+    });
+
+    await step("move the highlighted result with arrows and tab", async () => {
+      await userEvent.keyboard("{ArrowDown}");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-2"]')).toHaveAttribute(
+          "data-search-selected",
+          "true",
+        );
+      });
+
+      await userEvent.keyboard("{Tab}");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-5"]')).toHaveAttribute(
+          "data-search-selected",
+          "true",
+        );
+      });
+
+      await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-2"]')).toHaveAttribute(
+          "data-search-selected",
+          "true",
+        );
+      });
+
+      await userEvent.keyboard("{ArrowUp}");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-history-id="history-1"]')).toHaveAttribute(
+          "data-search-selected",
+          "true",
+        );
+      });
+    });
+
+    await step("press enter to activate the highlighted session", async () => {
+      resetSidebarStoryMessages();
+
+      await userEvent.keyboard("{ArrowDown}");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-2"]')).toHaveAttribute(
+          "data-search-selected",
+          "true",
+        );
+      });
+
+      await userEvent.keyboard("{Enter}");
+
+      await expectMessage({ sessionId: "session-2", type: "focusSession" });
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-2"]')).toHaveAttribute(
+          "data-search-selected",
+          "false",
+        );
+      });
+    });
+
+    await step("hide the highlight again when typing changes the search term", async () => {
+      const searchInput = canvas.getByRole("textbox", {
+        name: "Search current and previous sessions",
+      });
+
+      await userEvent.keyboard("c");
+
+      await expect(searchInput).toHaveValue("rec");
+      await waitFor(() => {
+        expect(storyRoot.querySelector('[data-sidebar-session-id="session-2"]')).toHaveAttribute(
+          "data-search-selected",
+          "false",
+        );
+      });
+      await expect(
+        storyRoot.querySelector('[data-sidebar-history-id="history-1"]'),
+      ).toHaveAttribute("data-search-selected", "false");
+    });
+
+    await step("delete from search with backspace when the input is not focused", async () => {
+      await userEvent.keyboard("{Escape}");
+      await userEvent.click(canvas.getByRole("button", { name: "Search sessions" }));
+
+      const searchInput = canvas.getByRole("textbox", {
+        name: "Search current and previous sessions",
+      });
+      await userEvent.type(searchInput, "re");
+      searchInput.blur();
+
+      await fireEvent.keyDown(storyDocument, {
+        bubbles: true,
+        cancelable: true,
+        key: "Backspace",
+      });
+
+      await waitFor(() => {
+        expect(searchInput).toHaveValue("r");
       });
     });
   },

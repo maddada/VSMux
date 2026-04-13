@@ -64,6 +64,7 @@ export function PreviousSessionsModal({ isOpen, onClose, vscode }: PreviousSessi
           value: searchInput.value,
         },
         event.key,
+        event,
       );
       if (!nextSearchState) {
         return;

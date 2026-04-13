@@ -24,6 +24,15 @@ describe("isTextEditingKey", () => {
     expect(
       isTextEditingKey({
         altKey: false,
+        ctrlKey: true,
+        isComposing: false,
+        key: "Backspace",
+        metaKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isTextEditingKey({
+        altKey: false,
         ctrlKey: false,
         isComposing: false,
         key: "Delete",
@@ -112,6 +121,48 @@ describe("applyTextEditingKey", () => {
       selectionEnd: 2,
       selectionStart: 2,
       value: "co",
+    });
+  });
+
+  test("should delete the previous word on ctrl+backspace", () => {
+    expect(
+      applyTextEditingKey(
+        {
+          selectionEnd: 11,
+          selectionStart: 11,
+          value: "hello world",
+        },
+        "Backspace",
+        {
+          ctrlKey: true,
+          metaKey: false,
+        },
+      ),
+    ).toEqual({
+      selectionEnd: 6,
+      selectionStart: 6,
+      value: "hello ",
+    });
+  });
+
+  test("should delete the previous word on cmd+backspace", () => {
+    expect(
+      applyTextEditingKey(
+        {
+          selectionEnd: 19,
+          selectionStart: 19,
+          value: "alpha beta   gamma",
+        },
+        "Backspace",
+        {
+          ctrlKey: false,
+          metaKey: true,
+        },
+      ),
+    ).toEqual({
+      selectionEnd: 13,
+      selectionStart: 13,
+      value: "alpha beta   ",
     });
   });
 

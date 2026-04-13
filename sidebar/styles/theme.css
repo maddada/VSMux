@@ -9,6 +9,8 @@
   --app-card-active: #182233;
   --app-button-background: #2f6feb;
   --app-button-foreground: #f7fbff;
+  --app-search-selection-border: color-mix(in srgb, #ffffff 92%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #ffffff 56%, transparent);
   --app-input-background: #0f151d;
   --app-tooltip-background: #151d29;
   --app-tooltip-foreground: #edf4ff;
@@ -48,6 +50,8 @@ body[data-sidebar-theme="plain-light"] {
   --app-card-active: #efefef;
   --app-button-background: #6f6f6f;
   --app-button-foreground: #ffffff;
+  --app-search-selection-border: color-mix(in srgb, #000000 78%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #000000 28%, transparent);
   --app-input-background: #ffffff;
   --app-tooltip-background: #ffffff;
   --app-tooltip-foreground: #1f1f1f;
@@ -162,6 +166,8 @@ body[data-sidebar-theme="light-blue"] {
   --app-card-active: #edf4ff;
   --app-button-background: #2f6feb;
   --app-button-foreground: #ffffff;
+  --app-search-selection-border: color-mix(in srgb, #000000 78%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #000000 28%, transparent);
   --app-input-background: #ffffff;
   --app-tooltip-background: #ffffff;
   --app-tooltip-foreground: #172334;
@@ -181,6 +187,8 @@ body[data-sidebar-theme="light-green"] {
   --app-card-active: #eef8ef;
   --app-button-background: #3f8f57;
   --app-button-foreground: #ffffff;
+  --app-search-selection-border: color-mix(in srgb, #000000 78%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #000000 28%, transparent);
   --app-input-background: #ffffff;
   --app-tooltip-background: #ffffff;
   --app-tooltip-foreground: #17251b;
@@ -200,6 +208,8 @@ body[data-sidebar-theme="light-pink"] {
   --app-card-active: #fff0f7;
   --app-button-background: #c65c8a;
   --app-button-foreground: #ffffff;
+  --app-search-selection-border: color-mix(in srgb, #000000 78%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #000000 28%, transparent);
   --app-input-background: #ffffff;
   --app-tooltip-background: #ffffff;
   --app-tooltip-foreground: #351a28;
@@ -219,6 +229,8 @@ body[data-sidebar-theme="light-orange"] {
   --app-card-active: #fff1de;
   --app-button-background: #d17b31;
   --app-button-foreground: #ffffff;
+  --app-search-selection-border: color-mix(in srgb, #000000 78%, transparent);
+  --app-search-selection-ring: color-mix(in srgb, #000000 28%, transparent);
   --app-input-background: #ffffff;
   --app-tooltip-background: #ffffff;
   --app-tooltip-foreground: #392312;

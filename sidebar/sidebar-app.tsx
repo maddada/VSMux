@@ -41,6 +41,13 @@ import {
   SidebarPreviousSessionsSearchGroup,
   SidebarSessionSearchField,
 } from "./sidebar-session-search-overlay";
+import {
+  createSidebarSessionSearchResults,
+  createSidebarSessionSearchSelection,
+  getNextSidebarSessionSearchSelection,
+  isSidebarSessionSearchSelectionMatch,
+  type SidebarSessionSearchSelection,
+} from "./sidebar-session-search";
 import { logSidebarDebug } from "./sidebar-debug";
 import { resetSidebarStore, useSidebarStore } from "./sidebar-store";
 import {
@@ -53,6 +60,11 @@ import {
   moveSessionIdsByDropTarget,
 } from "./sidebar-dnd";
 import { SessionGroupSection } from "./session-group-section";
+import {
+  applyTextEditingKey,
+  isEditableKeyboardTarget,
+  isTextEditingKey,
+} from "./text-input-keyboard";
 import { TOOLTIP_DELAY_MS } from "./tooltip-delay";
 import type { WebviewApi } from "./webview-api";
 import { createDisplaySessionLayout } from "../shared/active-sessions-sort";
@@ -132,12 +144,17 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   const [sessionDropIndicatorGroupId, setSessionDropIndicatorGroupId] = useState<string>();
   const [overflowMenuAnchor, setOverflowMenuAnchor] = useState<HTMLElement>();
   const [overflowMenuPosition, setOverflowMenuPosition] = useState<FloatingMenuPosition>();
+  const [isSessionSearchSelectionVisible, setIsSessionSearchSelectionVisible] = useState(false);
+  const [selectedSessionSearchResult, setSelectedSessionSearchResult] =
+    useState<SidebarSessionSearchSelection>();
   const pendingCreateGroupRef = useRef(false);
   const didResetStoreRef = useRef(false);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
   const sessionGroupsPanelRef = useRef<HTMLElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const groupIdsRef = useRef<string[]>([]);
   const sessionIdsByGroupRef = useRef<SessionIdsByGroup>({});
+  const previousNormalizedSessionSearchQueryRef = useRef("");
   const pointerDownSessionTargetRef = useRef<SidebarPointerDownSessionTarget>();
   const sessionPointerDragStateRef = useRef<SidebarSessionPointerDragState>();
 
@@ -543,6 +560,23 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     displayedBrowserGroupIds.length === 0 &&
     displayedWorkspaceGroupIds.length === 0 &&
     filteredPreviousSessions.length === 0;
+  const sidebarSessionSearchResults = useMemo(
+    () =>
+      createSidebarSessionSearchResults({
+        displayedBrowserGroupIds,
+        displayedBrowserSessionIdsByGroup,
+        displayedWorkspaceGroupIds,
+        displayedWorkspaceSessionIdsByGroup,
+        filteredPreviousSessions,
+      }),
+    [
+      displayedBrowserGroupIds,
+      displayedBrowserSessionIdsByGroup,
+      displayedWorkspaceGroupIds,
+      displayedWorkspaceSessionIdsByGroup,
+      filteredPreviousSessions,
+    ],
+  );
   const dragStructureKey = useMemo(
     () => createDragStructureKey(displayedWorkspaceGroupIds, displayedWorkspaceSessionIdsByGroup),
     [displayedWorkspaceGroupIds, displayedWorkspaceSessionIdsByGroup],
@@ -555,6 +589,63 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   useEffect(() => {
     sessionIdsByGroupRef.current = displayedWorkspaceSessionIdsByGroup;
   }, [displayedWorkspaceSessionIdsByGroup]);
+
+  useEffect(() => {
+    const queryChanged =
+      previousNormalizedSessionSearchQueryRef.current !== normalizedSessionSearchQuery;
+    previousNormalizedSessionSearchQueryRef.current = normalizedSessionSearchQuery;
+
+    if (
+      !isSessionSearchOpen ||
+      normalizedSessionSearchQuery.length === 0 ||
+      sidebarSessionSearchResults.length === 0 ||
+      queryChanged
+    ) {
+      setIsSessionSearchSelectionVisible(false);
+    }
+
+    setSelectedSessionSearchResult((previous) => {
+      if (!isSessionSearchOpen || normalizedSessionSearchQuery.length === 0) {
+        return previous;
+      }
+
+      if (sidebarSessionSearchResults.length === 0) {
+        return undefined;
+      }
+
+      if (queryChanged) {
+        return createSidebarSessionSearchSelection(sidebarSessionSearchResults[0]);
+      }
+
+      if (!previous) {
+        return undefined;
+      }
+
+      return sidebarSessionSearchResults.some((result) =>
+        isSidebarSessionSearchSelectionMatch(result, previous),
+      )
+        ? previous
+        : createSidebarSessionSearchSelection(sidebarSessionSearchResults[0]);
+    });
+  }, [isSessionSearchOpen, normalizedSessionSearchQuery, sidebarSessionSearchResults]);
+
+  useEffect(() => {
+    if (!isSessionSearchSelectionVisible || !selectedSessionSearchResult) {
+      return;
+    }
+
+    const selectedElement =
+      selectedSessionSearchResult.kind === "session"
+        ? document.querySelector<HTMLElement>(
+            `[data-sidebar-session-id="${selectedSessionSearchResult.sessionId}"]`,
+          )
+        : document.querySelector<HTMLElement>(
+            `[data-sidebar-history-id="${selectedSessionSearchResult.historyId}"]`,
+          );
+    selectedElement?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [isSessionSearchSelectionVisible, selectedSessionSearchResult]);
 
   const postSidebarDebugLog = useEffectEvent((event: string, details: unknown) => {
     if (!debuggingMode) {
@@ -815,6 +906,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   const openScratchPad = () => {
     setIsDaemonSessionsOpen(false);
     setIsPreviousSessionsOpen(false);
+    setIsSessionSearchSelectionVisible(false);
     setIsSessionSearchOpen(false);
     setSessionSearchQuery("");
     setIsScratchPadOpen((previous) => !previous);
@@ -824,6 +916,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     setIsOverflowMenuOpen(false);
     setIsPreviousSessionsOpen(false);
     setIsScratchPadOpen(false);
+    setIsSessionSearchSelectionVisible(false);
     setIsSessionSearchOpen(false);
     setSessionSearchQuery("");
     setIsDaemonSessionsOpen(true);
@@ -836,6 +929,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   };
 
   const closeSessionSearch = () => {
+    setIsSessionSearchSelectionVisible(false);
     setIsSessionSearchOpen(false);
     setSessionSearchQuery("");
   };
@@ -874,64 +968,13 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     return false;
   });
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (event.key === "Escape") {
-        if (!closeTopmostSidebarOverlay()) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      if (
-        event.defaultPrevented ||
-        gitCommitDraft !== undefined ||
-        isDaemonSessionsOpen ||
-        isPreviousSessionsOpen ||
-        isScratchPadOpen ||
-        isOverflowMenuOpen ||
-        isEditableSidebarKeyboardTarget(target) ||
-        !isSidebarSearchActivationKey(event)
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      setIsSessionSearchOpen(true);
-      setSessionSearchQuery((previous) =>
-        isSessionSearchOpen ? `${previous}${event.key}` : event.key,
-      );
-    };
-
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [
-    closeTopmostSidebarOverlay,
-    gitCommitDraft,
-    isDaemonSessionsOpen,
-    isOverflowMenuOpen,
-    isPreviousSessionsOpen,
-    isScratchPadOpen,
-    isSessionSearchOpen,
-  ]);
-
   const toggleSessionSearch = () => {
     setIsDaemonSessionsOpen(false);
     setIsPreviousSessionsOpen(false);
     setIsScratchPadOpen(false);
     setIsSessionSearchOpen((previous) => {
       if (previous) {
+        setIsSessionSearchSelectionVisible(false);
         setSessionSearchQuery("");
       }
 
@@ -953,6 +996,150 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       type: "deletePreviousSession",
     });
   };
+
+  const activateSelectedSessionSearchResult = useEffectEvent(() => {
+    if (!selectedSessionSearchResult) {
+      return false;
+    }
+
+    if (selectedSessionSearchResult.kind === "previous") {
+      restoreSearchedPreviousSession(selectedSessionSearchResult.historyId);
+      return true;
+    }
+
+    const selectedResult = sidebarSessionSearchResults.find((result) =>
+      isSidebarSessionSearchSelectionMatch(result, selectedSessionSearchResult),
+    );
+    if (!selectedResult || selectedResult.kind !== "session") {
+      return false;
+    }
+
+    applyLocalFocus(selectedResult.groupId, selectedResult.sessionId);
+    vscode.postMessage({
+      sessionId: selectedResult.sessionId,
+      type: "focusSession",
+    });
+    return true;
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      const searchInput = searchInputRef.current;
+      const isSearchInputTarget = searchInput !== null && target === searchInput;
+
+      if (event.key === "Escape") {
+        if (!closeTopmostSidebarOverlay()) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (
+        event.defaultPrevented ||
+        gitCommitDraft !== undefined ||
+        isDaemonSessionsOpen ||
+        isPreviousSessionsOpen ||
+        isScratchPadOpen ||
+        isOverflowMenuOpen ||
+        (isEditableSidebarKeyboardTarget(target) && !isSearchInputTarget)
+      ) {
+        return;
+      }
+
+      if (
+        isSessionSearchOpen &&
+        isSidebarSessionSearchNavigationKey(event) &&
+        (isSearchInputTarget || !isEditableSidebarKeyboardTarget(target))
+      ) {
+        const nextSelection = getNextSidebarSessionSearchSelection({
+          currentSelection: selectedSessionSearchResult,
+          direction: getSidebarSessionSearchNavigationDirection(event),
+          results: sidebarSessionSearchResults,
+        });
+        if (!nextSelection) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedSessionSearchResult(nextSelection);
+        setIsSessionSearchSelectionVisible(true);
+        return;
+      }
+
+      if (
+        isSessionSearchOpen &&
+        event.key === "Enter" &&
+        (isSearchInputTarget || !isEditableSidebarKeyboardTarget(target))
+      ) {
+        if (!activateSelectedSessionSearchResult()) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setIsSessionSearchSelectionVisible(false);
+        return;
+      }
+
+      if (isSearchInputTarget) {
+        return;
+      }
+
+      if (isSessionSearchOpen && isTextEditingKey(event)) {
+        const nextSearchState = applyTextEditingKey(
+          {
+            value: sessionSearchQuery,
+          },
+          event.key,
+          event,
+        );
+        if (!nextSearchState) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setSessionSearchQuery(nextSearchState.value);
+        return;
+      }
+
+      if (!isSidebarSearchActivationKey(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setIsSessionSearchOpen(true);
+      setSessionSearchQuery((previous) =>
+        isSessionSearchOpen ? `${previous}${event.key}` : event.key,
+      );
+    };
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [
+    activateSelectedSessionSearchResult,
+    closeTopmostSidebarOverlay,
+    gitCommitDraft,
+    isDaemonSessionsOpen,
+    isOverflowMenuOpen,
+    isPreviousSessionsOpen,
+    isScratchPadOpen,
+    isSessionSearchOpen,
+    selectedSessionSearchResult,
+    sessionSearchQuery,
+    sidebarSessionSearchResults,
+  ]);
 
   const adjustTerminalFontSize = (delta: -1 | 1) => {
     vscode.postMessage({ delta, type: "adjustTerminalFontSize" });
@@ -1104,6 +1291,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                     onClick={() => {
                       setIsDaemonSessionsOpen(false);
                       setIsScratchPadOpen(false);
+                      setIsSessionSearchSelectionVisible(false);
                       setIsSessionSearchOpen(false);
                       setSessionSearchQuery("");
                       setIsPreviousSessionsOpen((previous) => !previous);
@@ -1127,6 +1315,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
             />
             {isSessionSearchOpen && !isSessionsCollapsed ? (
               <SidebarSessionSearchField
+                inputRef={searchInputRef}
                 query={sessionSearchQuery}
                 setQuery={setSessionSearchQuery}
               />
@@ -1148,6 +1337,12 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                       onAutoEditHandled={() => undefined}
                       onCollapsedChange={setGroupCollapsed}
                       orderedSessionIds={displayedBrowserSessionIdsByGroup[groupId] ?? []}
+                      selectedSearchSessionId={
+                        isSessionSearchSelectionVisible &&
+                        selectedSessionSearchResult?.kind === "session"
+                          ? selectedSessionSearchResult.sessionId
+                          : undefined
+                      }
                       vscode={vscode}
                     />
                   ))}
@@ -1175,6 +1370,12 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                       onCollapsedChange={setGroupCollapsed}
                       onFocusRequested={applyLocalFocus}
                       orderedSessionIds={displayedWorkspaceSessionIdsByGroup[groupId] ?? []}
+                      selectedSearchSessionId={
+                        isSessionSearchSelectionVisible &&
+                        selectedSessionSearchResult?.kind === "session"
+                          ? selectedSessionSearchResult.sessionId
+                          : undefined
+                      }
                       sessionDropIndicatorGroupId={sessionDropIndicatorGroupId}
                       showSessionDropPositionIndicators={
                         !isSessionSearchOpen && isManualActiveSessionsSort
@@ -1189,6 +1390,12 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                   onDeletePreviousSession={deleteSearchedPreviousSession}
                   onRestorePreviousSession={restoreSearchedPreviousSession}
                   previousSessions={filteredPreviousSessions}
+                  selectedHistoryId={
+                    isSessionSearchSelectionVisible &&
+                    selectedSessionSearchResult?.kind === "previous"
+                      ? selectedSessionSearchResult.historyId
+                      : undefined
+                  }
                   showDebugSessionNumbers={debuggingMode}
                   showHotkeys={showHotkeysOnSessionCards}
                 />
@@ -1842,6 +2049,19 @@ function isSidebarSearchActivationKey(event: KeyboardEvent): boolean {
     !event.metaKey &&
     /^[\p{L}\p{N}]$/u.test(event.key)
   );
+}
+
+function isSidebarSessionSearchNavigationKey(event: KeyboardEvent): boolean {
+  return (
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Tab")
+  );
+}
+
+function getSidebarSessionSearchNavigationDirection(event: KeyboardEvent): -1 | 1 {
+  return event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey) ? -1 : 1;
 }
 
 function isEditableSidebarKeyboardTarget(target: Node): boolean {

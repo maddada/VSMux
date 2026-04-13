@@ -1,21 +1,27 @@
 import { IconSearch, IconX } from "@tabler/icons-react";
-import { useEffect, useRef } from "react";
+import { useEffect, type KeyboardEventHandler, type RefObject } from "react";
 import type { SidebarPreviousSessionItem } from "../shared/session-grid-contract";
 import { SessionHistoryCard } from "./session-history-card";
 
 export type SidebarSessionSearchFieldProps = {
+  inputRef: RefObject<HTMLInputElement | null>;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   query: string;
   setQuery: (query: string) => void;
 };
 
-export function SidebarSessionSearchField({ query, setQuery }: SidebarSessionSearchFieldProps) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
+export function SidebarSessionSearchField({
+  inputRef,
+  onKeyDown,
+  query,
+  setQuery,
+}: SidebarSessionSearchFieldProps) {
   const hasQuery = query.length > 0;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.setSelectionRange(query.length, query.length);
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(query.length, query.length);
     }, 0);
 
     return () => {
@@ -32,8 +38,9 @@ export function SidebarSessionSearchField({ query, setQuery }: SidebarSessionSea
           onChange={(event) => {
             setQuery(event.target.value);
           }}
+          onKeyDown={onKeyDown}
           placeholder="Search sessions"
-          ref={searchInputRef}
+          ref={inputRef}
           type="text"
           value={query}
         />
@@ -43,7 +50,7 @@ export function SidebarSessionSearchField({ query, setQuery }: SidebarSessionSea
             className="session-search-clear-button"
             onClick={() => {
               setQuery("");
-              searchInputRef.current?.focus();
+              inputRef.current?.focus();
             }}
             type="button"
           >
@@ -71,6 +78,7 @@ export type SidebarPreviousSessionsSearchGroupProps = {
   onDeletePreviousSession: (historyId: string) => void;
   onRestorePreviousSession: (historyId: string) => void;
   previousSessions: readonly SidebarPreviousSessionItem[];
+  selectedHistoryId?: string;
   showDebugSessionNumbers: boolean;
   showHotkeys: boolean;
 };
@@ -79,6 +87,7 @@ export function SidebarPreviousSessionsSearchGroup({
   onDeletePreviousSession,
   onRestorePreviousSession,
   previousSessions,
+  selectedHistoryId,
   showDebugSessionNumbers,
   showHotkeys,
 }: SidebarPreviousSessionsSearchGroupProps) {
@@ -101,6 +110,7 @@ export function SidebarPreviousSessionsSearchGroup({
         {previousSessions.map((session) => (
           <SessionHistoryCard
             key={session.historyId}
+            isSearchSelected={selectedHistoryId === session.historyId}
             onDelete={() => onDeletePreviousSession(session.historyId)}
             onRestore={() => onRestorePreviousSession(session.historyId)}
             session={session}
