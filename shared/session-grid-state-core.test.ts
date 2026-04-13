@@ -411,6 +411,19 @@ describe("visible primary titles", () => {
     expect(getPreferredSessionTitle("Bug Fix", undefined)).toBe("Bug Fix");
   });
 
+  test("should ignore generic VSmux terminal titles when choosing a visible session title", () => {
+    expect(getPreferredSessionTitle("Session 1", "VSmux")).toBeUndefined();
+  });
+
+  test("should ignore the default Windows PowerShell executable title", () => {
+    expect(
+      getPreferredSessionTitle(
+        "Session 1",
+        "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ),
+    ).toBeUndefined();
+  });
+
   test("should only expose terminal-set primary titles through sidebar session items", () => {
     const items = createSidebarSessionItems(
       {

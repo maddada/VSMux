@@ -209,6 +209,52 @@ describe("buildSidebarMessage", () => {
     );
   });
 
+  test("should ignore the generic VSmux terminal title for unnamed terminal sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0);
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getTerminalTitle: () => "VSmux",
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        alias: "00",
+        primaryTitle: undefined,
+        terminalTitle: undefined,
+      }),
+    );
+  });
+
+  test("should ignore the default Windows PowerShell executable title for unnamed terminal sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0);
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getTerminalTitle: () => "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe .",
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        alias: "00",
+        primaryTitle: undefined,
+        terminalTitle: undefined,
+      }),
+    );
+  });
+
   test("should expose the latest terminal activity timestamp when available", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = createSessionRecord(1, 0);
@@ -487,6 +533,38 @@ describe("createPreviousSessionEntry", () => {
         sessionRecord,
       }),
     );
+  });
+
+  test("should skip generic VSmux terminal titles when archiving previous sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = createSessionRecord(1, 0);
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry({
+      ...createPreviousSessionEntryOptions(group, sessionRecord),
+      getTerminalTitle: () => "VSmux",
+    });
+
+    expect(previousSession).toBeUndefined();
+  });
+
+  test("should skip default Windows PowerShell executable titles when archiving previous sessions", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const group = workspaceSnapshot.groups[0];
+    const sessionRecord = createSessionRecord(1, 0);
+    group.snapshot.sessions = [sessionRecord];
+    group.snapshot.focusedSessionId = sessionRecord.sessionId;
+    group.snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const previousSession = createPreviousSessionEntry({
+      ...createPreviousSessionEntryOptions(group, sessionRecord),
+      getTerminalTitle: () => "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe .",
+    });
+
+    expect(previousSession).toBeUndefined();
   });
 
   test("should preserve the derived agent icon in previous session history", () => {

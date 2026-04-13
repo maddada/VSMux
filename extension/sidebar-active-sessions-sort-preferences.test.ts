@@ -7,10 +7,10 @@ import {
 vi.mock("vscode", () => ({}));
 
 describe("sidebar active sessions sort preferences", () => {
-  test("should default to manual sort", () => {
+  test("should default to last activity sort", () => {
     const context = createMockContext();
 
-    expect(getSidebarActiveSessionsSortMode(context as never, "workspace-1")).toBe("manual");
+    expect(getSidebarActiveSessionsSortMode(context as never, "workspace-1")).toBe("lastActivity");
   });
 
   test("should persist last activity sort mode", async () => {
@@ -24,9 +24,17 @@ describe("sidebar active sessions sort preferences", () => {
   test("should ignore redundant writes", async () => {
     const context = createMockContext();
 
-    await saveSidebarActiveSessionsSortMode(context as never, "workspace-1", "manual");
+    await saveSidebarActiveSessionsSortMode(context as never, "workspace-1", "lastActivity");
 
     expect(context.workspaceState.update).not.toHaveBeenCalled();
+  });
+
+  test("should still honor a persisted manual sort mode", () => {
+    const context = createMockContext();
+
+    void context.workspaceState.update("VSmux.sidebarActiveSessionsSortMode:workspace-1", "manual");
+
+    expect(getSidebarActiveSessionsSortMode(context as never, "workspace-1")).toBe("manual");
   });
 });
 

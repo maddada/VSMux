@@ -26,6 +26,9 @@ import {
 const LEADING_TERMINAL_TITLE_STATUS_MARKER_PATTERN = /^[\s\u2800-\u28ff·•⋅◦✳*✦◇🤖🔔]+/u;
 const LEADING_TERMINAL_TITLE_PREFIX_PATTERN = /^(?:OC\s*\|\s*)+/iu;
 const DEFAULT_TERMINAL_ENGINE: TerminalEngine = "ghostty";
+const IGNORED_GENERIC_TERMINAL_TITLES = new Set(["vsmux"]);
+const WINDOWS_DEFAULT_POWERSHELL_TITLE_PATTERN =
+  /^[a-z]:\\windows\\system32\\windowspowershell\\v1\.0\\powershell\.exe(?:\s+\.)?$/iu;
 
 export function clampVisibleSessionCount(value: number): VisibleSessionCount {
   if (value <= 1) {
@@ -335,6 +338,14 @@ export function getVisibleTerminalTitle(title: string | undefined): string | und
   }
 
   if (/^(~|\/)/.test(normalizedTitle)) {
+    return undefined;
+  }
+
+  if (IGNORED_GENERIC_TERMINAL_TITLES.has(normalizedTitle.trim().toLowerCase())) {
+    return undefined;
+  }
+
+  if (WINDOWS_DEFAULT_POWERSHELL_TITLE_PATTERN.test(normalizedTitle)) {
     return undefined;
   }
 

@@ -31,5 +31,5 @@ export async function saveSidebarActiveSessionsSortMode(
 }
 
 function normalizeSidebarActiveSessionsSortMode(candidate: unknown): SidebarActiveSessionsSortMode {
-  return candidate === "lastActivity" ? "lastActivity" : "manual";
+  return candidate === "manual" ? "manual" : "lastActivity";
 }
