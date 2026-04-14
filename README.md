@@ -6,10 +6,11 @@ For VS Code: https://marketplace.visualstudio.com/items?itemName=maddada.VSmux
 
 For Cursor and Others: https://open-vsx.org/extension/maddada/VSmux
 
-## Latest Release: 3.4.1
+## Latest Release: 3.5.0
 
-- Workspace terminals use a lighter default text weight and slightly taller line height for a cleaner reading experience.
-- Group summaries now reflect actual session activity more accurately.
+- Runtime setup and daemon transport are more resilient, so install and reconnect flows should behave more reliably.
+- Sidebar reordering is sturdier now across sessions, agents, and commands.
+- The sidebar has a cleaner refreshed group layout that is easier to scan during bigger multi-session workflows.
 
 Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELOG.md)
 

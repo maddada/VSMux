@@ -1661,7 +1661,7 @@ function getActiveSessionsSortMenuLabel(isManualActiveSessionsSort: boolean): st
 }
 
 function getScratchPadMenuLabel(isScratchPadOpen: boolean): string {
-  return isScratchPadOpen ? "Hide Scratch Pad" : "Show Scratch Pad";
+  return isScratchPadOpen ? "Hide Scratch Pad" : "Scratch Pad";
 }
 
 type RenderSidebarTopControlsOptions = {

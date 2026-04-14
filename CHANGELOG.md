@@ -2,6 +2,13 @@
 
 All notable user-facing changes are documented in this file.
 
+## 3.5.0 - 2026-04-14
+
+- Runtime setup and daemon transport are more resilient now, so VSmux should recover and connect more reliably when the embedded runtime needs to install or restart.
+- Sidebar reordering is sturdier across sessions, agents, and commands, with clearer sync behavior after drag-and-drop changes.
+- The sidebar UI has been refreshed with cleaner group panels, calmer spacing, and smoother session browsing so larger session lists feel easier to scan.
+- Live terminal and session activity state is tracked more accurately, which helps idle and active states stay in sync with what is actually happening.
+
 ## 3.4.1 - 2026-04-14
 
 - Workspace terminals now default to a lighter text weight and a slightly roomier line height, so the terminal view should feel easier to read out of the box.
