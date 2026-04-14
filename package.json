@@ -824,7 +824,7 @@
           "title": "Find Previous Session Prompt Template",
           "type": "string",
           "scope": "application",
-          "default": "Help me find a previous AI agent session where I talked about: {query}\n\nPlease search the local session history and transcript files available on this machine.\nUse session index files and transcript logs together when possible so you can recover both the session ID and the latest user-set name.\n\nPlease return:\n- the best matching session ID\n- the latest session or thread name if you can find one\n- the file path you used to identify it\n- a short reason it matches\n\nIf there are multiple strong matches, list the top few and prefer the most recent ones.",
+          "default": "Help me find a previous AI agent session where I talked about: {query}\n\nSearch these local session locations:\n- <user folder>/.claude/projects\n- <user folder>/.codex/sessions\n- <user folder>/.claude-profiles/*/projects\n- <user folder>/.codex-profiles/*/sessions\n\nRules:\n- First detect the current repo root, current branch, and all local git worktrees.\n- Only keep sessions from the current repo, one of its worktrees, or a clearly related project path.\n- Search metadata first, then transcript bodies.\n- Prefer exact saved session/thread names over transcript keyword matches.\n- Prefer more recent sessions when relevance is similar.\n\nCodex:\n- Search these first:\n  - <user folder>/.codex/session_index.jsonl\n  - <user folder>/.codex/history.jsonl\n  - <user folder>/.codex-profiles/*/session_index.jsonl\n  - <user folder>/.codex-profiles/*/history.jsonl\n- Then inspect matching rollout files under:\n  - <user folder>/.codex/sessions/**/rollout-*.jsonl\n  - <user folder>/.codex-profiles/*/sessions/**/rollout-*.jsonl\n- Name priority:\n  1. thread_name_updated.thread_name in rollout files\n  2. thread_name in session_index.jsonl\n- Also use:\n  - session_meta.payload.id\n  - session_meta.payload.cwd\n\nClaude:\n- Search these first:\n  - <user folder>/.claude/projects/*/sessions-index.json\n  - <user folder>/.claude-profiles/*/projects/*/sessions-index.json\n- Then inspect matching session files:\n  - <user folder>/.claude/projects/*/*.jsonl\n  - <user folder>/.claude-profiles/*/projects/*/*.jsonl\n- Name priority:\n  1. custom-title.customTitle\n  2. agent-name.agentName\n  3. entries[].summary from sessions-index.json\n  4. slug\n- Also use:\n  - sessionId\n  - cwd\n  - gitBranch\n  - projectPath\n\nReturn:\n- session ID\n- latest saved session/thread name\n- exact file path(s) used\n- related project folder if not current repo\n- short reason it matches\n\nIf multiple strong matches exist, return the top few, most recent first.",
           "description": "Prompt staged inside the selected agent when using Find a session from Previous Sessions. Use {query} or {topic} for the text entered in the VS Code input box."
         },
         "VSmux.agentOrder": {
@@ -842,12 +842,6 @@
           "type": "boolean",
           "default": true,
           "description": "When renaming a session from the sidebar, also stage `/rename <new name>` in that terminal and focus it without pressing Enter."
-        },
-        "VSmux.autoSubmitRenameCommandOnAutoName": {
-          "title": "Auto Submit Rename Command On Auto Name",
-          "type": "boolean",
-          "default": true,
-          "description": "When a long rename input is summarized into an automatic session name, also press Enter after staging `/rename <generated name>` so Agent CLI syncs immediately."
         },
         "VSmux.createSessionOnSidebarDoubleClick": {
           "title": "Create Session On Sidebar Double Click",

@@ -456,7 +456,6 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
         pendingSocketMessages.push(message);
       }
     };
-
     const sendReadyMessage = () => {
       if (!websocket || websocket.readyState !== WebSocket.OPEN || readySent) {
         return;

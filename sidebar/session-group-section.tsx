@@ -505,6 +505,20 @@ export function SessionGroupSection({
     onCollapsedChange(group.groupId, !isCollapsed);
   };
 
+  const handleGroupHeaderClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (isEditing) {
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest(".group-header-actions")) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    toggleCollapsed();
+  };
+
   return (
     <>
       <section
@@ -532,7 +546,7 @@ export function SessionGroupSection({
         }}
         ref={sortable.ref}
       >
-        <div className="group-head">
+        <div className="group-head" data-collapsible="true" onClick={handleGroupHeaderClick}>
           <div className="group-title-wrap">
             {isEditing ? (
               <input

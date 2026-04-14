@@ -49,6 +49,7 @@ import {
 } from "./sidebar-session-search";
 import { logSidebarDebug } from "./sidebar-debug";
 import { postSidebarOrderReproLog } from "./sidebar-order-repro-log";
+import { scrollElementIntoViewIfNeeded } from "./scroll-into-view-if-needed";
 import { resetSidebarStore, useSidebarStore } from "./sidebar-store";
 import {
   getClientPoint,
@@ -614,6 +615,10 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
           ),
     [isSessionSearchFiltering, normalizedSessionSearchQuery, previousSessions],
   );
+  const focusedSessionId = useMemo(
+    () => Object.values(sessionsById).find((session) => session.isFocused)?.sessionId,
+    [sessionsById],
+  );
   const shouldShowSessionSearchEmptyState =
     isSessionSearchFiltering &&
     displayedBrowserGroupIds.length === 0 &&
@@ -707,6 +712,32 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       block: "nearest",
     });
   }, [isSessionSearchSelectionVisible, selectedSessionSearchResult]);
+
+  useEffect(() => {
+    if (!focusedSessionId || !sessionGroupsContentRef.current) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const scrollViewport = sessionGroupsContentRef.current;
+      if (!scrollViewport) {
+        return;
+      }
+
+      const focusedSessionElement = document.querySelector<HTMLElement>(
+        `[data-sidebar-session-id="${focusedSessionId}"]`,
+      );
+      if (!focusedSessionElement) {
+        return;
+      }
+
+      scrollElementIntoViewIfNeeded(focusedSessionElement, scrollViewport);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [focusedSessionId]);
 
   const postSidebarDebugLog = useEffectEvent((event: string, details: unknown) => {
     if (!debuggingMode) {
@@ -1348,7 +1379,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
             />
             <div className="session-groups-content" ref={sessionGroupsContentRef}>
               {displayedBrowserGroupIds.length > 0 ? (
-                <div className="group-list">
+                <div className="group-list browser-group-list">
                   {displayedBrowserGroupIds.map((groupId) => (
                     <SessionGroupSection
                       autoEdit={false}
@@ -1381,7 +1412,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                 onDragStart={handleDragStart}
                 sensors={sensors}
               >
-                <div className="group-list">
+                <div className="group-list workspace-group-list">
                   {displayedWorkspaceGroupIds.map((groupId, groupIndex) => (
                     <SessionGroupSection
                       autoEdit={autoEditingGroupId === groupId}
@@ -1427,20 +1458,30 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
                 />
               ) : null}
               {!isSessionSearchOpen ? (
-                <button
-                  aria-label="Create a new group"
-                  className="group-create-button"
-                  data-empty-space-blocking="true"
-                  disabled={effectiveGroupIds.length >= MAX_GROUP_COUNT}
-                  onClick={() => {
-                    pendingCreateGroupRef.current = true;
-                    vscode.postMessage({ type: "createGroup" });
-                  }}
-                  type="button"
-                >
-                  <IconPlus aria-hidden="true" className="group-create-button-icon" size={14} />
-                  New Group
-                </button>
+                <div className="group group-create-shell" data-empty-space-blocking="true">
+                  <div className="group-head">
+                    <button
+                      aria-label="Create a new group"
+                      className="group-create-button"
+                      disabled={effectiveGroupIds.length >= MAX_GROUP_COUNT}
+                      onClick={() => {
+                        pendingCreateGroupRef.current = true;
+                        vscode.postMessage({ type: "createGroup" });
+                      }}
+                      type="button"
+                    >
+                      <IconPlus
+                        aria-hidden="true"
+                        className="group-create-button-icon"
+                        size={14}
+                        stroke={2}
+                      />
+                      <span className="group-create-button-label section-titlebar-label">
+                        New Group
+                      </span>
+                    </button>
+                  </div>
+                </div>
               ) : null}
               {shouldShowSessionSearchEmptyState ? (
                 <div className="empty session-search-empty-state" data-empty-space-blocking="true">
@@ -1716,6 +1757,9 @@ function renderSidebarTopControls({
   return (
     <div
       className="sidebar-titlebar-controls"
+      data-controls-visible={String(
+        isOverflowMenuOpen || isPreviousSessionsOpen || isSessionSearchOpen,
+      )}
       data-empty-space-blocking="true"
       data-menu-open={String(isOverflowMenuOpen)}
     >

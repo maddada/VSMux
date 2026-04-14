@@ -1,5 +1,5 @@
 import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 export type SectionHeaderProps = {
   actions?: ReactNode;
@@ -17,16 +17,35 @@ export function SectionHeader({
   title,
 }: SectionHeaderProps) {
   const collapseLabel = `${isCollapsed ? "Expand" : "Collapse"} ${title}`;
+  const handleHeaderClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isCollapsible) {
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest(".section-titlebar-actions")) {
+      return;
+    }
+
+    onToggleCollapsed?.();
+  };
 
   return (
-    <div className="section-titlebar" data-empty-space-blocking="true">
+    <div
+      className="section-titlebar"
+      data-collapsible={String(isCollapsible)}
+      data-empty-space-blocking="true"
+      onClick={handleHeaderClick}
+    >
       <div className="section-titlebar-main">
         {isCollapsible ? (
           <button
             aria-label={collapseLabel}
             className="section-titlebar-toggle"
             data-empty-space-blocking="true"
-            onClick={onToggleCollapsed}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleCollapsed?.();
+            }}
             title={collapseLabel}
             type="button"
           >
@@ -39,7 +58,16 @@ export function SectionHeader({
         ) : null}
         <span className="section-titlebar-label">{title}</span>
       </div>
-      {actions ? <div className="section-titlebar-actions">{actions}</div> : null}
+      {actions ? (
+        <div
+          className="section-titlebar-actions"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

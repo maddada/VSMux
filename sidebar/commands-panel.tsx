@@ -161,8 +161,10 @@ export function CommandsPanel({
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
   const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
+  const gridRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const pendingOrderSyncRef = useRef<PendingOrderSync>();
+  const lastLoggedLayoutRef = useRef<string>();
   const lastLoggedOrderStateRef = useRef<string>();
 
   useEffect(() => {
@@ -342,29 +344,98 @@ export function CommandsPanel({
     postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.state", payload);
   }, [commands, draftCommandIds, orderedCommands, shouldRenderSection, vscode]);
 
+  useEffect(() => {
+    const gridElement = gridRef.current;
+    if (!gridElement) {
+      return;
+    }
+
+    const logLayout = () => {
+      const layout = describeRenderedButtonLayout(gridElement);
+      const nextFingerprint = JSON.stringify(layout);
+      if (lastLoggedLayoutRef.current === nextFingerprint) {
+        return;
+      }
+
+      lastLoggedLayoutRef.current = nextFingerprint;
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.layout", layout);
+    };
+
+    const observer = new ResizeObserver(() => {
+      logLayout();
+    });
+    observer.observe(gridElement);
+    const animationFrameId = window.requestAnimationFrame(() => {
+      logLayout();
+    });
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [orderedCommands, vscode]);
+
+  const handleDragStart = ((event) => {
+    if (!isSortableOperation(event.operation)) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragStartIgnored", {
+        reason: "not-sortable-operation",
+      });
+      return;
+    }
+
+    const source = event.operation.source;
+    const sourceData = source ? getCommandDragData(source) : undefined;
+    postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragStart", {
+      initialIndex: source?.initialIndex ?? null,
+      sourceCommandId: sourceData?.commandId ?? null,
+    });
+  }) satisfies DragDropEventHandlers["onDragStart"];
+
   const handleDragEnd = ((event) => {
     if (event.canceled) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragEndIgnored", {
+        reason: "canceled",
+      });
       return;
     }
 
     if (!isSortableOperation(event.operation)) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragEndIgnored", {
+        reason: "not-sortable-operation",
+      });
       return;
     }
 
     const { source, target } = event.operation;
-    if (!source || !target) {
+    if (!source) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragEndIgnored", {
+        hasSource: Boolean(source),
+        hasTarget: Boolean(target),
+        reason: "missing-source",
+      });
       return;
     }
 
     const sourceData = getCommandDragData(source);
-    const targetData = getCommandDragData(target);
-    if (!sourceData || !targetData || sourceData.commandId === targetData.commandId) {
+    if (!sourceData) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragEndIgnored", {
+        reason: "invalid-source-data",
+        sourceCommandId: sourceData?.commandId ?? null,
+      });
       return;
     }
 
     const { initialIndex } = source;
-    const targetIndex = target.index;
+    const projectedIndex =
+      "index" in source && typeof source.index === "number" ? source.index : null;
+    const targetIndex = projectedIndex ?? target?.index ?? null;
     if (targetIndex == null || initialIndex === targetIndex) {
+      postSidebarOrderReproLog(vscode, "repro.sidebarOrder.commands.dragEndIgnored", {
+        initialIndex,
+        projectedIndex,
+        reason: "same-or-missing-target-index",
+        targetIndex: targetIndex ?? null,
+      });
       return;
     }
 
@@ -395,6 +466,7 @@ export function CommandsPanel({
       currentOrderedCommandIds: orderedCommands.map((command) => command.commandId),
       initialIndex,
       nextCommandIds,
+      projectedIndex,
       requestId,
       syncedCommandIds: commands.map((command) => command.commandId),
       targetIndex,
@@ -422,9 +494,10 @@ export function CommandsPanel({
             <div className="card commands-panel commands-panel-shell">
               {showGitButton ? <GitActionRow git={git} vscode={vscode} /> : null}
               <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
-                <DragDropProvider onDragEnd={handleDragEnd}>
+                <DragDropProvider onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
                   <div
                     className="commands-grid"
+                    ref={gridRef}
                     style={{ gridTemplateColumns: `repeat(${gridColumnCount}, minmax(0, 1fr))` }}
                   >
                     {orderedCommands.map((command, index) => (
@@ -619,6 +692,7 @@ function SortableCommandButton({
             data-empty-space-blocking="true"
             data-has-icon={String(command.icon !== undefined)}
             data-icon-only={String(isIconOnly)}
+            data-sidebar-order-id={command.commandId}
             draggable={false}
             onClick={onRun}
             onContextMenu={onContextMenu}
@@ -773,6 +847,37 @@ function getActionTooltip(command: SidebarCommandButton): string {
   return command.actionType === "browser"
     ? `${subject}: ${command.url}`
     : `${subject}: ${command.command}`;
+}
+
+function describeRenderedButtonLayout(gridElement: HTMLDivElement) {
+  const renderedItems = Array.from(
+    gridElement.querySelectorAll<HTMLElement>("[data-sidebar-order-id]"),
+  )
+    .map((element) => {
+      const itemId = element.dataset.sidebarOrderId;
+      if (!itemId) {
+        return undefined;
+      }
+
+      return {
+        id: itemId,
+        left: Math.round(element.offsetLeft),
+        top: Math.round(element.offsetTop),
+        width: Math.round(element.offsetWidth),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== undefined);
+
+  const visualOrderIds = [...renderedItems]
+    .sort((left, right) => left.top - right.top || left.left - right.left)
+    .map((item) => item.id);
+
+  return {
+    clientWidth: Math.round(gridElement.clientWidth),
+    computedGridTemplateColumns: getComputedStyle(gridElement).gridTemplateColumns,
+    renderedItems,
+    visualOrderIds,
+  };
 }
 
 function runActionAriaLabel(command: SidebarCommandButton): string {

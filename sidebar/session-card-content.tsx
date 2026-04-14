@@ -54,6 +54,7 @@ export function SessionCardContent({
     showDebugSessionNumbers,
   });
   const hasLastInteractionTime = showLastInteractionTime && Boolean(session.lastInteractionAt);
+  const showHeaderAgentIcon = showLastInteractionTime && Boolean(session.agentIcon);
   useRelativeTimeTick(hasLastInteractionTime);
   const lastInteractionLabel =
     hasLastInteractionTime && session.lastInteractionAt
@@ -65,6 +66,7 @@ export function SessionCardContent({
     hasLastInteractionTime && session.lastInteractionAt
       ? { color: getRelativeTimeColor(session.lastInteractionAt) }
       : undefined;
+  const hasSessionHeadTrailing = Boolean(lastInteractionLabel) || showHeaderAgentIcon;
 
   return (
     <>
@@ -72,9 +74,19 @@ export function SessionCardContent({
         <div className="session-alias-heading" ref={aliasHeadingRef}>
           {headingText}
         </div>
-        {lastInteractionLabel ? (
-          <div className="session-last-interaction-time" style={lastInteractionStyle}>
-            {lastInteractionLabel}
+        {hasSessionHeadTrailing ? (
+          <div className="session-head-trailing">
+            {lastInteractionLabel ? (
+              <div className="session-last-interaction-time" style={lastInteractionStyle}>
+                {lastInteractionLabel}
+              </div>
+            ) : null}
+            {showHeaderAgentIcon ? (
+              <SessionHeaderAgentIcon
+                agentIcon={session.agentIcon}
+                isFavorite={session.isFavorite}
+              />
+            ) : null}
           </div>
         ) : null}
         {/* <div className="session-head-actions">
@@ -269,13 +281,23 @@ type SessionAgentLogoStyle = CSSProperties & {
   "--session-agent-logo": string;
 };
 
-export function SessionFloatingAgentIcon({ agentIcon, isFavorite = false }: SessionAgentIconProps) {
+type SessionAgentIconDecorationProps = SessionAgentIconProps & {
+  className: string;
+  tablerClassName: string;
+};
+
+function SessionAgentIconDecoration({
+  agentIcon,
+  className,
+  isFavorite = false,
+  tablerClassName,
+}: SessionAgentIconDecorationProps) {
   const favoriteState = String(isFavorite);
   if (agentIcon === "browser") {
     return (
       <IconWorld
         aria-hidden="true"
-        className="session-floating-agent-tabler-icon"
+        className={tablerClassName}
         data-agent-icon="browser"
         data-favorite={favoriteState}
         size={14}
@@ -295,10 +317,32 @@ export function SessionFloatingAgentIcon({ agentIcon, isFavorite = false }: Sess
   return (
     <span
       aria-hidden="true"
-      className="session-floating-agent-icon"
+      className={className}
       data-agent-icon={agentIcon}
       data-favorite={favoriteState}
       style={agentLogoStyle}
+    />
+  );
+}
+
+export function SessionFloatingAgentIcon({ agentIcon, isFavorite = false }: SessionAgentIconProps) {
+  return (
+    <SessionAgentIconDecoration
+      agentIcon={agentIcon}
+      className="session-floating-agent-icon"
+      isFavorite={isFavorite}
+      tablerClassName="session-floating-agent-tabler-icon"
+    />
+  );
+}
+
+function SessionHeaderAgentIcon({ agentIcon, isFavorite = false }: SessionAgentIconProps) {
+  return (
+    <SessionAgentIconDecoration
+      agentIcon={agentIcon}
+      className="session-header-agent-icon"
+      isFavorite={isFavorite}
+      tablerClassName="session-header-agent-tabler-icon"
     />
   );
 }

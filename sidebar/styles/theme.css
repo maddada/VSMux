@@ -21,6 +21,37 @@
   --attention-dot: #63e58f;
 }
 
+body:not([data-sidebar-theme]),
+body[data-sidebar-theme="dark-blue"],
+body[data-sidebar-theme="light-blue"] {
+  --session-visible-surface: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--app-card-active) 92%, transparent),
+    color-mix(in srgb, var(--app-card) 96%, transparent)
+  );
+  --session-visible-glow: color-mix(in srgb, var(--app-button-background) 4%, transparent);
+  --session-visible-hover-border: color-mix(
+    in srgb,
+    var(--app-button-background) 40%,
+    var(--app-border)
+  );
+  --session-visible-hover-ring: color-mix(in srgb, var(--app-button-background) 6%, transparent);
+  --session-visible-hover-shadow: color-mix(in srgb, var(--app-button-background) 4%, transparent);
+  --session-visible-hover-overlay: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--app-button-background) 6%, transparent),
+    transparent 62%
+  );
+  --session-focused-border: color-mix(in srgb, var(--app-button-background) 48%, var(--app-border));
+  --session-focused-outline: color-mix(in srgb, var(--app-button-background) 42%, #ffffff 10%);
+  --session-focused-ring: color-mix(in srgb, var(--app-button-background) 20%, transparent);
+  --session-focus-visible-outline: color-mix(
+    in srgb,
+    var(--app-button-background) 48%,
+    #ffffff 18%
+  );
+}
+
 body[data-sidebar-theme="plain-dark"] {
   color-scheme: dark;
   --app-background: #111111;
@@ -319,8 +350,24 @@ button:disabled {
 .sidebar-titlebar-controls {
   display: inline-flex;
   gap: 4px;
+  opacity: 0;
+  pointer-events: none;
   position: relative;
+  transition:
+    opacity 160ms ease,
+    visibility 0s linear 160ms;
+  visibility: hidden;
   z-index: 10;
+}
+
+.stack:hover .sidebar-titlebar-controls,
+.stack:focus-within .sidebar-titlebar-controls,
+.sidebar-titlebar-controls[data-controls-visible="true"],
+.sidebar-titlebar-controls[data-menu-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0s;
+  visibility: visible;
 }
 
 .card {

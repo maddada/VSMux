@@ -6,6 +6,23 @@
 .commands-section {
   display: grid;
   gap: calc(10px * var(--sidebar-density-scale));
+  --sidebar-tile-background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
+  --sidebar-tile-border: color-mix(in srgb, var(--app-border) 92%, transparent);
+  --sidebar-tile-foreground: color-mix(in srgb, var(--app-foreground) 90%, var(--app-muted) 10%);
+  --sidebar-tile-hover-background: color-mix(
+    in srgb,
+    var(--app-button-background) 14%,
+    var(--app-card-active) 86%
+  );
+  --sidebar-tile-hover-border: color-mix(
+    in srgb,
+    var(--app-button-background) 48%,
+    var(--app-border)
+  );
+}
+
+.commands-section-agents {
+  margin-top: calc(4px * var(--sidebar-density-scale));
 }
 
 .commands-panel {
@@ -27,9 +44,9 @@
 .git-action-main-button,
 .git-action-toggle-button {
   align-items: center;
-  background: color-mix(in srgb, var(--app-button-background) 14%, var(--app-card-active) 86%);
-  border-color: color-mix(in srgb, var(--app-button-background) 40%, var(--app-border));
-  color: color-mix(in srgb, var(--app-foreground) 92%, var(--app-muted) 8%);
+  background: var(--sidebar-tile-background);
+  border-color: var(--sidebar-tile-border);
+  color: var(--sidebar-tile-foreground);
   display: inline-flex;
   min-height: calc(38px * var(--sidebar-density-scale));
   outline: 2px solid transparent;
@@ -40,8 +57,8 @@
 .git-action-main-button:focus-visible,
 .git-action-toggle-button:hover,
 .git-action-toggle-button:focus-visible {
-  background: color-mix(in srgb, var(--app-button-background) 18%, var(--app-card-active) 82%);
-  border-color: color-mix(in srgb, var(--app-button-background) 48%, var(--app-border));
+  background: var(--sidebar-tile-hover-background);
+  border-color: var(--sidebar-tile-hover-border);
   outline: none;
 }
 
@@ -241,10 +258,10 @@
 .agent-button,
 .command-button {
   align-items: center;
-  background: color-mix(in srgb, var(--app-card-active) 90%, transparent);
-  border-color: color-mix(in srgb, var(--app-border) 92%, transparent);
+  background: var(--sidebar-tile-background);
+  border-color: var(--sidebar-tile-border);
   border-radius: calc(12px * var(--sidebar-density-scale));
-  color: color-mix(in srgb, var(--app-foreground) 90%, var(--app-muted) 10%);
+  color: var(--sidebar-tile-foreground);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: calc(10px * var(--sidebar-density-scale));
@@ -285,8 +302,8 @@
 .agent-button:focus-visible,
 .command-button:hover,
 .command-button:focus-visible {
-  background: color-mix(in srgb, var(--app-button-background) 14%, var(--app-card-active) 86%);
-  border-color: color-mix(in srgb, var(--app-button-background) 48%, var(--app-border));
+  background: var(--sidebar-tile-hover-background);
+  border-color: var(--sidebar-tile-hover-border);
   outline: none;
 }
 
@@ -399,8 +416,8 @@ body[data-sidebar-theme^="dark-"] .agent-button-icon[data-agent-icon="browser"] 
 }
 
 .command-button[data-configured="true"] {
-  background: color-mix(in srgb, var(--app-button-background) 16%, var(--app-card-active) 84%);
-  border-color: color-mix(in srgb, var(--app-button-background) 40%, var(--app-border));
+  background: var(--sidebar-tile-background);
+  border-color: var(--sidebar-tile-border);
 }
 
 .command-button[data-configured="false"] {

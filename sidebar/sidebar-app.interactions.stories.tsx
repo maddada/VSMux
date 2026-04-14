@@ -33,6 +33,10 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+async function hoverSidebarChrome(storyRoot: HTMLElement) {
+  fireEvent.mouseEnter(await findRequiredElement(storyRoot, ".stack", "sidebar stack"));
+}
+
 export const ToolbarActions: Story = {
   args: {
     highlightedVisibleCount: 2,
@@ -100,12 +104,14 @@ export const ToolbarActions: Story = {
 
     await step("open sidebar settings", async () => {
       resetSidebarStoryMessages();
+      await hoverSidebarChrome(canvasElement.ownerDocument.body);
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(await body.findByRole("menuitem", { name: "VSmux Settings" }));
       await expectMessage({ type: "openSettings" });
     });
 
     await step("open the scratch pad from the sidebar menu", async () => {
+      await hoverSidebarChrome(canvasElement.ownerDocument.body);
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await body.findByRole("menuitem", { name: "Sort: Manual" });
       await userEvent.click(await body.findByRole("menuitem", { name: "Show Scratch Pad" }));
@@ -117,6 +123,7 @@ export const ToolbarActions: Story = {
     });
 
     await step("collapse the sidebar menu from its trigger", async () => {
+      await hoverSidebarChrome(canvasElement.ownerDocument.body);
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await body.findByRole("menuitem", { name: "Running" });
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
@@ -127,6 +134,7 @@ export const ToolbarActions: Story = {
 
     await step("zoom terminals without closing the sidebar menu", async () => {
       resetSidebarStoryMessages();
+      await hoverSidebarChrome(canvasElement.ownerDocument.body);
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(await body.findByRole("menuitem", { name: "Zoom Out" }));
       await expectMessage({ delta: -1, type: "adjustTerminalFontSize" });
@@ -234,6 +242,7 @@ export const ActiveSortToggle: Story = {
 
     await step("sort sessions inside each group by last activity", async () => {
       resetSidebarStoryMessages();
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
         await within(storyRoot).findByRole("menuitem", { name: "Sort: Manual" }),
@@ -246,6 +255,7 @@ export const ActiveSortToggle: Story = {
 
     await step("restore the manual order when toggled back", async () => {
       resetSidebarStoryMessages();
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
         await within(storyRoot).findByRole("menuitem", { name: "Sort: Last Activity" }),
@@ -274,6 +284,7 @@ export const ActiveSortModeStillAllowsDragging: Story = {
 
     await step("enable last-activity sorting", async () => {
       resetSidebarStoryMessages();
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
         await within(storyRoot).findByRole("menuitem", { name: "Sort: Manual" }),
@@ -366,6 +377,7 @@ export const InlineSearchFiltersGroupsInPlace: Story = {
     await waitForReadyMessage();
 
     await step("open inline search without replacing the current list", async () => {
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(canvas.getByRole("button", { name: "Search sessions" }));
       await expect(
         canvas.getByRole("textbox", { name: "Search current and previous sessions" }),
@@ -410,6 +422,8 @@ export const InlineSearchFiltersGroupsInPlace: Story = {
           canvas.queryByRole("textbox", { name: "Search current and previous sessions" }),
         ).toBeNull();
       });
+      await expect(canvas.queryByRole("button", { name: "Create a new group" })).toBeNull();
+      await hoverSidebarChrome(storyRoot);
       await expect(canvas.getByRole("button", { name: "Create a new group" })).toBeVisible();
       await expectSessionMembership(storyRoot, "group-1", ["session-1", "session-2", "session-3"]);
       await expectSessionMembership(storyRoot, "group-2", ["session-4", "session-5"]);
@@ -497,6 +511,7 @@ export const InlineSearchKeyboardSelection: Story = {
     await waitForReadyMessage();
 
     await step("filter sessions inline", async () => {
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(canvas.getByRole("button", { name: "Search sessions" }));
       const searchInput = canvas.getByRole("textbox", {
         name: "Search current and previous sessions",
@@ -588,6 +603,7 @@ export const InlineSearchKeyboardSelection: Story = {
 
     await step("delete from search with backspace when the input is not focused", async () => {
       await userEvent.keyboard("{Escape}");
+      await hoverSidebarChrome(storyRoot);
       await userEvent.click(canvas.getByRole("button", { name: "Search sessions" }));
 
       const searchInput = canvas.getByRole("textbox", {
@@ -937,6 +953,7 @@ export const DragIntoEmptyGroupAndRejectOutsideDrops: Story = {
 
     await step("ignore drops outside the groups", async () => {
       resetSidebarStoryMessages();
+      fireEvent.mouseEnter(await findRequiredElement(storyRoot, ".stack", "sidebar stack"));
       await dragAndDrop(
         await findRequiredElement(
           storyRoot,

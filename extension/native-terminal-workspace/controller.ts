@@ -190,7 +190,6 @@ import {
   getClampedActionCompletionSoundSetting,
   getClampedAgentManagerZoomPercent,
   getClampedCompletionSoundSetting,
-  getAutoSubmitRenameCommandOnAutoName,
   getClampedSidebarThemeSetting,
   getCreateSessionOnSidebarDoubleClick,
   getDefaultBrowserLaunchUrl,
@@ -905,13 +904,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
   }
 
-  public async renameSession(
-    sessionId: string,
-    title: string,
-    options?: {
-      autoSubmitTerminalRename?: boolean;
-    },
-  ): Promise<void> {
+  public async renameSession(sessionId: string, title: string): Promise<void> {
     const sessionRecord = this.store.getSession(sessionId);
     const renamePlan = sessionRecord
       ? createSessionRenamePlan(sessionRecord, this.getActiveSnapshot().focusedSessionId)
@@ -928,23 +921,18 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         `/rename ${normalizedRenameTitle}`,
         false,
       );
-      if (options?.autoSubmitTerminalRename) {
-        await this.submitRawTerminalCarriageReturn(sessionId);
-      }
       if (sessionId === this.getActiveSnapshot().focusedSessionId) {
         await this.requestWorkspaceTerminalScrollToBottom(sessionId);
       }
-      if (!options?.autoSubmitTerminalRename) {
-        await this.workspacePanel.postMessage({
-          confirmOnTerminalEnterSessionId: sessionId,
-          confirmedMessage: "Thread name synced into Agent CLI.",
-          confirmedTitle: "Thread renamed",
-          expiresAt: Date.now() + WORKSPACE_RENAME_TOAST_DURATION_MS,
-          message: "Hit enter to sync the name into Agent CLI",
-          title: "Name staged in terminal",
-          type: "showToast",
-        });
-      }
+      await this.workspacePanel.postMessage({
+        confirmOnTerminalEnterSessionId: sessionId,
+        confirmedMessage: "Thread name synced into Agent CLI.",
+        confirmedTitle: "Thread renamed",
+        expiresAt: Date.now() + WORKSPACE_RENAME_TOAST_DURATION_MS,
+        message: "Hit enter to sync the name into Agent CLI",
+        title: "Name staged in terminal",
+        type: "showToast",
+      });
     }
 
     if (renamePlan?.shouldFocusRenamedSession) {
@@ -998,9 +986,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       }
     }
 
-    await this.renameSession(sessionId, resolvedTitle, {
-      autoSubmitTerminalRename: shouldAutoName && getAutoSubmitRenameCommandOnAutoName(),
-    });
+    await this.renameSession(sessionId, resolvedTitle);
   }
 
   public async promptRenameSession(sessionId: string): Promise<void> {
@@ -3542,10 +3528,6 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     await this.backend.writeText(sessionId, data, shouldExecute);
-  }
-
-  private async submitRawTerminalCarriageReturn(sessionId: string): Promise<void> {
-    await this.backend.writeText(sessionId, "\r", false);
   }
 
   private async runProgrammaticTerminalResume(
