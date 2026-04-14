@@ -270,6 +270,17 @@
   user-select: none;
 }
 
+.agent-button-icon-shell,
+.agent-button-icon,
+.agent-button-fallback-icon,
+.agent-button-loading-icon,
+.command-button-kind-badge,
+.command-button-kind-icon,
+.command-button-leading-icon,
+.command-button-label {
+  pointer-events: none;
+}
+
 .agent-button:hover,
 .agent-button:focus-visible,
 .command-button:hover,
@@ -311,7 +322,15 @@
 }
 
 .agent-button[data-icon-only="true"] {
-  min-width: 30px;
+  min-width: 0;
+  padding: 0;
+}
+
+.commands-panel-shell,
+.agents-panel-shell {
+  background: transparent;
+  border: none;
+  box-shadow: none;
   padding: 0;
 }
 

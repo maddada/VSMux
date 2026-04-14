@@ -9,6 +9,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
+import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { SortableKeyboardPlugin } from "@dnd-kit/dom/sortable";
 import { useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -40,6 +41,33 @@ const CONTEXT_MENU_ITEM_HEIGHT_PX = 34;
 const CONTEXT_MENU_VERTICAL_PADDING_PX = 12;
 const COUNT_OPTIONS: VisibleSessionCount[] = [1, 2, 3, 4, 6, 9];
 const GROUP_CONTROL_MENU_MARGIN_PX = 12;
+const GROUP_DRAG_HOLD_DELAY_MS = 130;
+const GROUP_DRAG_HOLD_TOLERANCE_PX = 12;
+const TOUCH_GROUP_DRAG_HOLD_DELAY_MS = 180;
+const TOUCH_GROUP_DRAG_HOLD_TOLERANCE_PX = 12;
+
+const groupSensors = [
+  PointerSensor.configure({
+    activationConstraints(event) {
+      if (event.pointerType === "touch") {
+        return [
+          new PointerActivationConstraints.Delay({
+            tolerance: TOUCH_GROUP_DRAG_HOLD_TOLERANCE_PX,
+            value: TOUCH_GROUP_DRAG_HOLD_DELAY_MS,
+          }),
+        ];
+      }
+
+      return [
+        new PointerActivationConstraints.Delay({
+          tolerance: GROUP_DRAG_HOLD_TOLERANCE_PX,
+          value: GROUP_DRAG_HOLD_DELAY_MS,
+        }),
+      ];
+    },
+  }),
+  KeyboardSensor,
+];
 
 type ContextMenuPosition = {
   x: number;
@@ -51,6 +79,7 @@ type GroupControlMenu = "visible-count";
 export type SessionGroupSectionProps = {
   autoEdit: boolean;
   canClose: boolean;
+  completionFlashNonceBySessionId?: Record<string, number>;
   draggingDisabled?: boolean;
   groupId: string;
   index: number;
@@ -108,6 +137,7 @@ function getVisibleCountMenuLabel(visibleCount: VisibleSessionCount): string {
 export function SessionGroupSection({
   autoEdit,
   canClose,
+  completionFlashNonceBySessionId,
   draggingDisabled = false,
   groupId,
   index,
@@ -159,6 +189,7 @@ export function SessionGroupSection({
     id: groupId,
     index,
     plugins: [SortableKeyboardPlugin],
+    sensors: groupSensors,
     type: "group",
   });
   const emptyGroupDropTarget = useDroppable({
@@ -551,7 +582,83 @@ export function SessionGroupSection({
                   data-draggable={String(!isBrowserGroup)}
                   ref={isBrowserGroup ? undefined : sortable.handleRef}
                 >
-                  <div className="group-title">{group.title}</div>
+                  <button
+                    aria-controls={isCollapsed ? undefined : sessionsRegionId}
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.title}`}
+                    className="group-title-button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      toggleCollapsed();
+                    }}
+                    title={`${isCollapsed ? "Expand" : "Collapse"} ${group.title}`}
+                    type="button"
+                  >
+                    <span className="group-title">{group.title}</span>
+                  </button>
+                </div>
+                <div
+                  className="group-header-actions"
+                  data-open={String(openControlMenu !== undefined)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  {group.isActive && !isBrowserGroup ? (
+                    <div className="group-layout-controls">
+                      <div className="group-control-anchor">
+                        <button
+                          aria-expanded={openControlMenu === "visible-count"}
+                          aria-haspopup="menu"
+                          aria-label={`Select split count for ${group.title}`}
+                          className="group-add-button group-control-button"
+                          data-open={String(openControlMenu === "visible-count")}
+                          onClick={() => {
+                            setOpenControlMenu((previous) =>
+                              previous === "visible-count" ? undefined : "visible-count",
+                            );
+                          }}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setOpenControlMenu((previous) =>
+                              previous === "visible-count" ? undefined : "visible-count",
+                            );
+                          }}
+                          ref={visibleCountButtonRef}
+                          title={`Select split count for ${group.title}`}
+                          type="button"
+                        >
+                          <span className="group-control-count-value">
+                            {String(group.layoutVisibleCount)}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <button
+                    aria-label={
+                      isBrowserGroup
+                        ? `Open a browser in ${group.title}`
+                        : `Create a session in ${group.title}`
+                    }
+                    className="group-add-button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      requestCreateSession();
+                    }}
+                    title={
+                      isBrowserGroup
+                        ? `Open a browser in ${group.title}`
+                        : `Create a session in ${group.title}`
+                    }
+                    type="button"
+                  >
+                    <IconPlus aria-hidden="true" className="group-add-icon" size={14} stroke={2} />
+                  </button>
                 </div>
                 {isCollapsed && hasCollapsedSummary ? (
                   <div aria-label={collapsedSummaryLabel} className="group-collapsed-summary">
@@ -584,69 +691,6 @@ export function SessionGroupSection({
                     ) : null}
                   </div>
                 ) : null}
-                {group.isActive && !isBrowserGroup ? (
-                  <div
-                    className="group-layout-controls"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                  >
-                    <div className="group-control-anchor">
-                      <button
-                        aria-expanded={openControlMenu === "visible-count"}
-                        aria-haspopup="menu"
-                        aria-label={`Select split count for ${group.title}`}
-                        className="group-add-button group-control-button"
-                        data-open={String(openControlMenu === "visible-count")}
-                        onClick={() => {
-                          setOpenControlMenu((previous) =>
-                            previous === "visible-count" ? undefined : "visible-count",
-                          );
-                        }}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setOpenControlMenu((previous) =>
-                            previous === "visible-count" ? undefined : "visible-count",
-                          );
-                        }}
-                        ref={visibleCountButtonRef}
-                        title={`Select split count for ${group.title}`}
-                        type="button"
-                      >
-                        <span className="group-control-count-value">
-                          {String(group.layoutVisibleCount)}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-                <button
-                  aria-label={
-                    isBrowserGroup
-                      ? `Open a browser in ${group.title}`
-                      : `Create a session in ${group.title}`
-                  }
-                  className={
-                    isBrowserGroup
-                      ? "group-add-button group-add-button-always-visible"
-                      : "group-add-button"
-                  }
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    requestCreateSession();
-                  }}
-                  title={
-                    isBrowserGroup
-                      ? `Open a browser in ${group.title}`
-                      : `Create a session in ${group.title}`
-                  }
-                  type="button"
-                >
-                  <IconPlus aria-hidden="true" className="group-add-icon" size={14} stroke={2} />
-                </button>
               </div>
             )}
           </div>
@@ -660,6 +704,7 @@ export function SessionGroupSection({
             {orderedSessionIds.length > 0 ? (
               orderedSessionIds.map((sessionId, sessionIndex) => (
                 <SortableSessionCard
+                  completionFlashNonce={completionFlashNonceBySessionId?.[sessionId] ?? 0}
                   dragDisabled={draggingDisabled}
                   groupId={group.groupId}
                   index={sessionIndex}

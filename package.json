@@ -27,14 +27,12 @@
     "out/extension/**/*.js",
     "out/extension/**/*.json",
     "out/extension/**/*.mjs",
-    "out/extension/**/*.dll",
-    "out/extension/**/*.exe",
     "out/extension/**/*.node",
-    "out/extension/**/spawn-helper",
     "out/shared/**/*.js",
     "out/sidebar/**/*.css",
     "out/sidebar/**/*.html",
     "out/sidebar/**/*.js",
+    "out/dpcode-server/**",
     "out/t3-embed/**",
     "out/workspace/**/*.css",
     "out/workspace/**/*.html",
@@ -80,7 +78,6 @@
     "@dnd-kit/helpers": "0.3.2",
     "@dnd-kit/react": "0.3.2",
     "@fontsource-variable/inter": "^5.2.8",
-    "@lydell/node-pty": "1.2.0-beta.3",
     "@tabler/icons-react": "^3.40.0",
     "@xterm/addon-attach": "0.13.0-beta.197",
     "@xterm/addon-fit": "0.12.0-beta.197",
@@ -122,6 +119,7 @@
     "@vscode/vsce": "^3.7.1",
     "concurrently": "^9.2.1",
     "esbuild": "^0.24.0",
+    "node-pty": "1.2.0-beta.12",
     "storybook": "^10.3.0",
     "tailwindcss": "^4.1.17",
     "typescript": "~5.9.3",
@@ -198,6 +196,16 @@
       {
         "command": "VSmux.focusLeft",
         "title": "Focus Left",
+        "category": "VSmux"
+      },
+      {
+        "command": "VSmux.focusPreviousSidebarSession",
+        "title": "Focus Previous Sidebar Session",
+        "category": "VSmux"
+      },
+      {
+        "command": "VSmux.focusNextSidebarSession",
+        "title": "Focus Next Sidebar Session",
         "category": "VSmux"
       },
       {
@@ -986,6 +994,18 @@
         "when": "terminalFocus"
       },
       {
+        "command": "VSmux.focusPreviousSidebarSession",
+        "key": "ctrl+alt+[",
+        "mac": "cmd+alt+[",
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
+      },
+      {
+        "command": "VSmux.focusNextSidebarSession",
+        "key": "ctrl+alt+]",
+        "mac": "cmd+alt+]",
+        "when": "!inputFocus || terminalFocus || vsmux.workspacePanelFocus"
+      },
+      {
         "command": "VSmux.showOne",
         "key": "ctrl+alt+s 1",
         "mac": "cmd+alt+s 1",
@@ -1039,19 +1059,6 @@
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    },
-    "supportedArchitectures": {
-      "os": [
-        "current",
-        "darwin",
-        "linux",
-        "win32"
-      ],
-      "cpu": [
-        "current",
-        "arm64",
-        "x64"
-      ]
     },
     "patchedDependencies": {
       "restty@0.1.35": "patches/restty@0.1.35.patch"

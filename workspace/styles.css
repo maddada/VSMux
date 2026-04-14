@@ -534,6 +534,7 @@ body {
 
 .workspace-pane {
   background: rgba(0, 0, 0, 0.94);
+  --workspace-completion-flash-color: #65e58a;
   border: 1px solid transparent;
   border-radius: 0px;
   /* box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24); */
@@ -546,6 +547,30 @@ body {
   position: relative;
   opacity: 1;
   z-index: 1;
+}
+
+.workspace-pane::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--workspace-completion-flash-color) 92%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--workspace-completion-flash-color) 18%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--workspace-completion-flash-color) 90%, transparent),
+    0 0 24px color-mix(in srgb, var(--workspace-completion-flash-color) 32%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+  z-index: 3;
+}
+
+.workspace-pane[data-completion-flash="odd"]::after {
+  animation: workspace-pane-completion-flash-a 3s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.workspace-pane[data-completion-flash="even"]::after {
+  animation: workspace-pane-completion-flash-b 3s cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 .workspace-pane-hidden {
@@ -572,6 +597,64 @@ body {
   box-shadow:
     inset 0 0 0 1px var(--workspace-active-pane-border-color, rgba(90, 134, 255, 0.95)),
     0 18px 32px rgba(0, 0, 0, 0.28);
+}
+
+@keyframes workspace-pane-completion-flash-a {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+
+  8%,
+  36%,
+  64% {
+    opacity: 0.42;
+    transform: scale(1.001);
+  }
+
+  16%,
+  44%,
+  72% {
+    opacity: 1;
+    transform: scale(1.0025);
+  }
+
+  24%,
+  52%,
+  80% {
+    opacity: 0;
+    transform: scale(1.004);
+  }
+}
+
+@keyframes workspace-pane-completion-flash-b {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+
+  8%,
+  36%,
+  64% {
+    opacity: 0.42;
+    transform: scale(1.001);
+  }
+
+  16%,
+  44%,
+  72% {
+    opacity: 1;
+    transform: scale(1.0025);
+  }
+
+  24%,
+  52%,
+  80% {
+    opacity: 0;
+    transform: scale(1.004);
+  }
 }
 
 .workspace-pane-header {

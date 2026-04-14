@@ -166,6 +166,7 @@ export type SidebarSessionPresentationChangedMessage = {
 
 export type SidebarPlayCompletionSoundMessage = {
   sound: CompletionSoundSetting;
+  sessionId: string;
   type: "playCompletionSound";
 };
 

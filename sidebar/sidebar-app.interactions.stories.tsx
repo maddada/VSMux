@@ -87,6 +87,17 @@ export const ToolbarActions: Story = {
       await expectMessage({ type: "openSettings" });
     });
 
+    await step("open the scratch pad from the sidebar menu", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
+      await body.findByRole("menuitem", { name: "Sort: Manual" });
+      await userEvent.click(await body.findByRole("menuitem", { name: "Show Scratch Pad" }));
+      await body.findByRole("dialog", { name: "Scratch Pad" });
+      await userEvent.click(body.getByRole("button", { name: "Close scratch pad" }));
+      await waitFor(() => {
+        expect(body.queryByRole("dialog", { name: "Scratch Pad" })).toBeNull();
+      });
+    });
+
     await step("collapse the sidebar menu from its trigger", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
       await body.findByRole("menuitem", { name: "Running" });
@@ -201,12 +212,9 @@ export const ActiveSortToggle: Story = {
 
     await step("sort sessions inside each group by last activity", async () => {
       resetSidebarStoryMessages();
+      await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
-        await findRequiredElement(
-          storyRoot,
-          'button[aria-label^="Switch active sessions sort mode."]',
-          "active sessions sort toggle",
-        ),
+        await within(storyRoot).findByRole("menuitem", { name: "Sort: Manual" }),
       );
 
       await expectMessage({ type: "toggleActiveSessionsSortMode" });
@@ -216,12 +224,9 @@ export const ActiveSortToggle: Story = {
 
     await step("restore the manual order when toggled back", async () => {
       resetSidebarStoryMessages();
+      await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
-        await findRequiredElement(
-          storyRoot,
-          'button[aria-label^="Switch active sessions sort mode."]',
-          "active sessions sort toggle",
-        ),
+        await within(storyRoot).findByRole("menuitem", { name: "Sort: Last Activity" }),
       );
 
       await expectMessage({ type: "toggleActiveSessionsSortMode" });
@@ -247,12 +252,9 @@ export const ActiveSortModeStillAllowsDragging: Story = {
 
     await step("enable last-activity sorting", async () => {
       resetSidebarStoryMessages();
+      await userEvent.click(within(storyRoot).getByRole("button", { name: "Open sidebar menu" }));
       await userEvent.click(
-        await findRequiredElement(
-          storyRoot,
-          'button[aria-label^="Switch active sessions sort mode."]',
-          "active sessions sort toggle",
-        ),
+        await within(storyRoot).findByRole("menuitem", { name: "Sort: Manual" }),
       );
       await expectMessage({ type: "toggleActiveSessionsSortMode" });
       await expectSessionMembership(storyRoot, "group-1", ["session-2", "session-3", "session-1"]);
@@ -639,17 +641,11 @@ export const SessionCardActions: Story = {
       await expectMessage({ sessionId: "session-3", type: "focusSession" });
     });
 
-    await step("rename a session from the hover button", async () => {
+    await step("rename a session with a double click", async () => {
       resetSidebarStoryMessages();
 
       const sessionCard = await findSessionCard();
-      await userEvent.hover(sessionCard);
-      const sessionFrame = sessionCard.closest(".session-frame");
-      if (!(sessionFrame instanceof HTMLElement)) {
-        throw new Error("Expected hovered session card to be wrapped by .session-frame");
-      }
-
-      await userEvent.click(within(sessionFrame).getByRole("button", { name: "Rename session" }));
+      await userEvent.dblClick(sessionCard);
 
       await expectMessage({ sessionId: "session-3", type: "promptRenameSession" });
     });

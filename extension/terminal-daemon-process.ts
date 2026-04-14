@@ -3,11 +3,15 @@ import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
-import * as pty from "@lydell/node-pty";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import { createManagedTerminalEnvironment } from "./native-managed-terminal";
 import { applyAgentShellIntegrationEnvironment } from "./agent-shell-integration-environment";
+import {
+  loadVsCodeInternalNodePty,
+  type NodePtyModule,
+  type PtyProcess,
+} from "./vscode-internal-node-pty";
 import {
   createPendingAttachQueue,
   createTerminalReplayChunks,
@@ -80,7 +84,7 @@ type ManagedSession = {
   titleActivity?: TitleDerivedSessionActivity;
   titleActivityTimer?: NodeJS.Timeout;
   titleCarryover: string;
-  pty: pty.IPty;
+  pty: PtyProcess;
   rows: number;
   sessionId: string;
   sessionKey: string;
@@ -131,6 +135,7 @@ let lifecycleTimer: NodeJS.Timeout | undefined;
 let ownerAdoptionTimer: NodeJS.Timeout | undefined;
 let daemonInfo: DaemonInfo | undefined;
 let nextPendingSessionAttachmentId = 0;
+let nodePtyModule: NodePtyModule | undefined;
 
 const server = createServer();
 const wss = new WebSocketServer({ noServer: true });
@@ -538,7 +543,7 @@ function createSession(request: TerminalHostCreateOrAttachRequest): ManagedSessi
     zdotdir: environment.ZDOTDIR,
     zdotdirExists: environment.ZDOTDIR ? existsSync(environment.ZDOTDIR) : false,
   });
-  const spawnedPty = pty.spawn(request.shell, request.shellArgs ?? [], {
+  const spawnedPty = getNodePty().spawn(request.shell, request.shellArgs ?? [], {
     cols: request.cols,
     cwd: request.cwd,
     encoding: null,
@@ -622,6 +627,11 @@ function createSession(request: TerminalHostCreateOrAttachRequest): ManagedSessi
   });
 
   return session;
+}
+
+function getNodePty(): NodePtyModule {
+  nodePtyModule ??= loadVsCodeInternalNodePty();
+  return nodePtyModule;
 }
 
 function resizeSession(session: ManagedSession, cols: number, rows: number): void {

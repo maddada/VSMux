@@ -130,6 +130,11 @@ export type WorkspacePanelCodexWelcomeSettingAppliedMessage = {
   status: "alreadySet" | "updated";
 };
 
+export type WorkspacePanelFlashCompletionSessionMessage = {
+  sessionId: string;
+  type: "flashCompletionSession";
+};
+
 export type ExtensionToWorkspacePanelMessage =
   | WorkspacePanelHydrateMessage
   | WorkspacePanelSessionStateMessage
@@ -138,7 +143,8 @@ export type ExtensionToWorkspacePanelMessage =
   | WorkspacePanelScrollTerminalToBottomMessage
   | WorkspacePanelShowWelcomeMessage
   | WorkspacePanelShowToastMessage
-  | WorkspacePanelCodexWelcomeSettingAppliedMessage;
+  | WorkspacePanelCodexWelcomeSettingAppliedMessage
+  | WorkspacePanelFlashCompletionSessionMessage;
 
 export type WorkspacePanelReadyMessage = {
   type: "ready";
@@ -247,6 +253,7 @@ export function stripWorkspacePanelTransientFields(
     message.type === "showWelcomeModal" ||
     message.type === "showToast" ||
     message.type === "codexWelcomeSettingApplied" ||
+    message.type === "flashCompletionSession" ||
     message.type === "scrollTerminalToBottom" ||
     message.type === "terminalPresentationChanged" ||
     message.type === "destroyTerminalRuntime" ||

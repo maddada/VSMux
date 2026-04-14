@@ -833,6 +833,26 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
   }
 
+  public async focusAdjacentSidebarSession(direction: -1 | 1): Promise<void> {
+    const orderedSessionIds = this.getSidebarOrderedSessionIds();
+    if (orderedSessionIds.length === 0) {
+      return;
+    }
+
+    const currentSessionId = this.getFocusedSidebarSessionId();
+    const currentIndex = currentSessionId ? orderedSessionIds.indexOf(currentSessionId) : -1;
+    const targetIndex =
+      currentIndex < 0
+        ? direction > 0
+          ? 0
+          : orderedSessionIds.length - 1
+        : (currentIndex + direction + orderedSessionIds.length) % orderedSessionIds.length;
+    const targetSessionId = orderedSessionIds[targetIndex];
+    if (targetSessionId) {
+      await this.focusSession(targetSessionId, "sidebar");
+    }
+  }
+
   public async revealSession(sessionId?: string): Promise<void> {
     const resolvedSessionId = sessionId ?? (await this.promptForSessionId("Reveal session"));
     if (resolvedSessionId) {
@@ -3385,6 +3405,33 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       .filter((sessionRecord): sessionRecord is SessionRecord => sessionRecord !== undefined);
   }
 
+  private getSidebarOrderedSessionIds(): string[] {
+    const browserSessionIds = getShowSidebarBrowsers()
+      ? this.refreshLiveBrowserTabs().map((browserTab) => browserTab.sessionId)
+      : [];
+    const workspaceSnapshot = this.getPresentedWorkspaceSnapshot();
+    const sessionActivityContext = this.createSessionActivityContext();
+    const workspaceSessionIds = this.getSidebarOrderedWorkspaceSessions(
+      workspaceSnapshot,
+      sessionActivityContext,
+    ).map((sessionRecord) => sessionRecord.sessionId);
+
+    return [...browserSessionIds, ...workspaceSessionIds];
+  }
+
+  private getFocusedSidebarSessionId(): string | undefined {
+    if (getShowSidebarBrowsers()) {
+      const activeBrowserTab = this.refreshLiveBrowserTabs().find(
+        (browserTab) => browserTab.isActive,
+      );
+      if (activeBrowserTab) {
+        return activeBrowserTab.sessionId;
+      }
+    }
+
+    return this.store.getActiveGroup()?.snapshot.focusedSessionId;
+  }
+
   private suppressSessionActivityIndicators(sessionRecord: SessionRecord): void {
     if (sessionRecord.kind !== "terminal") {
       return;
@@ -3799,7 +3846,12 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       });
       void this.sidebarProvider.postMessage({
         sound: getClampedCompletionSoundSetting(),
+        sessionId,
         type: "playCompletionSound",
+      });
+      void this.workspacePanel.postMessage({
+        sessionId,
+        type: "flashCompletionSession",
       });
     }, COMPLETION_SOUND_CONFIRMATION_DELAY_MS);
     this.pendingCompletionSoundTimeoutBySessionId.set(sessionId, timeout);

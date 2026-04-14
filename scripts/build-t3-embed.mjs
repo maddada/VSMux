@@ -4,13 +4,13 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, parse, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 
 const repoRoot = process.cwd();
 const embedRoot = process.env.VSMUX_T3_REPO_ROOT?.trim() || resolve(repoRoot, "..", "dpcode-embed");
@@ -27,7 +27,6 @@ const embedPackageJsonPath = resolve(embedRoot, "package.json");
 const serverPackageJsonPath = resolve(serverRoot, "package.json");
 const embedLockfilePaths = [resolve(embedRoot, "bun.lock"), resolve(embedRoot, "bun.lockb")];
 const embedInstallStampPath = resolve(embedNodeModulesRoot, ".vsmux-install-stamp");
-const requireFromServer = createRequire(join(serverRoot, "package.json"));
 
 if (!existsSync(vendorWebRoot)) {
   throw new Error(
@@ -171,13 +170,14 @@ function copyInstalledDependencyClosure(packageName, copiedPackageNames, parentP
   if (!sourceDir) {
     return;
   }
+  const resolvedSourceDir = realpathSync(sourceDir);
 
   copiedPackageNames.add(packageName);
   const destinationDir = resolve(packagedServerNodeModulesRoot, packageName);
   mkdirSync(dirname(destinationDir), { recursive: true });
-  copyTree(sourceDir, destinationDir);
+  copyTree(resolvedSourceDir, destinationDir);
 
-  const packageJsonPath = resolve(sourceDir, "package.json");
+  const packageJsonPath = resolve(resolvedSourceDir, "package.json");
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   const dependencyNames = new Set([
     ...Object.keys(packageJson.dependencies ?? {}),
@@ -186,56 +186,28 @@ function copyInstalledDependencyClosure(packageName, copiedPackageNames, parentP
   ]);
 
   for (const dependencyName of dependencyNames) {
-    copyInstalledDependencyClosure(dependencyName, copiedPackageNames, sourceDir);
+    copyInstalledDependencyClosure(dependencyName, copiedPackageNames, resolvedSourceDir);
   }
 }
 
 function resolveInstalledPackageDir(packageName, parentPackageDir) {
-  const packageEntryPath = resolveInstalledPackageEntryPath(packageName, parentPackageDir);
-  if (!packageEntryPath) {
-    return undefined;
-  }
-
-  let currentDir = dirname(packageEntryPath);
+  let currentDir = parentPackageDir ?? serverRoot;
   const filesystemRoot = parse(currentDir).root;
 
-  while (currentDir !== filesystemRoot) {
-    const packageJsonPath = resolve(currentDir, "package.json");
-    if (existsSync(packageJsonPath)) {
-      try {
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-        if (packageJson?.name === packageName) {
-          return currentDir;
-        }
-      } catch {
-        // Keep walking upward until we find the package root.
-      }
+  while (true) {
+    const candidateDir = resolve(currentDir, "node_modules", packageName);
+    if (existsSync(candidateDir)) {
+      return candidateDir;
+    }
+
+    if (currentDir === filesystemRoot) {
+      return undefined;
     }
 
     const nextDir = dirname(currentDir);
     if (nextDir === currentDir) {
-      break;
+      return undefined;
     }
     currentDir = nextDir;
   }
-
-  return undefined;
-}
-
-function resolveInstalledPackageEntryPath(packageName, parentPackageDir) {
-  const candidateSpecifiers = [`${packageName}/package.json`, packageName];
-
-  const requireFn = parentPackageDir
-    ? createRequire(join(parentPackageDir, "package.json"))
-    : requireFromServer;
-
-  for (const specifier of candidateSpecifiers) {
-    try {
-      return requireFn.resolve(specifier);
-    } catch {
-      // Try the next resolution strategy.
-    }
-  }
-
-  return undefined;
 }

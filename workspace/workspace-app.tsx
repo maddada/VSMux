@@ -98,6 +98,7 @@ const AUTO_RELOAD_ON_LAG = true;
 const T3_TERMINAL_FOCUS_GUARD_MS = 1_000;
 const WORKSPACE_TOAST_CONFIRM_DISPLAY_MS = 2_800;
 const WORKSPACE_TOAST_CONFIRM_FADE_MS = 300;
+const COMPLETION_FLASH_DURATION_MS = 3_000;
 let nextWorkspaceBootId = 0;
 let nextWorkspacePaneViewInstanceId = 0;
 let nextWorkspacePortalTargetId = 0;
@@ -241,6 +242,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   const [paneMeasuredBoundsVersion, setPaneMeasuredBoundsVersion] = useState(0);
   const [, setTerminalPortalVersion] = useState(0);
   const [workspaceToast, setWorkspaceToast] = useState<WorkspaceToastState | undefined>();
+  const [completionFlashNonceBySessionId, setCompletionFlashNonceBySessionId] = useState<
+    Record<string, number>
+  >({});
   const [terminalScrollRequest, setTerminalScrollRequest] = useState<
     WorkspaceTerminalScrollRequestState | undefined
   >();
@@ -264,6 +268,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
     new Map<string, (element: HTMLDivElement | null) => void>(),
   );
   const terminalPortalTargetVersionRef = useRef(0);
+  const completionFlashTimeoutBySessionIdRef = useRef<Map<string, number>>(new Map());
   const handleT3IframeFocusRef = useRef<
     | ((
         sessionId: string,
@@ -521,6 +526,33 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
         return;
       }
 
+      if (nextMessage.type === "flashCompletionSession") {
+        const existingTimeout = completionFlashTimeoutBySessionIdRef.current.get(
+          nextMessage.sessionId,
+        );
+        if (existingTimeout !== undefined) {
+          window.clearTimeout(existingTimeout);
+        }
+        setCompletionFlashNonceBySessionId((previous) => ({
+          ...previous,
+          [nextMessage.sessionId]: (previous[nextMessage.sessionId] ?? 0) + 1,
+        }));
+        const timeout = window.setTimeout(() => {
+          completionFlashTimeoutBySessionIdRef.current.delete(nextMessage.sessionId);
+          setCompletionFlashNonceBySessionId((previous) => {
+            if (!(nextMessage.sessionId in previous)) {
+              return previous;
+            }
+
+            const next = { ...previous };
+            delete next[nextMessage.sessionId];
+            return next;
+          });
+        }, COMPLETION_FLASH_DURATION_MS);
+        completionFlashTimeoutBySessionIdRef.current.set(nextMessage.sessionId, timeout);
+        return;
+      }
+
       if (nextMessage.type === "scrollTerminalToBottom") {
         setTerminalScrollRequest(nextMessage);
         return;
@@ -583,6 +615,15 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       window.removeEventListener("message", handleIframeFocus);
     };
   }, [messageSource, vscode]);
+
+  useEffect(() => {
+    return () => {
+      for (const timeout of completionFlashTimeoutBySessionIdRef.current.values()) {
+        window.clearTimeout(timeout);
+      }
+      completionFlashTimeoutBySessionIdRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (!workspaceToast) {
@@ -1467,6 +1508,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
       ) : null}
       {orderedPanes.map((pane) => (
         <WorkspacePaneView
+          completionFlashNonce={completionFlashNonceBySessionId[pane.sessionId] ?? 0}
           debugLog={(event, payload) =>
             postWorkspaceDebugLog(workspaceState.debuggingMode, event, payload)
           }
@@ -1666,6 +1708,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
 
 type WorkspacePaneViewProps = {
   autoFocusRequest?: WorkspacePanelAutoFocusRequest;
+  completionFlashNonce?: number;
   debugLog: (event: string, payload?: Record<string, unknown>) => void;
   fallbackLayoutStyle?: CSSProperties;
   t3FocusSuppressedUntil: number;
@@ -1694,6 +1737,7 @@ type WorkspacePaneViewProps = {
 
 const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   autoFocusRequest,
+  completionFlashNonce = 0,
   debugLog,
   fallbackLayoutStyle,
   t3FocusSuppressedUntil,
@@ -1721,6 +1765,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
 }) => {
   const paneViewInstanceIdRef = useRef(`workspace-pane-view-${++nextWorkspacePaneViewInstanceId}`);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const [completionFlashRunId, setCompletionFlashRunId] = useState(0);
   const primaryTitle = getWorkspacePanePrimaryTitle(pane);
   const headerIndicatorState = getWorkspacePaneHeaderIndicatorState(pane);
   const canFork = supportsWorkspacePaneFork(pane);
@@ -1779,6 +1824,28 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
     };
   }, [onBoundsMeasured, pane.isVisible]);
 
+  useEffect(() => {
+    if (completionFlashNonce <= 0) {
+      return;
+    }
+
+    setCompletionFlashRunId(completionFlashNonce);
+  }, [completionFlashNonce]);
+
+  useEffect(() => {
+    if (completionFlashRunId <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setCompletionFlashRunId((previous) => (previous === completionFlashRunId ? 0 : previous));
+    }, COMPLETION_FLASH_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [completionFlashRunId]);
+
   return (
     <section
       className={[
@@ -1792,6 +1859,9 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
       ]
         .filter(Boolean)
         .join(" ")}
+      data-completion-flash={
+        completionFlashRunId > 0 ? (completionFlashRunId % 2 === 0 ? "even" : "odd") : undefined
+      }
       data-workspace-pane-id={pane.sessionId}
       ref={sectionRef}
       onMouseDown={() => {

@@ -52,12 +52,18 @@ For this repo, `compile` now delegates to `build:extension`, and `vscode:prepubl
 `build:extension` currently runs:
 
 ```bash
+vp run t3:embed:build
 vp run sidebar:build
 vp run debug-panel:build
 vp run workspace:build
+pnpm run chat-history:webview:build
 tsc -p ./tsconfig.extension.json
 node ./scripts/vendor-runtime-deps.mjs
 ```
+
+`vendor-runtime-deps.mjs` now vendors only the runtime JavaScript dependencies the daemon needs at package time, such as `ws` and the xterm packages. It does not ship a private `node-pty` build anymore.
+
+The terminal daemon now resolves `node-pty` from the host VS Code installation at runtime by using `vscode.env.appRoot`, so release packaging should not include `spawn-helper`, Windows PTY sidecars, or `@lydell/node-pty-*` platform packages.
 
 ### `scripts/publish-extension.mjs`
 
@@ -381,6 +387,7 @@ inside the temporary worktree before packaging.
 - this repo currently relies on `vp exec vsce ...` for Marketplace commands
 - this repo currently publishes Open VSX by calling `npx ovsx publish ...` manually
 - `pnpm run vsix:publish` does not publish Open VSX by itself
+- terminal PTY support comes from VS Code's own bundled `node-pty` at runtime, not from native PTY binaries packaged in the VSIX
 
 ## Recommendation
 

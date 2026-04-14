@@ -55,11 +55,12 @@
   );
   --session-glow: transparent;
   width: 100%;
-  padding: calc(9px * var(--sidebar-density-scale)) calc(12px * var(--sidebar-density-scale));
-  border: 1px solid var(--app-border);
+  padding: calc(9px * var(--sidebar-density-scale)) calc(9px * var(--sidebar-density-scale))
+    calc(9px * var(--sidebar-density-scale)) calc(11px * var(--sidebar-density-scale));
+  border: 1px solid transparent;
   outline: 2px solid transparent;
   outline-offset: -3px;
-  border-radius: calc(18px * var(--sidebar-density-scale));
+  border-radius: calc(10px * var(--sidebar-density-scale));
   background: transparent;
   color: inherit;
   text-align: left;
@@ -72,7 +73,74 @@
     background-color 120ms ease,
     border-color 120ms ease,
     box-shadow 120ms ease,
+    outline-color 120ms ease,
     opacity 120ms ease;
+}
+
+.session[data-completion-flash="odd"] {
+  animation: session-completion-flash-a 3s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.session[data-completion-flash="even"] {
+  animation: session-completion-flash-b 3s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+@keyframes session-completion-flash-a {
+  0%,
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+
+  8%,
+  36%,
+  64% {
+    opacity: 0.9;
+    filter: brightness(1.03) saturate(1.02);
+  }
+
+  16%,
+  44%,
+  72% {
+    opacity: 0.58;
+    filter: brightness(0.96) saturate(0.98);
+  }
+
+  24%,
+  52%,
+  80% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes session-completion-flash-b {
+  0%,
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+
+  8%,
+  36%,
+  64% {
+    opacity: 0.9;
+    filter: brightness(1.03) saturate(1.02);
+  }
+
+  16%,
+  44%,
+  72% {
+    opacity: 0.58;
+    filter: brightness(0.96) saturate(0.98);
+  }
+
+  24%,
+  52%,
+  80% {
+    opacity: 1;
+    filter: none;
+  }
 }
 
 .session::before,
@@ -97,7 +165,7 @@
   inset: 1px;
   z-index: -1;
   background: var(--session-surface);
-  opacity: 1;
+  opacity: 0;
 }
 
 .session[data-dragging="true"] {
@@ -127,34 +195,73 @@
   opacity: 1;
 }
 
+.session:is(
+  :hover,
+  :focus-visible,
+  :focus-within,
+  [data-focused="true"],
+  [data-search-selected="true"]
+) {
+  border-color: var(--app-border);
+}
+
+.session:is(
+    :hover,
+    :focus-visible,
+    :focus-within,
+    [data-focused="true"],
+    [data-search-selected="true"]
+  )::after {
+  opacity: 1;
+}
+
 .session[data-visible="true"] {
   --session-surface: linear-gradient(
     160deg,
-    color-mix(in srgb, var(--app-button-background) 18%, var(--app-card-active) 82%),
-    color-mix(in srgb, var(--app-button-background) 10%, var(--app-card) 90%)
+    color-mix(in srgb, var(--app-button-background) 10%, var(--app-card-active) 90%),
+    color-mix(in srgb, var(--app-button-background) 6%, var(--app-card) 94%)
   );
-  --session-glow: color-mix(in srgb, var(--app-button-background) 16%, transparent);
-  border-color: color-mix(in srgb, var(--app-button-background) 34%, var(--app-border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--app-button-background) 10%, transparent),
-    0 12px 28px color-mix(in srgb, var(--app-button-background) 8%, transparent);
+  --session-glow: color-mix(in srgb, var(--app-button-background) 9%, transparent);
 }
 
-.session[data-visible="true"]::before {
-  opacity: 0.96;
+.session[data-visible="true"]::after {
+  opacity: 1;
+}
+
+.session[data-visible="true"]:is(
+    :hover,
+    :focus-visible,
+    :focus-within,
+    [data-focused="true"],
+    [data-search-selected="true"]
+  ) {
+  border-color: color-mix(in srgb, var(--app-button-background) 22%, var(--app-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--app-button-background) 6%, transparent),
+    0 10px 22px color-mix(in srgb, var(--app-button-background) 4%, transparent);
+}
+
+.session[data-visible="true"]:is(
+    :hover,
+    :focus-visible,
+    :focus-within,
+    [data-focused="true"],
+    [data-search-selected="true"]
+  )::before {
+  opacity: 0.72;
   background:
     radial-gradient(circle at 16% 18%, var(--session-glow), transparent 54%),
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--app-button-background) 14%, transparent),
+      color-mix(in srgb, var(--app-button-background) 8%, transparent),
       transparent 62%
     );
 }
 
 .session[data-focused="true"] {
-  border-color: color-mix(in srgb, var(--app-button-background) 72%, var(--app-border));
-  outline-color: color-mix(in srgb, var(--app-button-background) 92%, #ffffff 8%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 88%, transparent);
+  border-color: color-mix(in srgb, var(--app-button-background) 42%, var(--app-border));
+  outline-color: color-mix(in srgb, var(--app-button-background) 56%, #ffffff 8%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-button-background) 52%, transparent);
 }
 
 .session[data-search-selected="true"] {
@@ -169,7 +276,7 @@
 
 .session-history-card {
   cursor: default;
-  padding-left: calc(28px * var(--sidebar-density-scale));
+  padding-left: calc(25px * var(--sidebar-density-scale));
 }
 
 .session-history-card[data-restorable="true"] {
@@ -229,7 +336,7 @@
   opacity: 0;
   pointer-events: none;
   scale: 1;
-  translate: 8px -50%;
+  translate: 7px -50%;
   z-index: 2;
   transition:
     opacity 160ms ease,
@@ -280,7 +387,7 @@
   width: calc(15px * var(--sidebar-density-scale));
   height: calc(15px * var(--sidebar-density-scale));
   background: var(--session-agent-icon-color, var(--app-foreground));
-  opacity: 0.74;
+  opacity: 0;
   pointer-events: none;
   translate: calc(-5px * var(--sidebar-density-scale)) calc(-4px * var(--sidebar-density-scale));
   z-index: 3;
@@ -292,6 +399,7 @@
   mask-position: center;
   mask-repeat: no-repeat;
   mask-size: contain;
+  transition: opacity 120ms ease;
 }
 
 .session-floating-agent-tabler-icon {
@@ -299,10 +407,11 @@
   left: 0;
   top: 0;
   color: var(--session-agent-icon-color, var(--app-foreground));
-  opacity: 0.74;
+  opacity: 0;
   pointer-events: none;
   translate: calc(-5px * var(--sidebar-density-scale)) calc(-4px * var(--sidebar-density-scale));
   z-index: 3;
+  transition: opacity 120ms ease;
 }
 
 .session-floating-agent-icon[data-agent-icon="codex"] {
@@ -339,6 +448,15 @@
 .session-floating-agent-tabler-icon[data-favorite="true"] {
   --session-agent-icon-color: color-mix(in srgb, #ffdf75 78%, #c78b12 22%);
   filter: brightness(1.04) saturate(1.08);
+}
+
+.session-frame:hover .session-floating-agent-icon,
+.session-frame:hover .session-floating-agent-tabler-icon {
+  opacity: 0.74;
+}
+
+.session-frame:hover .session-floating-agent-icon[data-favorite="true"],
+.session-frame:hover .session-floating-agent-tabler-icon[data-favorite="true"] {
   opacity: 1;
 }
 
@@ -349,15 +467,27 @@
 
 .session-last-interaction-time {
   color: color-mix(in srgb, var(--app-muted) 88%, transparent);
+  font-family:
+    Consolas, "SFMono-Regular", Menlo, Monaco, "Cascadia Mono", "Liberation Mono",
+    "DejaVu Sans Mono", "Ubuntu Mono", "Courier New";
   font-size: calc(12px * var(--sidebar-density-scale));
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   letter-spacing: 0.01em;
   line-height: 1.25;
   min-width: 0;
+  opacity: 0.5;
   overflow: hidden;
   position: relative;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
   z-index: 1;
+  transition: opacity 120ms ease;
+}
+
+.session:hover .session-last-interaction-time,
+.session:focus-visible .session-last-interaction-time,
+.session:focus-within .session-last-interaction-time {
+  opacity: 1;
 }

@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const outNodeModulesDir = path.join(repoRoot, "out", "extension", "node_modules");
 const require = createRequire(import.meta.url);
 
-const runtimePackages = ["ws", "@lydell/node-pty", "@xterm/addon-serialize", "@xterm/headless"];
+const runtimePackages = ["ws", "@xterm/addon-serialize", "@xterm/headless"];
 
 async function main() {
   await rm(outNodeModulesDir, { force: true, recursive: true });
@@ -17,8 +17,6 @@ async function main() {
   for (const packageName of runtimePackages) {
     await copyPackage(packageName);
   }
-
-  await copyInstalledNodePtyPlatformPackages();
 }
 
 async function copyPackage(packageName) {
@@ -26,45 +24,6 @@ async function copyPackage(packageName) {
   const destinationDir = path.join(outNodeModulesDir, packageName);
   await mkdir(path.dirname(destinationDir), { recursive: true });
   await cp(sourceDir, destinationDir, { dereference: true, recursive: true });
-}
-
-async function copyInstalledNodePtyPlatformPackages() {
-  const nodePtyDir = await resolvePackageDir("@lydell/node-pty");
-  const lydellDir = path.join(nodePtyDir, "..");
-  const entries = await readdir(lydellDir, { withFileTypes: true });
-  const expectedPackages = Object.keys(
-    JSON.parse(await readFile(path.join(nodePtyDir, "package.json"), "utf8"))
-      .optionalDependencies ?? {},
-  ).map((packageName) => packageName.replace("@lydell/", ""));
-  const copiedPackages = new Set();
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) {
-      continue;
-    }
-    if (!entry.name.startsWith("node-pty-")) {
-      continue;
-    }
-    const sourceDir = path.join(lydellDir, entry.name);
-    const destinationDir = path.join(outNodeModulesDir, "@lydell", entry.name);
-    await mkdir(path.dirname(destinationDir), { recursive: true });
-    await cp(sourceDir, destinationDir, { dereference: true, recursive: true });
-    copiedPackages.add(entry.name);
-  }
-
-  const missingPackages = expectedPackages.filter(
-    (packageName) => !copiedPackages.has(packageName),
-  );
-  if (missingPackages.length > 0) {
-    throw new Error(
-      [
-        "Missing node-pty platform packages in local node_modules:",
-        ...missingPackages.map((packageName) => `- ${packageName}`),
-        "",
-        "Run `pnpm install` with the package.json pnpm.supportedArchitectures settings so these optional packages are available before packaging.",
-      ].join("\n"),
-    );
-  }
 }
 
 async function resolvePackageDir(packageName) {
@@ -90,6 +49,7 @@ async function resolvePackageDir(packageName) {
   throw new Error(`Unable to resolve package root for ${packageName}.`);
 }
 
-main().catch(() => {
+main().catch((error) => {
+  console.error(error);
   process.exitCode = 1;
 });

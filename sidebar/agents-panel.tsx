@@ -237,6 +237,7 @@ export function AgentsPanel({
       .map((agentId) => agentById.get(agentId))
       .filter((agent): agent is SidebarAgentButton => agent !== undefined);
   }, [agents, draftAgentIds]);
+  const gridColumnCount = Math.min(Math.max(orderedAgents.length, 1), 5);
 
   const handleDragEnd = ((event) => {
     if (event.canceled) {
@@ -302,10 +303,13 @@ export function AgentsPanel({
             title="Agents"
           />
           {!isCollapsed ? (
-            <div className="card commands-panel">
+            <div className="card commands-panel agents-panel-shell">
               <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
                 <DragDropProvider onDragEnd={handleDragEnd}>
-                  <div className="agents-grid">
+                  <div
+                    className="agents-grid"
+                    style={{ gridTemplateColumns: `repeat(${gridColumnCount}, minmax(0, 1fr))` }}
+                  >
                     {orderedAgents.map((agent, index) => (
                       <SortableAgentButton
                         agent={agent}
@@ -449,6 +453,10 @@ function SortableAgentButton({
     index,
     type: "sidebar-agent",
   });
+  const setButtonRef = (element: HTMLButtonElement | null) => {
+    sortable.ref(element);
+    sortable.sourceRef(element);
+  };
 
   return (
     <Tooltip.Root>
@@ -466,7 +474,7 @@ function SortableAgentButton({
             draggable={false}
             onClick={isLaunching ? undefined : onRun}
             onContextMenu={isLaunching ? undefined : onContextMenu}
-            ref={sortable.ref}
+            ref={setButtonRef}
             type="button"
           >
             <span className="agent-button-icon-shell">

@@ -52,6 +52,7 @@ const SESSION_CARD_DRAG_HOLD_DELAY_MS = 130;
 const SESSION_CARD_DRAG_HOLD_TOLERANCE_PX = 12;
 const TOUCH_SESSION_CARD_DRAG_HOLD_DELAY_MS = 130;
 const TOUCH_SESSION_CARD_DRAG_HOLD_TOLERANCE_PX = 12;
+const COMPLETION_FLASH_DURATION_MS = 3_000;
 
 const sessionCardSensors = [
   PointerSensor.configure({
@@ -90,6 +91,7 @@ type SessionContextMenuAction = {
 };
 
 export type SortableSessionCardProps = {
+  completionFlashNonce?: number;
   dragDisabled?: boolean;
   groupId: string;
   index: number;
@@ -123,6 +125,7 @@ function clampContextMenuPosition(
 }
 
 export function SortableSessionCard({
+  completionFlashNonce = 0,
   dragDisabled = false,
   groupId,
   index,
@@ -143,6 +146,7 @@ export function SortableSessionCard({
       })),
     );
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
+  const [completionFlashRunId, setCompletionFlashRunId] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const aliasHeadingRef = useRef<HTMLDivElement>(null);
   const debugInstanceIdRef = useRef(createSidebarDebugInstanceId());
@@ -244,6 +248,28 @@ export function SortableSessionCard({
   useEffect(() => {
     setContextMenuPosition(undefined);
   }, [session.alias, session.sessionId]);
+
+  useEffect(() => {
+    if (completionFlashNonce <= 0) {
+      return;
+    }
+
+    setCompletionFlashRunId(completionFlashNonce);
+  }, [completionFlashNonce]);
+
+  useEffect(() => {
+    if (completionFlashRunId <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setCompletionFlashRunId((previous) => (previous === completionFlashRunId ? 0 : previous));
+    }, COMPLETION_FLASH_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [completionFlashRunId]);
 
   useEffect(() => {
     postSessionDragDebugLog("session.cardMounted", {
@@ -588,6 +614,13 @@ export function SortableSessionCard({
             aria-pressed={session.isFocused}
             className="session"
             data-activity={session.activity}
+            data-completion-flash={
+              completionFlashRunId > 0
+                ? completionFlashRunId % 2 === 0
+                  ? "even"
+                  : "odd"
+                : undefined
+            }
             data-has-agent-icon={String(Boolean(session.agentIcon))}
             data-dragging={String(Boolean(sortable.isDragging))}
             data-drop-position={visibleDropPosition}
@@ -650,6 +683,15 @@ export function SortableSessionCard({
 
               requestFocusSession();
             }}
+            onDoubleClick={(event) => {
+              if (isBrowserSession) {
+                return;
+              }
+
+              event.preventDefault();
+              event.stopPropagation();
+              requestRename();
+            }}
             onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
               event.preventDefault();
               event.stopPropagation();
@@ -663,7 +705,6 @@ export function SortableSessionCard({
             <SessionCardContent
               aliasHeadingRef={aliasHeadingRef}
               onClose={requestClose}
-              onRename={isBrowserSession ? undefined : requestRename}
               session={session}
               showDebugSessionNumbers={showDebugSessionNumbers}
               showCloseButton={showCloseButton}

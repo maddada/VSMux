@@ -1,4 +1,4 @@
-import { IconPencil, IconWorld } from "@tabler/icons-react";
+import { IconWorld } from "@tabler/icons-react";
 import { Tooltip } from "@base-ui/react/tooltip";
 import {
   cloneElement,
@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import type { SidebarSessionItem } from "../shared/session-grid-contract";
+import { type SidebarSessionItem } from "../shared/session-grid-contract";
 import { getSidebarAgentNameByIcon, type SidebarAgentIcon } from "../shared/sidebar-agents";
 import { AGENT_LOGOS } from "./agent-logos";
 import { formatRelativeTime, getRelativeTimeColor } from "./relative-time";
@@ -36,7 +36,6 @@ const UNSYNCED_TITLE_LABEL = "(Unsynced title)";
 export type SessionCardContentProps = {
   aliasHeadingRef?: RefObject<HTMLDivElement | null>;
   onClose?: () => void;
-  onRename?: () => void;
   session: SidebarSessionItem;
   showDebugSessionNumbers: boolean;
   showCloseButton: boolean;
@@ -46,24 +45,21 @@ export type SessionCardContentProps = {
 
 export function SessionCardContent({
   aliasHeadingRef,
-  onClose,
-  onRename,
   session,
   showDebugSessionNumbers,
-  showCloseButton,
-  showHotkeys,
   showLastInteractionTime = false,
 }: SessionCardContentProps) {
   const { headingText } = getSessionCardTitleTooltip({
     session,
     showDebugSessionNumbers,
   });
-  const showMeta = showHotkeys;
   const hasLastInteractionTime = showLastInteractionTime && Boolean(session.lastInteractionAt);
   useRelativeTimeTick(hasLastInteractionTime);
   const lastInteractionLabel =
     hasLastInteractionTime && session.lastInteractionAt
-      ? formatRelativeTime(session.lastInteractionAt).value
+      ? formatRelativeTime(session.lastInteractionAt, {
+          allowJustNow: false,
+        }).value
       : undefined;
   const lastInteractionStyle =
     hasLastInteractionTime && session.lastInteractionAt
@@ -103,20 +99,6 @@ export function SessionCardContent({
           ) : null}
         </div> */}
       </div>
-      {onRename ? (
-        <button
-          aria-label="Rename session"
-          className="session-rename-button"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onRename();
-          }}
-          type="button"
-        >
-          <IconPencil aria-hidden="true" size={14} stroke={1.8} />
-        </button>
-      ) : null}
     </>
   );
 }

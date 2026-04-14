@@ -41,6 +41,12 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCommand("VSmux.focusRight", () => workspace.focusDirection("right")),
     registerCommand("VSmux.focusDown", () => workspace.focusDirection("down")),
     registerCommand("VSmux.focusLeft", () => workspace.focusDirection("left")),
+    registerCommand("VSmux.focusPreviousSidebarSession", () =>
+      workspace.focusAdjacentSidebarSession(-1),
+    ),
+    registerCommand("VSmux.focusNextSidebarSession", () =>
+      workspace.focusAdjacentSidebarSession(1),
+    ),
     registerSlotFocusCommand("VSmux.focusSessionSlot", workspace),
     registerVisibleCountCommand("VSmux.showOne", workspace, 1),
     registerVisibleCountCommand("VSmux.showTwo", workspace, 2),

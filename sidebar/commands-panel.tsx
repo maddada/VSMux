@@ -302,6 +302,7 @@ export function CommandsPanel({
       .map((commandId) => commandById.get(commandId))
       .filter((command): command is SidebarCommandButton => command !== undefined);
   }, [commands, draftCommandIds]);
+  const gridColumnCount = Math.min(Math.max(orderedCommands.length, 1), 4);
   const shouldRenderSection = isVisible && (showGitButton || orderedCommands.length > 0);
 
   const handleDragEnd = ((event) => {
@@ -368,11 +369,14 @@ export function CommandsPanel({
             title="Actions"
           />
           {!isCollapsed ? (
-            <div className="card commands-panel">
+            <div className="card commands-panel commands-panel-shell">
               {showGitButton ? <GitActionRow git={git} vscode={vscode} /> : null}
               <Tooltip.Provider delay={TOOLTIP_DELAY_MS}>
                 <DragDropProvider onDragEnd={handleDragEnd}>
-                  <div className="commands-grid">
+                  <div
+                    className="commands-grid"
+                    style={{ gridTemplateColumns: `repeat(${gridColumnCount}, minmax(0, 1fr))` }}
+                  >
                     {orderedCommands.map((command, index) => (
                       <SortableCommandButton
                         command={command}
@@ -543,6 +547,10 @@ function SortableCommandButton({
     index,
     type: "sidebar-command",
   });
+  const setButtonRef = (element: HTMLButtonElement | null) => {
+    sortable.ref(element);
+    sortable.sourceRef(element);
+  };
 
   return (
     <Tooltip.Root>
@@ -564,7 +572,7 @@ function SortableCommandButton({
             draggable={false}
             onClick={onRun}
             onContextMenu={onContextMenu}
-            ref={sortable.ref}
+            ref={setButtonRef}
             type="button"
           >
             <span aria-hidden="true" className="command-button-kind-badge">

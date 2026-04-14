@@ -15,6 +15,10 @@ function getRelativeTimeDiffMs(isoDate: string): number {
   return Math.max(0, Date.now() - new Date(isoDate).getTime());
 }
 
+function formatCompactRelativeUnit(value: number, unit: string): string {
+  return `${String(value).padStart(2, "0")}${unit}`;
+}
+
 function buildForegroundMixedGreen(greenWeight: number): string {
   return `color-mix(in srgb, #63e58f ${greenWeight}%, var(--app-foreground) ${100 - greenWeight}%)`;
 }
@@ -23,33 +27,43 @@ function buildMutedMixedGreen(greenWeight: number): string {
   return `color-mix(in srgb, #63e58f ${greenWeight}%, var(--app-muted) ${100 - greenWeight}%)`;
 }
 
-export function formatRelativeTime(isoDate: string): { value: string; suffix: string | null } {
+export type FormatRelativeTimeOptions = {
+  allowJustNow?: boolean;
+};
+
+export function formatRelativeTime(
+  isoDate: string,
+  options: FormatRelativeTimeOptions = {},
+): { value: string; suffix: string | null } {
   const diffMs = getRelativeTimeDiffMs(isoDate);
   const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 5) {
+  if (options.allowJustNow !== false && seconds < 5) {
     return { value: "just now", suffix: null };
   }
 
   if (seconds < 60) {
-    return { value: `${seconds}s`, suffix: "ago" };
+    return { value: formatCompactRelativeUnit(seconds, "s"), suffix: "ago" };
   }
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return { value: `${minutes}m`, suffix: "ago" };
+    return { value: formatCompactRelativeUnit(minutes, "m"), suffix: "ago" };
   }
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return { value: `${hours}h`, suffix: "ago" };
+    return { value: formatCompactRelativeUnit(hours, "h"), suffix: "ago" };
   }
 
   const days = Math.floor(hours / 24);
-  return { value: `${days}d`, suffix: "ago" };
+  return { value: formatCompactRelativeUnit(days, "d"), suffix: "ago" };
 }
 
-export function formatRelativeTimeLabel(isoDate: string): string {
-  const relative = formatRelativeTime(isoDate);
+export function formatRelativeTimeLabel(
+  isoDate: string,
+  options?: FormatRelativeTimeOptions,
+): string {
+  const relative = formatRelativeTime(isoDate, options);
   return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
 }
 

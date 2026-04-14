@@ -434,6 +434,10 @@ export class DaemonTerminalRuntime implements vscode.Disposable {
         const daemonScriptPath = path.join(__dirname, "terminal-daemon-process.js");
         const child = spawn(process.execPath, [daemonScriptPath, "--state-dir", daemonStateDir], {
           detached: true,
+          env: {
+            ...process.env,
+            VSMUX_VSCODE_APP_ROOT: vscode.env.appRoot,
+          },
           stdio: "ignore",
         });
         child.unref();

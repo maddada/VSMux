@@ -3,13 +3,25 @@
   gap: calc(10px * var(--sidebar-density-scale));
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
+  margin-left: calc(-12px * var(--sidebar-density-scale));
+  margin-right: calc(-12px * var(--sidebar-density-scale));
   overflow: hidden;
   position: relative;
+  width: calc(100% + (24px * var(--sidebar-density-scale)));
 }
 
 .session-groups-top {
   display: grid;
   gap: calc(10px * var(--sidebar-density-scale));
+  padding-left: calc(12px * var(--sidebar-density-scale));
+  padding-right: calc(12px * var(--sidebar-density-scale));
+}
+
+.session-groups-toolbar {
+  display: flex;
+  gap: calc(6px * var(--sidebar-density-scale));
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .session-groups-panel[data-dimmed="true"] {
@@ -88,11 +100,63 @@
   align-items: start;
   display: grid;
   gap: calc(10px * var(--sidebar-density-scale));
+  height: 100%;
   min-height: 0;
+  padding-right: calc(8px * var(--sidebar-density-scale));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   position: relative;
+}
+
+.session-groups-scroll-shell {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.session-groups-scroll-glow {
+  height: calc(22px * var(--sidebar-density-scale));
+  left: calc(2px * var(--sidebar-density-scale));
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: calc(2px * var(--sidebar-density-scale));
+  transition: opacity 150ms ease;
+  z-index: 2;
+}
+
+.session-groups-scroll-glow-top {
+  top: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--app-background) 22%, transparent) 0%,
+    color-mix(in srgb, var(--app-card) 14%, transparent) 48%,
+    transparent 100%
+  );
+  box-shadow: inset 0 11px 16px color-mix(in srgb, var(--app-background) 12%, transparent);
+}
+
+.session-groups-scroll-glow-bottom {
+  bottom: 0;
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--app-background) 22%, transparent) 0%,
+    color-mix(in srgb, var(--app-card) 14%, transparent) 48%,
+    transparent 100%
+  );
+  box-shadow: inset 0 -11px 16px color-mix(in srgb, var(--app-background) 12%, transparent);
+}
+
+.session-groups-scroll-shell[data-scroll-glow-top="true"] .session-groups-scroll-glow-top,
+.session-groups-scroll-shell[data-scroll-glow-bottom="true"] .session-groups-scroll-glow-bottom {
+  opacity: 1;
+}
+
+.session-groups-content > .group-list + .group-list {
+  margin-top: calc(-4px * var(--sidebar-density-scale));
 }
 
 .session-search-toolbar {
