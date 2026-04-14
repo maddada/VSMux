@@ -114,6 +114,8 @@ export function shouldBypassSidebarMessageQueue(message: SidebarToExtensionMessa
     case "refreshGitState":
     case "openSettings":
     case "promptFindPreviousSession":
+    case "syncSidebarAgentOrder":
+    case "syncSidebarCommandOrder":
       return true;
     default:
       return false;
@@ -256,6 +258,8 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
 
     case "syncSidebarCommandOrder":
       return (
+        typeof message.requestId === "string" &&
+        message.requestId.length > 0 &&
         Array.isArray(message.commandIds) &&
         message.commandIds.every(
           (commandId) => typeof commandId === "string" && commandId.length > 0,
@@ -268,6 +272,8 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
 
     case "syncSidebarAgentOrder":
       return (
+        typeof message.requestId === "string" &&
+        message.requestId.length > 0 &&
         Array.isArray(message.agentIds) &&
         message.agentIds.every((agentId) => typeof agentId === "string" && agentId.length > 0)
       );

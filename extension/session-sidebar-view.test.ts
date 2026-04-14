@@ -150,4 +150,21 @@ describe("shouldBypassSidebarMessageQueue", () => {
       }),
     ).toBe(false);
   });
+
+  test("should bypass sidebar reorder sync messages", () => {
+    expect(
+      shouldBypassSidebarMessageQueue({
+        agentIds: ["codex", "claude"],
+        requestId: "req-agent",
+        type: "syncSidebarAgentOrder",
+      }),
+    ).toBe(true);
+    expect(
+      shouldBypassSidebarMessageQueue({
+        commandIds: ["test", "build"],
+        requestId: "req-command",
+        type: "syncSidebarCommandOrder",
+      }),
+    ).toBe(true);
+  });
 });

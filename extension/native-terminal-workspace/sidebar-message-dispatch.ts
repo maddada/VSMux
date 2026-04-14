@@ -77,14 +77,14 @@ export type SidebarMessageHandlers = {
     iconColor?: string,
     url?: string,
   ) => Promise<void>;
-  syncSidebarAgentOrder: (agentIds: readonly string[]) => Promise<void>;
+  syncSidebarAgentOrder: (requestId: string, agentIds: readonly string[]) => Promise<void>;
   setSidebarGitPrimaryAction: (action: SidebarGitAction) => Promise<void>;
   toggleActiveSessionsSortMode: () => Promise<void>;
   setViewMode: (viewMode: TerminalViewMode) => Promise<void>;
   setVisibleCount: (visibleCount: VisibleSessionCount) => Promise<void>;
   syncGroupOrder: (groupIds: readonly string[]) => Promise<void>;
   syncSessionOrder: (groupId: string, sessionIds: readonly string[]) => Promise<void>;
-  syncSidebarCommandOrder: (commandIds: readonly string[]) => Promise<void>;
+  syncSidebarCommandOrder: (requestId: string, commandIds: readonly string[]) => Promise<void>;
   toggleCompletionBell: () => Promise<void>;
   toggleFullscreenSession: () => Promise<void>;
 };
@@ -190,13 +190,13 @@ export async function dispatchSidebarMessage(
       await handlers.deleteSidebarAgent(message.agentId);
       return;
     case "syncSidebarAgentOrder":
-      await handlers.syncSidebarAgentOrder(message.agentIds);
+      await handlers.syncSidebarAgentOrder(message.requestId, message.agentIds);
       return;
     case "deleteSidebarCommand":
       await handlers.deleteSidebarCommand(message.commandId);
       return;
     case "syncSidebarCommandOrder":
-      await handlers.syncSidebarCommandOrder(message.commandIds);
+      await handlers.syncSidebarCommandOrder(message.requestId, message.commandIds);
       return;
     case "focusSession":
       if (message.sessionId) {

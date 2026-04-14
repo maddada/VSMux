@@ -248,4 +248,36 @@ describe("dispatchSidebarMessage", () => {
     expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
     expect(handlers.promptFindPreviousSession).toHaveBeenCalledTimes(1);
   });
+
+  test("should route sidebar agent order sync messages with the request id", async () => {
+    const handlers = createHandlers();
+
+    await dispatchSidebarMessage(
+      {
+        agentIds: ["claude", "codex"],
+        requestId: "req-agent",
+        type: "syncSidebarAgentOrder",
+      },
+      handlers,
+    );
+
+    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
+    expect(handlers.syncSidebarAgentOrder).toHaveBeenCalledWith("req-agent", ["claude", "codex"]);
+  });
+
+  test("should route sidebar command order sync messages with the request id", async () => {
+    const handlers = createHandlers();
+
+    await dispatchSidebarMessage(
+      {
+        commandIds: ["test", "build"],
+        requestId: "req-command",
+        type: "syncSidebarCommandOrder",
+      },
+      handlers,
+    );
+
+    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
+    expect(handlers.syncSidebarCommandOrder).toHaveBeenCalledWith("req-command", ["test", "build"]);
+  });
 });

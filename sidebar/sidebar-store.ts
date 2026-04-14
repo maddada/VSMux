@@ -12,6 +12,7 @@ import type {
   SidebarDaemonSessionsStateMessage,
   SidebarHydrateMessage,
   SidebarHudState,
+  SidebarOrderSyncResultMessage,
   SidebarPreviousSessionItem,
   SidebarPromptGitCommitMessage,
   SidebarSessionGroup,
@@ -29,6 +30,8 @@ type SidebarStoreDataState = {
   groupOrder: string[];
   groupsById: Record<string, SidebarGroupRecord>;
   hud: SidebarHudState;
+  latestAgentOrderSyncResult: SidebarOrderSyncResultMessage | undefined;
+  latestCommandOrderSyncResult: SidebarOrderSyncResultMessage | undefined;
   pendingFocusedSessionId: string | undefined;
   previousSessions: SidebarPreviousSessionItem[];
   revision: number;
@@ -39,6 +42,7 @@ type SidebarStoreDataState = {
 };
 
 type SidebarStoreActions = {
+  applyOrderSyncResultMessage: (message: SidebarOrderSyncResultMessage) => void;
   applyLocalFocus: (groupId: string, sessionId: string) => void;
   applySessionPresentationMessage: (message: SidebarSessionPresentationChangedMessage) => void;
   applySidebarMessage: (message: SidebarHydrateMessage | SidebarSessionStateMessage) => void;
@@ -82,6 +86,8 @@ export function createInitialSidebarStoreDataState(): SidebarStoreDataState {
       visibleCount: 1,
       visibleSlotLabels: [],
     },
+    latestAgentOrderSyncResult: undefined,
+    latestCommandOrderSyncResult: undefined,
     pendingFocusedSessionId: undefined,
     previousSessions: [],
     revision: 0,
@@ -94,6 +100,12 @@ export function createInitialSidebarStoreDataState(): SidebarStoreDataState {
 
 export const useSidebarStore = create<SidebarStoreState>((set) => ({
   ...createInitialSidebarStoreDataState(),
+  applyOrderSyncResultMessage: (message) => {
+    set({
+      latestAgentOrderSyncResult: message.kind === "agent" ? message : undefined,
+      latestCommandOrderSyncResult: message.kind === "command" ? message : undefined,
+    });
+  },
   applyLocalFocus: (groupId, sessionId) => {
     set((state) => applyLocalFocusState(state, groupId, sessionId));
   },

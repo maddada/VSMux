@@ -15,6 +15,44 @@ describe("sidebar store", () => {
     resetSidebarStore();
   });
 
+  test("should track the latest order sync result for the matching sidebar section", () => {
+    useSidebarStore.getState().applyOrderSyncResultMessage({
+      itemIds: ["claude", "codex"],
+      kind: "agent",
+      requestId: "req-agent",
+      status: "success",
+      type: "sidebarOrderSyncResult",
+    });
+
+    let state = useSidebarStore.getState();
+    expect(state.latestAgentOrderSyncResult).toEqual({
+      itemIds: ["claude", "codex"],
+      kind: "agent",
+      requestId: "req-agent",
+      status: "success",
+      type: "sidebarOrderSyncResult",
+    });
+    expect(state.latestCommandOrderSyncResult).toBeUndefined();
+
+    useSidebarStore.getState().applyOrderSyncResultMessage({
+      itemIds: ["test", "build"],
+      kind: "command",
+      requestId: "req-command",
+      status: "error",
+      type: "sidebarOrderSyncResult",
+    });
+
+    state = useSidebarStore.getState();
+    expect(state.latestAgentOrderSyncResult).toBeUndefined();
+    expect(state.latestCommandOrderSyncResult).toEqual({
+      itemIds: ["test", "build"],
+      kind: "command",
+      requestId: "req-command",
+      status: "error",
+      type: "sidebarOrderSyncResult",
+    });
+  });
+
   test("should update only the targeted session record on sessionPresentationChanged", () => {
     useSidebarStore
       .getState()

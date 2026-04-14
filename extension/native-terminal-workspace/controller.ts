@@ -19,6 +19,7 @@ import {
   type SidebarDaemonSessionItem,
   type SessionGroupRecord,
   type SidebarHydrateMessage,
+  type SidebarOrderSyncKind,
   type SidebarSessionItem,
   type SidebarSessionStateMessage,
   type SidebarToExtensionMessage,
@@ -1088,7 +1089,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
                 sessionRecord,
                 workspaceSnapshot,
                 sessionActivityContext,
-              ) ?? { activity: "idle" },
+              ) ?? {
+                activity: "idle",
+              },
             ),
         )
       : [];
@@ -1903,9 +1906,13 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.refreshSidebar("hydrate");
   }
 
-  public async syncSidebarCommandOrder(commandIds: readonly string[]): Promise<void> {
-    await syncSidebarCommandOrderPreference(this.context, commandIds);
-    await this.refreshSidebar("hydrate");
+  public async syncSidebarCommandOrder(
+    requestId: string,
+    commandIds: readonly string[],
+  ): Promise<void> {
+    await this.syncSidebarOrder("command", requestId, commandIds, (nextCommandIds) =>
+      syncSidebarCommandOrderPreference(this.context, nextCommandIds),
+    );
   }
 
   public async saveSidebarAgent(
@@ -1923,9 +1930,48 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.refreshSidebar("hydrate");
   }
 
-  public async syncSidebarAgentOrder(agentIds: readonly string[]): Promise<void> {
-    await syncSidebarAgentOrderPreference(agentIds);
+  public async syncSidebarAgentOrder(
+    requestId: string,
+    agentIds: readonly string[],
+  ): Promise<void> {
+    await this.syncSidebarOrder("agent", requestId, agentIds, (nextAgentIds) =>
+      syncSidebarAgentOrderPreference(nextAgentIds),
+    );
+  }
+
+  private async syncSidebarOrder(
+    kind: SidebarOrderSyncKind,
+    requestId: string,
+    itemIds: readonly string[],
+    syncPreference: (itemIds: readonly string[]) => Promise<void>,
+  ): Promise<void> {
+    try {
+      await syncPreference(itemIds);
+      await this.postSidebarOrderSyncResult({
+        itemIds: [...itemIds],
+        kind,
+        requestId,
+        status: "success",
+        type: "sidebarOrderSyncResult",
+      });
+    } catch (error) {
+      await this.postSidebarOrderSyncResult({
+        itemIds: [...itemIds],
+        kind,
+        requestId,
+        status: "error",
+        type: "sidebarOrderSyncResult",
+      });
+      throw error;
+    }
+
     await this.refreshSidebar("hydrate");
+  }
+
+  private async postSidebarOrderSyncResult(
+    message: Extract<ExtensionToSidebarMessage, { type: "sidebarOrderSyncResult" }>,
+  ): Promise<void> {
+    await this.sidebarProvider.postMessage(message);
   }
 
   public async focusGroup(groupId: string, source?: "sidebar"): Promise<void> {
@@ -2198,10 +2244,12 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       toggleActiveSessionsSortMode: async () => this.toggleActiveSessionsSortMode(),
       setViewMode: async (viewMode) => this.setViewMode(viewMode),
       setVisibleCount: async (visibleCount) => this.setVisibleCount(visibleCount),
-      syncSidebarAgentOrder: async (agentIds) => this.syncSidebarAgentOrder(agentIds),
+      syncSidebarAgentOrder: async (requestId, agentIds) =>
+        this.syncSidebarAgentOrder(requestId, agentIds),
       syncGroupOrder: async (groupIds) => this.syncGroupOrder(groupIds),
       syncSessionOrder: async (groupId, sessionIds) => this.syncSessionOrder(groupId, sessionIds),
-      syncSidebarCommandOrder: async (commandIds) => this.syncSidebarCommandOrder(commandIds),
+      syncSidebarCommandOrder: async (requestId, commandIds) =>
+        this.syncSidebarCommandOrder(requestId, commandIds),
       toggleCompletionBell: async () => this.toggleCompletionBell(),
       toggleFullscreenSession: async () => this.toggleFullscreenSession(),
     });

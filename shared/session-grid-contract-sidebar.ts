@@ -169,6 +169,16 @@ export type SidebarPlayCompletionSoundMessage = {
   type: "playCompletionSound";
 };
 
+export type SidebarOrderSyncKind = "agent" | "command";
+
+export type SidebarOrderSyncResultMessage = {
+  itemIds: string[];
+  kind: SidebarOrderSyncKind;
+  requestId: string;
+  status: "error" | "success";
+  type: "sidebarOrderSyncResult";
+};
+
 export type SidebarDaemonInfo = {
   pid: number;
   port: number;
@@ -217,6 +227,7 @@ export type ExtensionToSidebarMessage =
   | SidebarSessionStateMessage
   | SidebarSessionPresentationChangedMessage
   | SidebarPlayCompletionSoundMessage
+  | SidebarOrderSyncResultMessage
   | SidebarDaemonSessionsStateMessage
   | SidebarPromptGitCommitMessage;
 
@@ -444,6 +455,7 @@ export type SidebarToExtensionMessage =
       commandId: string;
     }
   | {
+      requestId: string;
       type: "syncSidebarCommandOrder";
       commandIds: string[];
     }
@@ -463,6 +475,7 @@ export type SidebarToExtensionMessage =
       agentId: string;
     }
   | {
+      requestId: string;
       type: "syncSidebarAgentOrder";
       agentIds: string[];
     };

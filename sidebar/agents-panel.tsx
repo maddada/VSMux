@@ -23,6 +23,7 @@ import type { WebviewApi } from "./webview-api";
 const CONTEXT_MENU_MARGIN_PX = 12;
 const CONTEXT_MENU_WIDTH_PX = 180;
 const CONTEXT_MENU_HEIGHT_PX = 166;
+const REORDER_SYNC_TIMEOUT_MS = 3_000;
 
 type AgentsPanelProps = {
   createRequestId: number;
@@ -46,6 +47,11 @@ type AgentMenuState = {
 type AgentDragData = {
   agentId: string;
   kind: "sidebar-agent";
+};
+
+type PendingOrderSync = {
+  requestId: string;
+  timeoutId: number;
 };
 
 function createAgentDraft(): AgentConfigDraft {
@@ -109,10 +115,12 @@ export function AgentsPanel({
       pendingAgentIds: state.hud.pendingAgentIds,
     })),
   );
+  const latestAgentOrderSyncResult = useSidebarStore((state) => state.latestAgentOrderSyncResult);
   const [contextMenu, setContextMenu] = useState<AgentMenuState>();
   const [draftAgentIds, setDraftAgentIds] = useState<string[] | undefined>();
   const [editingAgent, setEditingAgent] = useState<AgentConfigDraft>();
   const menuRef = useRef<HTMLDivElement>(null);
+  const pendingOrderSyncRef = useRef<PendingOrderSync>();
 
   useEffect(() => {
     if (!contextMenu) {
@@ -179,6 +187,32 @@ export function AgentsPanel({
     setDraftAgentIds((previousDraft) => reconcileDraftAgentIds(previousDraft, agents));
   }, [agents]);
 
+  useEffect(
+    () => () => {
+      clearPendingOrderSync(pendingOrderSyncRef.current);
+      pendingOrderSyncRef.current = undefined;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const pendingOrderSync = pendingOrderSyncRef.current;
+    if (
+      !latestAgentOrderSyncResult ||
+      !pendingOrderSync ||
+      pendingOrderSync.requestId !== latestAgentOrderSyncResult.requestId
+    ) {
+      return;
+    }
+
+    clearPendingOrderSync(pendingOrderSync);
+    pendingOrderSyncRef.current = undefined;
+
+    if (latestAgentOrderSyncResult.status === "error") {
+      setDraftAgentIds(undefined);
+    }
+  }, [latestAgentOrderSyncResult]);
+
   useEffect(() => {
     if (createRequestId === 0) {
       return;
@@ -235,9 +269,23 @@ export function AgentsPanel({
       initialIndex,
       targetIndex,
     );
+    const requestId = createReorderRequestId();
+    clearPendingOrderSync(pendingOrderSyncRef.current);
+    pendingOrderSyncRef.current = {
+      requestId,
+      timeoutId: window.setTimeout(() => {
+        if (pendingOrderSyncRef.current?.requestId !== requestId) {
+          return;
+        }
+
+        pendingOrderSyncRef.current = undefined;
+        setDraftAgentIds(undefined);
+      }, REORDER_SYNC_TIMEOUT_MS),
+    };
     setDraftAgentIds(nextAgentIds);
     vscode.postMessage({
       agentIds: nextAgentIds,
+      requestId,
       type: "syncSidebarAgentOrder",
     });
   }) satisfies DragDropEventHandlers["onDragEnd"];
@@ -508,6 +556,18 @@ function reconcileDraftAgentIds(
   const syncedAgentIds = agents.map((agent) => agent.agentId);
   const nextDraftAgentIds = mergeAgentIds(draftAgentIds, syncedAgentIds);
   return haveSameAgentOrder(nextDraftAgentIds, syncedAgentIds) ? undefined : nextDraftAgentIds;
+}
+
+function clearPendingOrderSync(pendingOrderSync: PendingOrderSync | undefined) {
+  if (!pendingOrderSync) {
+    return;
+  }
+
+  window.clearTimeout(pendingOrderSync.timeoutId);
+}
+
+function createReorderRequestId(): string {
+  return `reorder-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function haveSameAgentOrder(left: readonly string[], right: readonly string[]): boolean {

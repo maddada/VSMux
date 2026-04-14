@@ -39,6 +39,7 @@ const CONTEXT_MENU_VERTICAL_PADDING_PX = 24;
 const CONTEXT_MENU_ITEM_HEIGHT_PX = 43;
 const CONTEXT_MENU_DIVIDER_HEIGHT_PX = 13;
 const CONTEXT_MENU_DIVIDER_COUNT = 2;
+const REORDER_SYNC_TIMEOUT_MS = 3_000;
 
 type CommandsPanelProps = {
   createActionType?: SidebarActionType;
@@ -64,6 +65,11 @@ type CommandMenuState = {
 type CommandDragData = {
   commandId: string;
   kind: "sidebar-command";
+};
+
+type PendingOrderSync = {
+  requestId: string;
+  timeoutId: number;
 };
 
 function clampContextMenuPosition(
@@ -148,10 +154,14 @@ export function CommandsPanel({
       git: state.hud.git,
     })),
   );
+  const latestCommandOrderSyncResult = useSidebarStore(
+    (state) => state.latestCommandOrderSyncResult,
+  );
   const [contextMenu, setContextMenu] = useState<CommandMenuState>();
   const [draftCommandIds, setDraftCommandIds] = useState<string[] | undefined>();
   const [editingCommand, setEditingCommand] = useState<CommandConfigDraft>();
   const menuRef = useRef<HTMLDivElement>(null);
+  const pendingOrderSyncRef = useRef<PendingOrderSync>();
 
   useEffect(() => {
     if (!contextMenu) {
@@ -242,6 +252,32 @@ export function CommandsPanel({
     setDraftCommandIds((previousDraft) => reconcileDraftCommandIds(previousDraft, commands));
   }, [commands]);
 
+  useEffect(
+    () => () => {
+      clearPendingOrderSync(pendingOrderSyncRef.current);
+      pendingOrderSyncRef.current = undefined;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const pendingOrderSync = pendingOrderSyncRef.current;
+    if (
+      !latestCommandOrderSyncResult ||
+      !pendingOrderSync ||
+      pendingOrderSync.requestId !== latestCommandOrderSyncResult.requestId
+    ) {
+      return;
+    }
+
+    clearPendingOrderSync(pendingOrderSync);
+    pendingOrderSyncRef.current = undefined;
+
+    if (latestCommandOrderSyncResult.status === "error") {
+      setDraftCommandIds(undefined);
+    }
+  }, [latestCommandOrderSyncResult]);
+
   useEffect(() => {
     if (createRequestId === 0) {
       return;
@@ -299,9 +335,23 @@ export function CommandsPanel({
       initialIndex,
       targetIndex,
     );
+    const requestId = createReorderRequestId();
+    clearPendingOrderSync(pendingOrderSyncRef.current);
+    pendingOrderSyncRef.current = {
+      requestId,
+      timeoutId: window.setTimeout(() => {
+        if (pendingOrderSyncRef.current?.requestId !== requestId) {
+          return;
+        }
+
+        pendingOrderSyncRef.current = undefined;
+        setDraftCommandIds(undefined);
+      }, REORDER_SYNC_TIMEOUT_MS),
+    };
     setDraftCommandIds(nextCommandIds);
     vscode.postMessage({
       commandIds: nextCommandIds,
+      requestId,
       type: "syncSidebarCommandOrder",
     });
   }) satisfies DragDropEventHandlers["onDragEnd"];
@@ -616,6 +666,18 @@ function reconcileDraftCommandIds(
   return haveSameCommandOrder(nextDraftCommandIds, syncedCommandIds)
     ? undefined
     : nextDraftCommandIds;
+}
+
+function clearPendingOrderSync(pendingOrderSync: PendingOrderSync | undefined) {
+  if (!pendingOrderSync) {
+    return;
+  }
+
+  window.clearTimeout(pendingOrderSync.timeoutId);
+}
+
+function createReorderRequestId(): string {
+  return `reorder-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function haveSameCommandOrder(left: readonly string[], right: readonly string[]): boolean {
