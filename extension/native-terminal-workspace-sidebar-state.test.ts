@@ -446,6 +446,49 @@ describe("buildSidebarMessage", () => {
     );
   });
 
+  test("should keep idle live terminal sessions running in the sidebar projection", () => {
+    const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
+    const sessionRecord = createSessionRecord(1, 0);
+    workspaceSnapshot.groups[0].snapshot.sessions = [sessionRecord];
+    workspaceSnapshot.groups[0].snapshot.focusedSessionId = sessionRecord.sessionId;
+    workspaceSnapshot.groups[0].snapshot.visibleSessionIds = [sessionRecord.sessionId];
+
+    const message = getSidebarStateMessage(
+      buildSidebarMessage({
+        ...createBuildSidebarMessageOptions(workspaceSnapshot, []),
+        getEffectiveSessionActivity: () => ({
+          activity: "idle",
+          agentName: "codex",
+        }),
+        getSessionSnapshot: () => ({
+          agentName: "codex",
+          agentStatus: "idle",
+          cols: 120,
+          cwd: "/workspace",
+          isAttached: true,
+          restoreState: "live",
+          rows: 34,
+          sessionId: sessionRecord.sessionId,
+          shell: "/bin/zsh",
+          startedAt: "2026-04-02T00:00:00.000Z",
+          status: "running",
+          title: "Codex",
+          workspaceId: "workspace-1",
+        }),
+        terminalHasLiveProjection: () => true,
+      }),
+    );
+
+    expect(message.groups[1]?.sessions[0]).toEqual(
+      expect.objectContaining({
+        activity: "idle",
+        lifecycleState: "running",
+        isRunning: true,
+        sessionId: sessionRecord.sessionId,
+      }),
+    );
+  });
+
   test("should mark sleeping terminal sessions as sleeping and not running", () => {
     const workspaceSnapshot = createDefaultGroupedSessionWorkspaceSnapshot();
     const sessionRecord = {

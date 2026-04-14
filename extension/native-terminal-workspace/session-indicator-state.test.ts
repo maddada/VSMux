@@ -15,14 +15,14 @@ describe("resolveTerminalSessionLifecycleState", () => {
     ).toBe("running");
   });
 
-  test("should keep idle live terminal sessions running", () => {
+  test("should mark running terminals without a live runtime as done", () => {
     expect(
       resolveTerminalSessionLifecycleState({
-        hasLiveRuntime: true,
+        hasLiveRuntime: false,
         isSleeping: false,
         status: "running",
       }),
-    ).toBe("running");
+    ).toBe("done");
   });
 
   test("should mark non-live terminal sessions as done", () => {

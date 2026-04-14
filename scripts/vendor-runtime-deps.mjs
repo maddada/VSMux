@@ -32,6 +32,11 @@ async function copyInstalledNodePtyPlatformPackages() {
   const nodePtyDir = await resolvePackageDir("@lydell/node-pty");
   const lydellDir = path.join(nodePtyDir, "..");
   const entries = await readdir(lydellDir, { withFileTypes: true });
+  const expectedPackages = Object.keys(
+    JSON.parse(await readFile(path.join(nodePtyDir, "package.json"), "utf8"))
+      .optionalDependencies ?? {},
+  ).map((packageName) => packageName.replace("@lydell/", ""));
+  const copiedPackages = new Set();
 
   for (const entry of entries) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) {
@@ -44,6 +49,21 @@ async function copyInstalledNodePtyPlatformPackages() {
     const destinationDir = path.join(outNodeModulesDir, "@lydell", entry.name);
     await mkdir(path.dirname(destinationDir), { recursive: true });
     await cp(sourceDir, destinationDir, { dereference: true, recursive: true });
+    copiedPackages.add(entry.name);
+  }
+
+  const missingPackages = expectedPackages.filter(
+    (packageName) => !copiedPackages.has(packageName),
+  );
+  if (missingPackages.length > 0) {
+    throw new Error(
+      [
+        "Missing node-pty platform packages in local node_modules:",
+        ...missingPackages.map((packageName) => `- ${packageName}`),
+        "",
+        "Run `pnpm install` with the package.json pnpm.supportedArchitectures settings so these optional packages are available before packaging.",
+      ].join("\n"),
+    );
   }
 }
 
