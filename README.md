@@ -18,7 +18,7 @@ Full release notes: [CHANGELOG.md](/Users/madda/dev/_active/agent-tiler/CHANGELO
 
 ## Screenshot
 
-<img width="700" alt="2026-04-14_fsCode_12-52-3d7@2x" src="https://github.com/user-attachments/assets/556c1190-4e7e-4965-9ff3-2ac2c5daef3a" />
+<img width="1000" alt="2026-04-14_fsCode_12-52-3d7@2x" src="https://github.com/user-attachments/assets/556c1190-4e7e-4965-9ff3-2ac2c5daef3a" />
 
 <br/><br/><br/>
 
