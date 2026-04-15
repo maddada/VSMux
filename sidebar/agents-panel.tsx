@@ -1,7 +1,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/react";
 import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
-import { IconCodeDots, IconLoader2, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import {
+  IconCodeDots,
+  IconLoader2,
+  IconPencil,
+  IconPlus,
+  IconSparkles2,
+  IconTrash,
+} from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 import {
   useEffect,
@@ -422,6 +429,7 @@ export function AgentsPanel({
         <section className="commands-section commands-section-agents">
           <SectionHeader
             actions={titlebarActions}
+            idleIcon={<IconSparkles2 size={18} stroke={1.8} />}
             isCollapsed={isCollapsed}
             isCollapsible
             onToggleCollapsed={() => onToggleCollapsed(!isCollapsed)}

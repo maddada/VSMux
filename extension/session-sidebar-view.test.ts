@@ -40,6 +40,7 @@ describe("isSidebarMessage", () => {
         command: "pnpm dev",
         icon: "terminal",
         iconColor: "#d6e0f3",
+        isGlobal: true,
         name: "",
         playCompletionSound: true,
         type: "saveSidebarCommand",

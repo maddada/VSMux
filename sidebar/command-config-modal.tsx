@@ -15,6 +15,7 @@ export type CommandConfigDraft = {
   commandId?: string;
   icon?: SidebarCommandIcon;
   iconColor?: string;
+  isGlobal?: boolean;
   name: string;
   playCompletionSound: boolean;
   url?: string;
@@ -40,10 +41,12 @@ export function CommandConfigModal({
   const [command, setCommand] = useState(draft.command ?? "");
   const [icon, setIcon] = useState<SidebarCommandIcon | undefined>(draft.icon);
   const [iconColor, setIconColor] = useState(draft.iconColor ?? DEFAULT_SIDEBAR_COMMAND_ICON_COLOR);
+  const [isGlobal, setIsGlobal] = useState(draft.isGlobal === true);
   const [name, setName] = useState(draft.name);
   const [playCompletionSound, setPlayCompletionSound] = useState(draft.playCompletionSound);
   const [url, setUrl] = useState(draft.url ?? "");
   const checkboxId = useId();
+  const globalCheckboxId = useId();
   const soundCheckboxId = useId();
   const descriptionId = useId();
   const titleId = useId();
@@ -59,6 +62,7 @@ export function CommandConfigModal({
     setCommand(draft.command ?? "");
     setIcon(draft.icon);
     setIconColor(draft.iconColor ?? DEFAULT_SIDEBAR_COMMAND_ICON_COLOR);
+    setIsGlobal(draft.isGlobal === true);
     setName(draft.name);
     setPlayCompletionSound(draft.playCompletionSound);
     setUrl(
@@ -212,6 +216,18 @@ export function CommandConfigModal({
               </label>
             </>
           )}
+          <label className="command-config-toggle" htmlFor={globalCheckboxId}>
+            <input
+              checked={isGlobal}
+              className="command-config-checkbox"
+              id={globalCheckboxId}
+              onChange={(event) => setIsGlobal(event.currentTarget.checked)}
+              type="checkbox"
+            />
+            <span className="command-config-toggle-copy">
+              Show this action in every VSmux project
+            </span>
+          </label>
         </div>
         <div className="confirm-modal-actions">
           <button className="secondary confirm-modal-button" onClick={onCancel} type="button">
@@ -228,6 +244,7 @@ export function CommandConfigModal({
                 commandId: draft.commandId,
                 icon,
                 iconColor: icon ? iconColor : undefined,
+                isGlobal,
                 name: trimmedName,
                 playCompletionSound: actionType === "terminal" ? playCompletionSound : false,
                 url: actionType === "browser" ? url.trim() : undefined,

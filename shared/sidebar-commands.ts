@@ -38,6 +38,7 @@ export type SidebarCommandButton = {
   commandId: string;
   icon?: SidebarCommandIcon;
   iconColor?: string;
+  isGlobal?: boolean;
   isDefault: boolean;
   name: string;
   playCompletionSound: boolean;
@@ -50,6 +51,7 @@ export type StoredSidebarCommand = {
   commandId: string;
   icon?: SidebarCommandIcon;
   iconColor?: string;
+  isGlobal?: boolean;
   isDefault: boolean;
   name: string;
   playCompletionSound: boolean;
@@ -146,6 +148,7 @@ export function normalizeStoredSidebarCommands(candidate: unknown): StoredSideba
       : undefined;
     const isDefault =
       partialItem.isDefault === true || (commandId ? isDefaultSidebarCommandId(commandId) : false);
+    const isGlobal = partialItem.isGlobal === true;
 
     if (!commandId || seenCommandIds.has(commandId) || (name.length === 0 && !icon)) {
       continue;
@@ -162,6 +165,7 @@ export function normalizeStoredSidebarCommands(candidate: unknown): StoredSideba
         closeTerminalOnExit: false,
         commandId,
         isDefault,
+        ...(isGlobal ? { isGlobal } : {}),
         name,
         playCompletionSound: false,
         ...(icon ? { icon, iconColor } : {}),
@@ -182,6 +186,7 @@ export function normalizeStoredSidebarCommands(candidate: unknown): StoredSideba
       command,
       commandId,
       isDefault,
+      ...(isGlobal ? { isGlobal } : {}),
       name,
       playCompletionSound:
         typeof partialItem.playCompletionSound === "boolean"
@@ -240,6 +245,7 @@ function normalizeStoredCommandButton(command: StoredSidebarCommand): SidebarCom
         closeTerminalOnExit: false,
         command: undefined,
         commandId: command.commandId,
+        ...(command.isGlobal ? { isGlobal: true } : {}),
         isDefault: command.isDefault,
         name: command.name,
         playCompletionSound: false,
@@ -251,6 +257,7 @@ function normalizeStoredCommandButton(command: StoredSidebarCommand): SidebarCom
         closeTerminalOnExit: command.closeTerminalOnExit,
         command: command.command,
         commandId: command.commandId,
+        ...(command.isGlobal ? { isGlobal: true } : {}),
         isDefault: command.isDefault,
         name: command.name,
         playCompletionSound: command.playCompletionSound,

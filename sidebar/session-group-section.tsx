@@ -1,10 +1,12 @@
 import {
+  IconCaretRightFilled,
+  IconMessageCircle,
   IconMoon,
   IconPencil,
   IconPlayerPlay,
   IconPlus,
   IconRefresh,
-  IconChevronRight,
+  IconWorld,
   IconX,
 } from "@tabler/icons-react";
 import { CollisionPriority } from "@dnd-kit/abstract";
@@ -601,6 +603,7 @@ export function SessionGroupSection({
                   aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.title}`}
                   className="group-collapse-button section-titlebar-toggle"
                   data-collapsed={String(isCollapsed)}
+                  data-has-idle-icon="true"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -609,10 +612,20 @@ export function SessionGroupSection({
                   title={`${isCollapsed ? "Expand" : "Collapse"} ${group.title}`}
                   type="button"
                 >
-                  <IconChevronRight
+                  <span
                     aria-hidden="true"
-                    className="group-collapse-icon section-titlebar-toggle-icon"
-                    size={14}
+                    className="group-collapse-icon group-collapse-idle-icon section-titlebar-toggle-icon section-titlebar-toggle-idle-icon"
+                  >
+                    {isBrowserGroup ? (
+                      <IconWorld size={16} stroke={1.8} />
+                    ) : (
+                      <IconMessageCircle size={16} stroke={1.8} />
+                    )}
+                  </span>
+                  <IconCaretRightFilled
+                    aria-hidden="true"
+                    className="group-collapse-icon group-collapse-chevron-icon section-titlebar-toggle-icon section-titlebar-toggle-chevron-icon"
+                    size={16}
                   />
                 </button>
                 <div

@@ -1,8 +1,9 @@
-import { IconChevronRight } from "@tabler/icons-react";
+import { IconCaretRightFilled } from "@tabler/icons-react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 export type SectionHeaderProps = {
   actions?: ReactNode;
+  idleIcon?: ReactNode;
   isCollapsed?: boolean;
   isCollapsible?: boolean;
   onToggleCollapsed?: () => void;
@@ -11,6 +12,7 @@ export type SectionHeaderProps = {
 
 export function SectionHeader({
   actions,
+  idleIcon,
   isCollapsed = false,
   isCollapsible = false,
   onToggleCollapsed,
@@ -43,6 +45,7 @@ export function SectionHeader({
             className="section-titlebar-toggle"
             data-collapsed={String(isCollapsed)}
             data-empty-space-blocking="true"
+            data-has-idle-icon={String(idleIcon !== undefined)}
             onClick={(event) => {
               event.stopPropagation();
               onToggleCollapsed?.();
@@ -50,7 +53,18 @@ export function SectionHeader({
             title={collapseLabel}
             type="button"
           >
-            <IconChevronRight aria-hidden="true" className="section-titlebar-toggle-icon" />
+            {idleIcon ? (
+              <span
+                aria-hidden="true"
+                className="section-titlebar-toggle-icon section-titlebar-toggle-idle-icon"
+              >
+                {idleIcon}
+              </span>
+            ) : null}
+            <IconCaretRightFilled
+              aria-hidden="true"
+              className="section-titlebar-toggle-icon section-titlebar-toggle-chevron-icon"
+            />
           </button>
         ) : null}
         <span className="section-titlebar-label">{title}</span>

@@ -111,6 +111,7 @@ describe("dispatchSidebarMessage", () => {
       "terminal",
       "#d6e0f3",
       undefined,
+      undefined,
     );
   });
 

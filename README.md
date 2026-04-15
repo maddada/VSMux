@@ -6,11 +6,11 @@
 
 ---
 
-### Latest Release: 3.7.0
+### Latest Release: 3.8.0
 
-- The sidebar has a broader visual refresh with cleaner group panels and more polished session cards.
-- Agent and command sections behave better now in denser layouts.
-- Grouped sessions are easier to scan with clearer connectors and smoother expand/collapse behavior.
+- Sidebar actions can now be global across all projects or shared across Git worktrees from the same repository.
+- Browser and session groups collapse more intelligently, especially around empty browser groups and newly added browser sessions.
+- Workspace terminals now include a scroll-to-top control for navigating long terminal history.
 
 Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 

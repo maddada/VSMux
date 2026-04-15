@@ -48,9 +48,12 @@
 }
 
 .floating-toolbar-button {
-  min-height: 20px;
-  min-width: 20px;
-  /* border-radius: 999px; */
+  background: transparent;
+  border-color: transparent;
+  border-radius: 999px;
+  box-shadow: none;
+  min-height: 22px;
+  min-width: 22px;
   /* background: color-mix(in srgb, var(--app-card) 88%, transparent); */
   /* backdrop-filter: blur(10px); */
   /* box-shadow: */
@@ -58,10 +61,30 @@
   /* 0 0 0 1px color-mix(in srgb, #ffffff 3%, transparent); */
 }
 
+.floating-toolbar-button[data-selected="true"],
+.floating-toolbar-button:hover,
+.floating-toolbar-button:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.floating-toolbar-button:hover,
+.floating-toolbar-button:focus-visible {
+  background: color-mix(in srgb, var(--app-foreground) 10%, transparent);
+}
+
+.floating-toolbar-button:active {
+  background: color-mix(in srgb, var(--app-button-background) 22%, transparent);
+}
+
+.floating-toolbar-button[data-selected="true"] {
+  background: color-mix(in srgb, var(--app-button-background) 16%, transparent);
+}
+
 .floating-toolbar-button .toolbar-icon,
 .floating-toolbar-button .toolbar-tabler-icon {
-  height: 10px;
-  width: 10px;
+  height: 12px;
+  width: 12px;
 }
 
 .toolbar-icon {

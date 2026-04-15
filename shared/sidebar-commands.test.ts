@@ -373,6 +373,33 @@ describe("normalizeStoredSidebarCommands", () => {
       },
     ]);
   });
+
+  test("should preserve global action metadata", () => {
+    expect(
+      normalizeStoredSidebarCommands([
+        {
+          closeTerminalOnExit: false,
+          command: "pnpm lint",
+          commandId: "custom-lint",
+          isDefault: false,
+          isGlobal: true,
+          name: "Lint",
+          playCompletionSound: true,
+        },
+      ]),
+    ).toEqual([
+      {
+        actionType: "terminal",
+        closeTerminalOnExit: false,
+        command: "pnpm lint",
+        commandId: "custom-lint",
+        isDefault: false,
+        isGlobal: true,
+        name: "Lint",
+        playCompletionSound: true,
+      },
+    ]);
+  });
 });
 
 describe("normalizeStoredSidebarCommandOrder", () => {

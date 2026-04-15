@@ -410,6 +410,7 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
         (message.icon === undefined || isSidebarCommandIcon(message.icon)) &&
         (message.iconColor === undefined ||
           normalizeSidebarCommandIconColor(message.iconColor) !== undefined) &&
+        (message.isGlobal === undefined || typeof message.isGlobal === "boolean") &&
         typeof message.playCompletionSound === "boolean" &&
         (message.url === undefined || typeof message.url === "string")
       );

@@ -75,6 +75,7 @@ export type SidebarMessageHandlers = {
     command?: string,
     icon?: SidebarCommandIcon,
     iconColor?: string,
+    isGlobal?: boolean,
     url?: string,
   ) => Promise<void>;
   syncSidebarAgentOrder: (requestId: string, agentIds: readonly string[]) => Promise<void>;
@@ -183,6 +184,7 @@ export async function dispatchSidebarMessage(
         message.command,
         message.icon,
         message.iconColor,
+        message.isGlobal,
         message.url,
       );
       return;

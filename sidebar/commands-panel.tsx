@@ -6,6 +6,7 @@ import {
   IconPencil,
   IconPlayerPlayFilled,
   IconPlus,
+  IconTerminal2,
   IconTrash,
   IconWorldFilled,
 } from "@tabler/icons-react";
@@ -110,6 +111,7 @@ function createCommandDraft(actionType: SidebarActionType): CommandConfigDraft {
     commandId: undefined,
     icon: undefined,
     iconColor: undefined,
+    isGlobal: false,
     name: "",
     playCompletionSound: actionType === "browser" ? false : true,
     url: actionType === "browser" ? undefined : "",
@@ -226,6 +228,7 @@ export function CommandsPanel({
       commandId: command.commandId,
       icon: command.icon,
       iconColor: command.iconColor,
+      isGlobal: command.isGlobal === true,
       name: command.name,
       playCompletionSound: command.playCompletionSound,
       url: command.url,
@@ -489,6 +492,7 @@ export function CommandsPanel({
         <section className="commands-section">
           <SectionHeader
             actions={titlebarActions}
+            idleIcon={<IconTerminal2 size={18} stroke={1.8} />}
             isCollapsed={isCollapsed}
             isCollapsible
             onToggleCollapsed={() => onToggleCollapsed(!isCollapsed)}
@@ -662,6 +666,7 @@ export function CommandsPanel({
               commandId: draft.commandId,
               icon: draft.icon,
               iconColor: draft.iconColor,
+              isGlobal: draft.isGlobal,
               name: draft.name,
               playCompletionSound: draft.playCompletionSound,
               type: "saveSidebarCommand",

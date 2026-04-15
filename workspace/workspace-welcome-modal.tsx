@@ -92,7 +92,7 @@ const WELCOME_PAGES: WelcomePage[] = [
       ],
     },
     bullets: [
-      "These settings keep Codex and VSmux aligned so session titles stay recognizable, which makes multi-agent work and resuming the right session much easier.",
+      "These settings keep Codex and VSmux aligned so session titles stay recognizable, which makes multi-agent work and resuming the right session much easier (Others like Claude do this by default)",
     ],
     icon: IconTerminal2,
     kicker: "Page 3",
@@ -136,7 +136,7 @@ const WELCOME_PAGES: WelcomePage[] = [
       "VSmux works especially well with Agent Manager X: github.com/maddada/agent-manager-x",
       "It lets you keep an always-visible view of your running agent sessions at the side of your screen across all projects.",
       "That makes it a great companion if you want a bigger-picture view while VSmux stays focused inside VS Code.",
-      "Help is especially welcome for porting Agent Manager X to Windows and Linux.",
+      "macOS only but help is welcome for porting Agent Manager X to Windows and Linux.",
     ],
     icon: IconLayoutSidebarRight,
     kicker: "Page 7",

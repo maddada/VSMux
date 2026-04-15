@@ -446,6 +446,7 @@ export type SidebarToExtensionMessage =
       commandId?: string;
       icon?: SidebarCommandIcon;
       iconColor?: string;
+      isGlobal?: boolean;
       name: string;
       playCompletionSound: boolean;
       command?: string;

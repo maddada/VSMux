@@ -87,6 +87,7 @@ import {
   deleteSidebarCommandPreference,
   getSidebarCommandButtonById,
   getSidebarCommandButtons,
+  migrateSidebarCommandPreferences,
   saveSidebarCommandPreference,
   syncSidebarCommandOrderPreference,
 } from "../sidebar-command-preferences";
@@ -523,6 +524,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
   }
 
   public async initialize(): Promise<void> {
+    await migrateSidebarCommandPreferences(this.context);
     await this.removeStalePendingT3Sessions();
     resetVSmuxDebugLog();
     logVSmuxDebug("controller.initialize", {
@@ -1893,6 +1895,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     command?: string,
     icon?: SidebarCommandIcon,
     iconColor?: string,
+    isGlobal?: boolean,
     url?: string,
   ): Promise<void> {
     await saveSidebarCommandPreference(this.context, {
@@ -1902,6 +1905,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       commandId,
       icon,
       iconColor,
+      isGlobal: isGlobal === true,
       name,
       playCompletionSound,
       url,
@@ -2263,6 +2267,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         command,
         icon,
         iconColor,
+        isGlobal,
         url,
       ) =>
         this.saveSidebarCommand(
@@ -2274,6 +2279,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
           command,
           icon,
           iconColor,
+          isGlobal,
           url,
         ),
       setSidebarGitCommitConfirmationEnabled: async (enabled) =>

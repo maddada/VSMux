@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { IconArrowBigDownFilled } from "@tabler/icons-react";
+import { IconArrowBigDownFilled, IconArrowBigUpFilled } from "@tabler/icons-react";
 import { AttachAddon } from "@xterm/addon-attach";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
@@ -213,6 +213,7 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
   const [searchResults, setSearchResults] = useState<SearchResultsState>(SEARCH_RESULTS_EMPTY);
   const [isTerminalSurfaceReady, setIsTerminalSurfaceReady] = useState(false);
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
+  const [showScrollToTopButton, setShowScrollToTopButton] = useState(false);
 
   const withPreservedTerminalBottomLock = <T,>(applyLayoutChange: () => T): T => {
     const preserveTerminalBottomLock = preserveTerminalBottomLockRef.current;
@@ -275,6 +276,20 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
 
     focusTerminal("scroll-to-bottom");
     terminal.scrollToBottom();
+    requestAnimationFrame(() => {
+      updateScrollToBottomButtonVisibilityRef.current?.();
+    });
+    return true;
+  };
+
+  const scrollTerminalToTop = () => {
+    const terminal = terminalRef.current;
+    if (!terminal || !isTerminalOpenRef.current) {
+      return false;
+    }
+
+    focusTerminal("scroll-to-top");
+    terminal.scrollToTop();
     requestAnimationFrame(() => {
       updateScrollToBottomButtonVisibilityRef.current?.();
     });
@@ -421,12 +436,14 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
       const container = containerRef.current;
       if (!container || !isTerminalOpenRef.current || !isVisibleRef.current || terminal.rows <= 0) {
         setShowScrollToBottomButton(false);
+        setShowScrollToTopButton(false);
         return;
       }
 
       const bounds = container.getBoundingClientRect();
       if (bounds.height <= 0) {
         setShowScrollToBottomButton(false);
+        setShowScrollToTopButton(false);
         return;
       }
 
@@ -434,7 +451,12 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
       const activeBuffer = terminal.buffer.active;
       const distanceFromBottom =
         Math.max(0, activeBuffer.baseY - activeBuffer.viewportY) * rowHeightPx;
+      const distanceFromTop = Math.max(0, activeBuffer.viewportY) * rowHeightPx;
       setShowScrollToBottomButton(distanceFromBottom > SCROLL_TO_BOTTOM_BUTTON_MARGIN_PX);
+      setShowScrollToTopButton(
+        distanceFromTop > SCROLL_TO_BOTTOM_BUTTON_MARGIN_PX &&
+          distanceFromBottom > SCROLL_TO_BOTTOM_BUTTON_MARGIN_PX,
+      );
     };
     updateScrollToBottomButtonVisibilityRef.current = updateScrollToBottomButtonVisibility;
 
@@ -1298,6 +1320,7 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
       preserveTerminalBottomLockRef.current = null;
       setIsTerminalSurfaceReady(false);
       setShowScrollToBottomButton(false);
+      setShowScrollToTopButton(false);
     };
   }, [
     connection.baseUrl,
@@ -1649,19 +1672,36 @@ export const XtermTerminalPane: React.FC<XtermTerminalPaneProps> = ({
           </button>
         </div>
       ) : null}
-      {isVisible && showScrollToBottomButton ? (
-        <button
-          aria-label="Scroll terminal to bottom"
-          className="terminal-pane-scroll-to-bottom"
-          onClick={(event) => {
-            event.stopPropagation();
-            scrollTerminalToBottom();
-          }}
-          type="button"
-        >
-          <IconArrowBigDownFilled aria-hidden size={16} />
-        </button>
-      ) : null}
+      <button
+        aria-hidden={!isVisible || !showScrollToBottomButton}
+        aria-label="Scroll terminal to bottom"
+        className={`terminal-pane-scroll-to-bottom${
+          isVisible && showScrollToBottomButton ? " terminal-pane-scroll-button-visible" : ""
+        }`}
+        disabled={!isVisible || !showScrollToBottomButton}
+        onClick={(event) => {
+          event.stopPropagation();
+          scrollTerminalToBottom();
+        }}
+        type="button"
+      >
+        <IconArrowBigDownFilled aria-hidden size={16} />
+      </button>
+      <button
+        aria-hidden={!isVisible || !showScrollToTopButton}
+        aria-label="Scroll terminal to top"
+        className={`terminal-pane-scroll-to-top${
+          isVisible && showScrollToTopButton ? " terminal-pane-scroll-button-visible" : ""
+        }`}
+        disabled={!isVisible || !showScrollToTopButton}
+        onClick={(event) => {
+          event.stopPropagation();
+          scrollTerminalToTop();
+        }}
+        type="button"
+      >
+        <IconArrowBigUpFilled aria-hidden size={16} />
+      </button>
     </div>
   );
 };

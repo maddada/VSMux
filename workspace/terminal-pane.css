@@ -45,13 +45,13 @@
   width: 100%;
 }
 
-.terminal-pane-scroll-to-bottom {
+.terminal-pane-scroll-to-bottom,
+.terminal-pane-scroll-to-top {
   align-items: center;
   backdrop-filter: blur(6px);
   background: rgba(18, 20, 26, 0.82);
   border: 1px solid rgba(208, 217, 255, 0.2);
   border-radius: 999px;
-  bottom: 12px;
   color: rgba(242, 246, 255, 0.96);
   cursor: pointer;
   display: inline-flex;
@@ -61,18 +61,43 @@
   height: 37.5px;
   justify-content: center;
   letter-spacing: 0.02em;
+  opacity: 0;
   padding: 0;
+  pointer-events: none;
   position: absolute;
   right: 17px;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.32);
   transition:
+    opacity 300ms ease,
+    visibility 0s linear 300ms,
     background 120ms ease,
     border-color 120ms ease;
+  visibility: hidden;
   width: 37.5px;
   z-index: 20;
 }
 
-.terminal-pane-scroll-to-bottom:hover {
+.terminal-pane-scroll-button-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    opacity 300ms ease,
+    visibility 0s linear,
+    background 120ms ease,
+    border-color 120ms ease;
+  visibility: visible;
+}
+
+.terminal-pane-scroll-to-bottom {
+  bottom: 12px;
+}
+
+.terminal-pane-scroll-to-top {
+  bottom: 58px;
+}
+
+.terminal-pane-scroll-to-bottom:hover,
+.terminal-pane-scroll-to-top:hover {
   background: rgba(30, 35, 46, 0.92);
   border-color: rgba(208, 217, 255, 0.34);
 }

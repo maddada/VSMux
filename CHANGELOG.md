@@ -2,6 +2,14 @@
 
 All notable user-facing changes are documented in this file.
 
+## 3.8.0 - 2026-04-16
+
+- Sidebar actions are more flexible now: custom actions can be marked global so they appear in every VSmux project, while project actions can be shared across Git worktrees from the same repository.
+- Existing workspace actions migrate into the new shared action storage automatically, so upgrading should keep your current command buttons intact.
+- Browser and session groups collapse more intelligently, including better handling for empty browser groups and newly added browser sessions.
+- Workspace terminals now have scroll-to-top controls alongside scroll-to-bottom, making long terminal history easier to navigate.
+- Sidebar section headers, group icons, toolbar buttons, and welcome copy have been polished for a clearer day-to-day workflow.
+
 ## 3.7.0 - 2026-04-14
 
 - The sidebar has a broader visual refresh now, with cleaner group panels, more polished session cards, and a more cohesive overall layout.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { IconArrowBigDownFilled } from "@tabler/icons-react";
+import { IconArrowBigDownFilled, IconArrowBigUpFilled } from "@tabler/icons-react";
 import { Restty } from "restty";
 import type {
   WorkspacePanelAutoFocusRequest,
@@ -153,6 +153,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultsState>(SEARCH_RESULTS_EMPTY);
   const runtimeCacheKey = getTerminalRuntimeCacheKey(pane.sessionId);
@@ -625,11 +626,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const scrollHost = getScrollHost();
     if (!scrollHost || !isVisibleRef.current) {
       setShowScrollToBottom(false);
+      setShowScrollToTop(false);
       return;
     }
 
     const distanceFromBottom =
       scrollHost.scrollHeight - scrollHost.clientHeight - scrollHost.scrollTop;
+    const distanceFromTop = scrollHost.scrollTop;
+    setShowScrollToTop(
+      distanceFromTop > SCROLL_TO_BOTTOM_THRESHOLD_PX &&
+        distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD_PX,
+    );
     setShowScrollToBottom((currentValue) => {
       if (currentValue) {
         return distanceFromBottom > SCROLL_TO_BOTTOM_HIDE_THRESHOLD_PX;
@@ -666,6 +673,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     scrollHost.scrollTop = scrollHost.scrollHeight;
     requestAnimationFrame(() => {
       scrollHost.scrollTop = scrollHost.scrollHeight;
+      updateTerminalSize();
+      updateScrollToBottomVisibility();
+    });
+    return true;
+  };
+
+  const scrollTerminalToTop = () => {
+    const scrollHost = getScrollHost();
+    if (!scrollHost) {
+      return false;
+    }
+
+    scrollHost.scrollTop = 0;
+    requestAnimationFrame(() => {
+      scrollHost.scrollTop = 0;
       updateTerminalSize();
       updateScrollToBottomVisibility();
     });
@@ -724,17 +746,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const distanceFromBottom = scrollHost
       ? scrollHost.scrollHeight - scrollHost.clientHeight - scrollHost.scrollTop
       : undefined;
+    const distanceFromTop = scrollHost ? scrollHost.scrollTop : undefined;
 
     return {
       containerHeight: bounds ? Math.round(bounds.height) : undefined,
       containerWidth: bounds ? Math.round(bounds.width) : undefined,
       distanceFromBottomPx:
         distanceFromBottom === undefined ? undefined : Math.max(0, Math.round(distanceFromBottom)),
+      distanceFromTopPx:
+        distanceFromTop === undefined ? undefined : Math.max(0, Math.round(distanceFromTop)),
       rendererMode: rendererModeRef.current,
       scrollClientHeight: scrollHost ? Math.round(scrollHost.clientHeight) : undefined,
       scrollHeight: scrollHost ? Math.round(scrollHost.scrollHeight) : undefined,
       scrollTop: scrollHost ? Math.round(scrollHost.scrollTop) : undefined,
       showScrollToBottom,
+      showScrollToTop,
       terminalCols: latestTermSizeRef.current?.cols,
       terminalRows: latestTermSizeRef.current?.rows,
     };
@@ -1407,6 +1433,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       rapidTypingWindowStartedAtRef.current = 0;
       postSettleAppearanceAppliedRef.current = false;
       setShowScrollToBottom(false);
+      setShowScrollToTop(false);
       setSearchResults(SEARCH_RESULTS_EMPTY);
     };
   }, [
@@ -1474,6 +1501,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     if (!isVisible) {
       setShowScrollToBottom(false);
+      setShowScrollToTop(false);
     }
 
     if (!isVisible) {
@@ -1792,24 +1820,42 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         reportDebug("terminal.mouseFocusRequest", {
           sessionId: pane.sessionId,
         });
-        focusTerminal();
+        focusTerminal("mouse-down");
       }}
     >
       <div className="terminal-pane-canvas terminal-tab" ref={containerRef} />
-      {showScrollToBottom ? (
-        <button
-          aria-label="Scroll terminal to bottom"
-          className="terminal-pane-scroll-to-bottom"
-          onClick={(event) => {
-            event.stopPropagation();
-            scrollTerminalToBottom();
-            focusTerminal();
-          }}
-          type="button"
-        >
-          <IconArrowBigDownFilled size={16} stroke={2} />
-        </button>
-      ) : null}
+      <button
+        aria-hidden={!showScrollToTop}
+        aria-label="Scroll terminal to top"
+        className={`terminal-pane-scroll-to-top${
+          showScrollToTop ? " terminal-pane-scroll-button-visible" : ""
+        }`}
+        disabled={!showScrollToTop}
+        onClick={(event) => {
+          event.stopPropagation();
+          scrollTerminalToTop();
+          focusTerminal("scroll-to-top");
+        }}
+        type="button"
+      >
+        <IconArrowBigUpFilled size={16} stroke={2} />
+      </button>
+      <button
+        aria-hidden={!showScrollToBottom}
+        aria-label="Scroll terminal to bottom"
+        className={`terminal-pane-scroll-to-bottom${
+          showScrollToBottom ? " terminal-pane-scroll-button-visible" : ""
+        }`}
+        disabled={!showScrollToBottom}
+        onClick={(event) => {
+          event.stopPropagation();
+          scrollTerminalToBottom();
+          focusTerminal("scroll-to-bottom");
+        }}
+        type="button"
+      >
+        <IconArrowBigDownFilled size={16} stroke={2} />
+      </button>
       {isSearchOpen ? (
         <div
           className="terminal-pane-search"

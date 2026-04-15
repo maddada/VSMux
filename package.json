@@ -1,7 +1,7 @@
 {
   "name": "VSmux",
   "displayName": "VSmux - T3code & Agent CLIs Manager",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "private": true,
   "description": "VSmux - T3code & Agent CLIs Manager",
   "categories": [
@@ -634,6 +634,13 @@
           "type": "boolean",
           "default": true,
           "description": "Show the Git button inside the Actions section in the VSmux sidebar."
+        },
+        "VSmux.shareSidebarCommandsAcrossWorktrees": {
+          "title": "Share Sidebar Commands Across Worktrees",
+          "type": "boolean",
+          "scope": "application",
+          "default": true,
+          "description": "Share non-global sidebar actions between Git worktrees that belong to the same repository. Global actions still appear in every project."
         },
         "VSmux.completionSound": {
           "title": "Completion Sound",
