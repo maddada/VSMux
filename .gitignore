@@ -23,3 +23,5 @@ docs/*
 .tmp/supervisor-repro2/
 .tmp/supervisor-repro3/
 .tmp/supervisor-repro4/
+.publish-tokens.local
+PUBLISHING.md
