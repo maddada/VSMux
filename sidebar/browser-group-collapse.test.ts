@@ -79,6 +79,25 @@ describe("reconcileCollapsedGroupsById", () => {
     ).toEqual({});
   });
 
+  test("should collapse a browser group again when its last browser closes", () => {
+    expect(
+      reconcileCollapsedGroupsById({
+        browserGroupIds: ["browser-tabs"],
+        groupIds: ["browser-tabs", "group-1"],
+        previousBrowserSessionCountsByGroup: {
+          "browser-tabs": 2,
+        },
+        previousCollapsedGroupsById: {},
+        sessionIdsByGroup: {
+          "browser-tabs": [],
+          "group-1": ["session-1"],
+        },
+      }),
+    ).toEqual({
+      "browser-tabs": true,
+    });
+  });
+
   test("should keep other collapsed groups untouched when browser counts stay flat", () => {
     const collapsedGroupsById = {
       "browser-tabs": true,

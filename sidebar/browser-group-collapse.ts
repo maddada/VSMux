@@ -43,7 +43,7 @@ export function reconcileCollapsedGroupsById({
     const previousCount = previousBrowserSessionCountsByGroup[browserGroupId];
     const nextCount = (sessionIdsByGroup[browserGroupId] ?? []).length;
 
-    if (previousCount === undefined && nextCount === 0) {
+    if (nextCount === 0) {
       if (!next[browserGroupId]) {
         next[browserGroupId] = true;
         changed = true;

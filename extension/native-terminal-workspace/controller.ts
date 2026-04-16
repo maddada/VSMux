@@ -5807,7 +5807,7 @@ async function readMacOSNativeClipboardPayload(): Promise<NativeClipboardPayload
     }
   }
 
-  if (Array.isArray(parsed.filePaths)) {
+  if (files.length === 0 && Array.isArray(parsed.filePaths)) {
     for (const candidatePath of parsed.filePaths) {
       if (typeof candidatePath !== "string" || candidatePath.trim().length === 0) {
         continue;

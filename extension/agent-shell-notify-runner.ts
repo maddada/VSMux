@@ -5,9 +5,18 @@ import {
 
 const AGENT_CONTROL_COMMAND = "9001";
 const AGENT_CONTROL_NAMESPACE = "VSmux";
+const USER_PROMPT_SUBMIT_ACK = JSON.stringify({ continue: true });
+
+type NormalizedEventType = "start" | "stop";
 
 async function main(): Promise<void> {
   const input = await readInput();
+  const hookResponse = getHookResponseForInput(input);
+  if (hookResponse) {
+    process.stdout.write(hookResponse);
+    return;
+  }
+
   const normalizedEvent = getNormalizedEventType(input);
   if (!normalizedEvent) {
     return;
@@ -35,7 +44,16 @@ async function readInput(): Promise<string> {
   return chunks.join("");
 }
 
-function getNormalizedEventType(input: string): "start" | "stop" | undefined {
+export function getHookResponseForInput(input: string): string | undefined {
+  const hookEventName = getJsonStringField(input, "hook_event_name");
+  if (hookEventName === "UserPromptSubmit") {
+    return USER_PROMPT_SUBMIT_ACK;
+  }
+
+  return undefined;
+}
+
+export function getNormalizedEventType(input: string): NormalizedEventType | undefined {
   const hookEventName = getJsonStringField(input, "hook_event_name");
   if (hookEventName && /^start$/i.test(hookEventName)) {
     return "start";
@@ -59,7 +77,7 @@ function getJsonStringField(input: string, key: string): string | undefined {
   return match?.[1] || undefined;
 }
 
-async function writeSessionState(eventType: "start" | "stop", agentName: string): Promise<void> {
+async function writeSessionState(eventType: NormalizedEventType, agentName: string): Promise<void> {
   const stateFilePath = process.env.VSMUX_SESSION_STATE_FILE?.trim();
   if (!stateFilePath) {
     return;
@@ -74,6 +92,8 @@ async function writeSessionState(eventType: "start" | "stop", agentName: string)
   });
 }
 
-void main().catch(() => {
-  process.exit(0);
-});
+if (typeof require !== "undefined" && require.main === module) {
+  void main().catch(() => {
+    process.exit(0);
+  });
+}
