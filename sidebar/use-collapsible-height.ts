@@ -17,7 +17,8 @@ export function useCollapsibleHeight<T extends HTMLElement>() {
     let animationFrameId = 0;
 
     const updateHeight = () => {
-      setContentHeight(element.scrollHeight);
+      const renderedHeight = Math.ceil(element.getBoundingClientRect().height);
+      setContentHeight(Math.max(element.scrollHeight, renderedHeight));
     };
 
     const scheduleUpdate = () => {
