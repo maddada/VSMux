@@ -6,7 +6,14 @@
 
 ---
 
-### Latest Release: 4.1.0
+### Latest Release: 4.2.0
+
+- T3 browser access is sturdier now: VSmux can reuse shared browser-access session state across windows, recover more gracefully when the shared access port is already in use, and keep remote-share links working with less manual setup.
+- T3 paste handling is stronger on macOS now, with a native clipboard fallback for pasted images, files, and text when the browser clipboard APIs come back empty.
+- Workspace readability controls are smoother now: terminal font size and T3 zoom preferences stay in sync more reliably, pane zoom controls support quick reset, and thread navigation inside T3 preserves session bindings more cleanly.
+- The sidebar has another polish pass, including clearer top-toolbar actions for search/history/pinned prompts, calmer group header interactions, a larger pinned-prompt editor, and tidier icon/header styling.
+
+### Previous Release: 4.1.0
 
 - T3 sessions can now be opened from your phone or browser with QR-based remote access links, including Tailscale, LAN, and VS Code external-link fallbacks, and VSmux can now spin up a T3 session for browser access when you do not already have one open.
 - Workspace panes now have inline zoom controls and clearer action tooltips, so adjusting terminal readability takes one click instead of a settings detour.
@@ -151,6 +158,7 @@ Gist on how to do this
 
 - **Embedded T3 sessions** — T3 Code runs directly inside the VSmux sidebar as a webview
 - **Remote T3 browser access** — open an active T3 session from your phone or another browser with QR-based share links and Tailscale/LAN fallback handling
+- **Clipboard bridging & native fallback** — pasted images and file-like clipboard content can be bridged into embedded T3 sessions more reliably, including a native macOS clipboard fallback when the web clipboard is empty
 - **T3 activity monitoring** — WebSocket connection to local T3 runtime tracks thread activity in real time
 - **T3 session lifecycle** — automatic supervision, sync, and management of T3 sessions
 
