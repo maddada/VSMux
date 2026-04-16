@@ -1,5 +1,6 @@
 .terminal-pane-root {
   background: #000;
+  container-type: inline-size;
   height: 100%;
   position: relative;
   width: 100%;
@@ -179,10 +180,13 @@
   border-color: rgba(129, 162, 255, 0.48);
 }
 
-@media (max-width: 1100px) {
+@container (max-width: 1100px) {
   .terminal-pane-search {
     flex-wrap: wrap;
-    max-width: calc(100% - 32px);
+    left: 16px;
+    max-width: none;
+    right: 16px;
+    row-gap: 8px;
   }
 
   .terminal-pane-search-input {
