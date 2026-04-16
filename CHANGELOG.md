@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented in this file.
 
+## 4.1.0 - 2026-04-16
+
+- Pinned prompts are now available in the sidebar, so you can save, edit, and copy reusable prompts that stay available across projects.
+- T3 browser access is more forgiving now: if you request remote access without an active T3 session, VSmux can start one for you first, and the shared browser-access endpoint now uses a stable server port and cleaner share URL.
+- The bundled dpcode server runtime is pruned more aggressively during packaging, which cuts a large amount of shipped runtime weight, and new rollback build/install commands make it easier to recover from bad local embed updates.
+
 ## 4.0.0 - 2026-04-16
 
 - T3 sessions can now be opened outside the editor through a new remote-access flow, with QR codes plus VS Code external-link, Tailscale, LAN, and local-only fallback handling depending on what is available on your machine.

@@ -6,12 +6,12 @@
 
 ---
 
-### Latest Release: 4.0.0
+### Latest Release: 4.1.0
 
-- T3 sessions can now be opened from your phone or browser with QR-based remote access links, including Tailscale, LAN, and VS Code external-link fallbacks.
+- T3 sessions can now be opened from your phone or browser with QR-based remote access links, including Tailscale, LAN, and VS Code external-link fallbacks, and VSmux can now spin up a T3 session for browser access when you do not already have one open.
 - Workspace panes now have inline zoom controls and clearer action tooltips, so adjusting terminal readability takes one click instead of a settings detour.
 - Session cards now default to agent icons instead of noisy timestamps, use cleaner compact time labels, and ignore generic bare titles like `Codex` or `Claude Code` when choosing what to show.
-- Command buttons also behave better in dense layouts, including cleaner support for icon-only buttons.
+- You can now save pinned prompts in the sidebar so reusable instructions stay one click away across projects, and command buttons behave better in dense layouts with cleaner icon-only support.
 
 Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 
@@ -55,6 +55,7 @@ Then this is the extension for you! You get a very nice interface to work with y
 - **Customizable AI Agents** — Add, configure, and modify distinct profiles for various AI models. You can set up custom paths, run different agents side-by-side, or create specific profiles (like "work" vs. "personal").
 - **Cross-Agent Context Handoff** — Transfer the context of an active conversation from one AI model (e.g., GPT) directly to another (e.g., Claude) to continue the work seamlessly.
 - **Custom Action Buttons** — Map any terminal command to a clickable, draggable button. These custom actions can be configured to execute commands automatically, play a notification sound upon completion, or close when finished.
+- **Pinned Prompts** — Save reusable prompts directly in the sidebar so common instructions stay available across projects without digging through old notes.
 - **Integrated Browser** — Open web environments (like your localhost) directly within a VSmux pane. The browser remembers login states and includes a DevTools console, allowing you to select and send specific HTML elements directly to your AI agents.
 - **Automated Git Operations** — Built-in actions to automatically generate commit messages and push code changes.
 - **Code Change Monitoring** — Keep an eye on the codebase modifications your agents are making in a dedicated bottom-left panel while simultaneously directing other agents on separate tasks.
