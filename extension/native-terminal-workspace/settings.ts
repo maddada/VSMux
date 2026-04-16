@@ -224,8 +224,21 @@ export function getShowLastInteractionTimeOnSessionCards(): boolean {
   return (
     vscode.workspace
       .getConfiguration(SETTINGS_SECTION)
-      .get<boolean>(SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING, true) ?? true
+      .get<boolean>(SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING, false) ?? false
   );
+}
+
+export async function setShowLastInteractionTimeOnSessionCards(enabled: boolean): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration(SETTINGS_SECTION);
+  const inspection = configuration.inspect<boolean>(
+    SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING,
+  );
+  const target =
+    inspection?.workspaceValue !== undefined
+      ? vscode.ConfigurationTarget.Workspace
+      : vscode.ConfigurationTarget.Global;
+
+  await configuration.update(SHOW_LAST_INTERACTION_TIME_ON_SESSION_CARDS_SETTING, enabled, target);
 }
 
 export function getDebuggingMode(): boolean {

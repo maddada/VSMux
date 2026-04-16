@@ -216,13 +216,19 @@ import {
   getTerminalFontWeight,
   getTerminalLetterSpacing,
   getTerminalLineHeight,
+  setShowLastInteractionTimeOnSessionCards,
   setTerminalFontSize,
   getXtermFrontendScrollback,
 } from "./settings";
 import { DaemonTerminalWorkspaceBackend } from "../daemon-terminal-workspace-backend";
 import { WorkspacePanelManager } from "../workspace-panel";
 import { WorkspaceAssetServer } from "../workspace-asset-server";
-import { createPendingT3IframeSource, createT3IframeSource } from "../t3-webview-manager/html";
+import { resolveT3BrowserAccessLink } from "../t3-browser-access";
+import {
+  createPendingT3IframeSource,
+  createT3BrowserAccessSource,
+  createT3IframeSource,
+} from "../t3-webview-manager/html";
 import { playCloseTerminalOnExitSound } from "../terminal-exit-sound";
 import {
   AgentManagerXBridgeClient,
@@ -347,6 +353,9 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       },
     });
     this.workspaceAssetServer = new WorkspaceAssetServer(context);
+    this.workspaceAssetServer.setT3BrowserAccessDocumentResolver(async (input) =>
+      this.createT3BrowserAccessDocument(input.sessionId, input.requestOrigin),
+    );
     this.workspacePanel = new WorkspacePanelManager({
       context,
       onMessage: async (message) => {
@@ -417,6 +426,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
 
         if (message.type === "promptRenameSession") {
           await this.promptRenameSession(message.sessionId);
+          return;
+        }
+
+        if (message.type === "adjustTerminalFontSize") {
+          await this.adjustTerminalFontSize(message.delta);
           return;
         }
 
@@ -998,7 +1012,7 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     }
 
     const nextTitle = await vscode.window.showInputBox({
-      prompt: "Rename session",
+      prompt: "Rename session - Paste text over 50 char to auto-generate a name",
       value:
         getPreferredSessionTitle(
           sessionRecord.title,
@@ -1474,6 +1488,11 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       COMPLETION_BELL_ENABLED_KEY,
       !this.getCompletionBellEnabled(),
     );
+    await this.refreshSidebar("hydrate");
+  }
+
+  public async toggleShowLastInteractionTimeOnSessionCards(): Promise<void> {
+    await setShowLastInteractionTimeOnSessionCards(!getShowLastInteractionTimeOnSessionCards());
     await this.refreshSidebar("hydrate");
   }
 
@@ -2211,12 +2230,15 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
       forkSession: async (sessionId) => this.forkSession(sessionId),
       fullReloadGroup: async (groupId) => this.fullReloadGroup(groupId),
       fullReloadSession: async (sessionId) => this.fullReloadSession(sessionId),
+      openT3SessionBrowserAccessLink: async (url) => this.openT3SessionBrowserAccessLink(url),
       setGroupSleeping: async (groupId, sleeping) => this.setGroupSleeping(groupId, sleeping),
       setSessionFavorite: async (sessionId, favorite) =>
         this.setSessionFavorite(sessionId, favorite),
       setSessionSleeping: async (sessionId, sleeping) =>
         this.setSessionSleeping(sessionId, sleeping),
       setT3SessionThreadId: async (sessionId) => this.promptSetT3SessionThreadId(sessionId),
+      requestT3SessionBrowserAccess: async (sessionId) =>
+        this.requestT3SessionBrowserAccess(sessionId),
       createGroup: async () => this.createGroup(),
       createGroupFromSession: async (sessionId) => this.createGroupFromSession(sessionId),
       createSession: async () => this.createSession(),
@@ -2288,6 +2310,8 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
         this.setSidebarGitGenerateCommitBodyEnabled(enabled),
       setSidebarGitPrimaryAction: async (action) => this.setSidebarGitPrimaryAction(action),
       toggleActiveSessionsSortMode: async () => this.toggleActiveSessionsSortMode(),
+      toggleShowLastInteractionTimeOnSessionCards: async () =>
+        this.toggleShowLastInteractionTimeOnSessionCards(),
       setViewMode: async (viewMode) => this.setViewMode(viewMode),
       setVisibleCount: async (visibleCount) => this.setVisibleCount(visibleCount),
       syncSidebarAgentOrder: async (requestId, agentIds) =>
@@ -4669,6 +4693,82 @@ export class NativeTerminalWorkspaceController implements vscode.Disposable {
     await this.store.replaceSnapshot({
       ...snapshot,
       groups: nextGroups,
+    });
+  }
+
+  private async requestT3SessionBrowserAccess(sessionId: string): Promise<void> {
+    const sessionRecord = this.resolveBrowserAccessT3Session(sessionId);
+    if (!sessionRecord) {
+      void vscode.window.showErrorMessage(
+        "Open a T3 Code session first before trying to access it from a browser or phone.",
+      );
+      return;
+    }
+
+    const accessLink = await this.getT3SessionBrowserAccessLink(sessionRecord);
+    await this.sidebarProvider.postMessage({
+      endpointUrl: accessLink.endpointUrl,
+      localUrl: accessLink.localUrl,
+      mode: accessLink.mode,
+      note: accessLink.note,
+      sessionId: sessionRecord.sessionId,
+      sessionTitle: sessionRecord.title,
+      tailscaleEnabled: accessLink.tailscaleEnabled,
+      type: "showT3BrowserAccess",
+    });
+  }
+
+  private async openT3SessionBrowserAccessLink(url: string): Promise<void> {
+    await vscode.env.openExternal(vscode.Uri.parse(url));
+  }
+
+  private async getT3SessionBrowserAccessLink(sessionRecord: T3SessionRecord) {
+    const localUrl = await this.workspaceAssetServer.getT3BrowserAccessUrl(sessionRecord.sessionId);
+    return resolveT3BrowserAccessLink(localUrl);
+  }
+
+  private resolveBrowserAccessT3Session(preferredSessionId: string): T3SessionRecord | undefined {
+    const candidateSessionIds = new Set<string>();
+    candidateSessionIds.add(preferredSessionId);
+    const focusedSessionId = this.getActiveSnapshot().focusedSessionId;
+    if (focusedSessionId) {
+      candidateSessionIds.add(focusedSessionId);
+    }
+
+    for (const sessionId of candidateSessionIds) {
+      const sessionRecord = this.store.getSession(sessionId);
+      if (sessionRecord && isT3Session(sessionRecord)) {
+        return sessionRecord;
+      }
+    }
+
+    return this.getAllSessionRecords().find((sessionRecord): sessionRecord is T3SessionRecord =>
+      isT3Session(sessionRecord),
+    );
+  }
+
+  private async createT3BrowserAccessDocument(
+    sessionId: string,
+    requestOrigin: string,
+  ): Promise<string | undefined> {
+    const sessionRecord = this.store.getSession(sessionId);
+    if (!sessionRecord || !isT3Session(sessionRecord)) {
+      return undefined;
+    }
+
+    await this.ensureT3Ready(sessionRecord);
+    const runtime = this.getOrCreateT3Runtime();
+    const resolvedSessionRecord = this.store.getSession(sessionId);
+    if (!resolvedSessionRecord || !isT3Session(resolvedSessionRecord)) {
+      return undefined;
+    }
+    const embedBootstrap = await runtime.createEmbedBootstrap(
+      resolvedSessionRecord.t3.workspaceRoot,
+    );
+    this.workspaceAssetServer.setT3ProxyAuthorizationToken(embedBootstrap.ownerBearerToken);
+    return createT3BrowserAccessSource(this.context, resolvedSessionRecord, {
+      assetServerOrigin: requestOrigin,
+      browserBootstrapToken: embedBootstrap.browserBootstrapToken,
     });
   }
 

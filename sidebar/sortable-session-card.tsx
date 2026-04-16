@@ -7,6 +7,7 @@ import {
   IconPlayerPlay,
   IconRefresh,
   IconStar,
+  IconDeviceMobile,
   IconX,
 } from "@tabler/icons-react";
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
@@ -406,6 +407,14 @@ export function SortableSessionCard({
     });
   };
 
+  const requestT3BrowserAccess = () => {
+    setContextMenuPosition(undefined);
+    vscode.postMessage({
+      sessionId: session.sessionId,
+      type: "requestT3SessionBrowserAccess",
+    });
+  };
+
   const requestSetSleeping = (sleeping: boolean) => {
     setContextMenuPosition(undefined);
     vscode.postMessage({
@@ -470,6 +479,19 @@ export function SortableSessionCard({
 
   const sessionActions: SessionContextMenuAction[] = [];
   if (canSetT3ThreadId) {
+    sessionActions.push({
+      icon: (
+        <IconDeviceMobile
+          aria-hidden="true"
+          className="session-context-menu-icon"
+          size={16}
+          stroke={1.8}
+        />
+      ),
+      key: "browser-access",
+      label: "Remote Access",
+      onClick: requestT3BrowserAccess,
+    });
     sessionActions.push({
       icon: (
         <IconHash aria-hidden="true" className="session-context-menu-icon" size={16} stroke={1.8} />

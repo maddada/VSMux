@@ -178,3 +178,15 @@
   background: rgba(88, 129, 255, 0.24);
   border-color: rgba(129, 162, 255, 0.48);
 }
+
+@media (max-width: 1100px) {
+  .terminal-pane-search {
+    flex-wrap: wrap;
+    max-width: calc(100% - 32px);
+  }
+
+  .terminal-pane-search-input {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}

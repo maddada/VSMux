@@ -6,16 +6,15 @@ import {
   IconBell,
   IconBellOff,
   IconArrowsSort,
+  IconEye,
   IconHelpCircle,
   IconHistory,
   IconLayoutSidebar,
-  IconMinus,
   IconPencil,
-  IconPlus,
   IconPlusFilled,
   IconSearch,
   IconSettings,
-  IconWorld,
+  IconDeviceMobile,
 } from "@tabler/icons-react";
 import {
   useEffect,
@@ -38,6 +37,7 @@ import { DaemonSessionsModal } from "./daemon-sessions-modal";
 import { GitCommitModal } from "./git-commit-modal";
 import { PreviousSessionsModal } from "./previous-sessions-modal";
 import { ScratchPadModal } from "./scratch-pad-modal";
+import { T3BrowserAccessModal } from "./t3-browser-access-modal";
 import {
   SidebarPreviousSessionsSearchGroup,
   SidebarSessionSearchField,
@@ -147,6 +147,8 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
   const [isPreviousSessionsOpen, setIsPreviousSessionsOpen] = useState(false);
   const [isScratchPadOpen, setIsScratchPadOpen] = useState(false);
   const [isSessionSearchOpen, setIsSessionSearchOpen] = useState(false);
+  const [t3BrowserAccess, setT3BrowserAccess] =
+    useState<Extract<ExtensionToSidebarMessage, { type: "showT3BrowserAccess" }>>();
   const [completionFlashNonceBySessionId, setCompletionFlashNonceBySessionId] = useState<
     Record<string, number>
   >({});
@@ -198,6 +200,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     previousSessions,
     sectionVisibility,
     showHotkeysOnSessionCards,
+    showLastInteractionTimeOnSessionCards,
     sessionsById,
     theme,
     workspaceGroupIds,
@@ -214,6 +217,7 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
       previousSessions: state.previousSessions,
       sectionVisibility: state.hud.sectionVisibility,
       showHotkeysOnSessionCards: state.hud.showHotkeysOnSessionCards,
+      showLastInteractionTimeOnSessionCards: state.hud.showLastInteractionTimeOnSessionCards,
       sessionsById: state.sessionsById,
       theme: state.hud.theme,
       workspaceGroupIds: state.workspaceGroupIds,
@@ -292,33 +296,32 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     }
 
     if (event.data.type === "playCompletionSound") {
+      const sessionId = event.data.sessionId;
       postSidebarDebugLog("completionSound.messageReceived", {
         sound: event.data.sound,
-        sessionId: event.data.sessionId,
+        sessionId,
       });
-      const existingTimeout = completionFlashTimeoutBySessionIdRef.current.get(
-        event.data.sessionId,
-      );
+      const existingTimeout = completionFlashTimeoutBySessionIdRef.current.get(sessionId);
       if (existingTimeout !== undefined) {
         window.clearTimeout(existingTimeout);
       }
       setCompletionFlashNonceBySessionId((previous) => ({
         ...previous,
-        [event.data.sessionId]: (previous[event.data.sessionId] ?? 0) + 1,
+        [sessionId]: (previous[sessionId] ?? 0) + 1,
       }));
       const timeout = window.setTimeout(() => {
-        completionFlashTimeoutBySessionIdRef.current.delete(event.data.sessionId);
+        completionFlashTimeoutBySessionIdRef.current.delete(sessionId);
         setCompletionFlashNonceBySessionId((previous) => {
-          if (!(event.data.sessionId in previous)) {
+          if (!(sessionId in previous)) {
             return previous;
           }
 
           const next = { ...previous };
-          delete next[event.data.sessionId];
+          delete next[sessionId];
           return next;
         });
       }, COMPLETION_FLASH_DURATION_MS);
-      completionFlashTimeoutBySessionIdRef.current.set(event.data.sessionId, timeout);
+      completionFlashTimeoutBySessionIdRef.current.set(sessionId, timeout);
       void playCompletionSound(event.data.sound, (soundEvent, details) => {
         postSidebarDebugLog(soundEvent, details);
       });
@@ -348,6 +351,11 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
 
     if (event.data.type === "promptGitCommit") {
       setGitCommitDraft(event.data);
+      return;
+    }
+
+    if (event.data.type === "showT3BrowserAccess") {
+      setT3BrowserAccess(event.data);
       return;
     }
 
@@ -1237,13 +1245,14 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     sidebarSessionSearchResults,
   ]);
 
-  const adjustTerminalFontSize = (delta: -1 | 1) => {
-    vscode.postMessage({ delta, type: "adjustTerminalFontSize" });
-  };
-
   const toggleCompletionBell = () => {
     setIsOverflowMenuOpen(false);
     vscode.postMessage({ type: "toggleCompletionBell" });
+  };
+
+  const toggleShowLastInteractionTimeOnSessionCards = () => {
+    setIsOverflowMenuOpen(false);
+    vscode.postMessage({ type: "toggleShowLastInteractionTimeOnSessionCards" });
   };
 
   const toggleActiveSessionsSortMode = () => {
@@ -1261,14 +1270,31 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     vscode.postMessage({ type: "openWorkspaceWelcome" });
   };
 
+  const browserAccessSessionId = useMemo(() => {
+    const orderedSessionIds = groupOrder.flatMap(
+      (groupId) => authoritativeSessionIdsByGroup[groupId] ?? [],
+    );
+    const focusedSessionId = orderedSessionIds.find(
+      (sessionId) => sessionsById[sessionId]?.isFocused,
+    );
+    return focusedSessionId ?? orderedSessionIds[0];
+  }, [authoritativeSessionIdsByGroup, groupOrder, sessionsById]);
+
   const topControlOptions = {
     completionBellEnabled,
+    browserAccessSessionId,
     isManualActiveSessionsSort,
     isOverflowMenuOpen,
     isPreviousSessionsOpen,
     isScratchPadOpen,
     isSessionSearchOpen,
-    onAdjustTerminalFontSize: adjustTerminalFontSize,
+    onAccessT3FromBrowser: (sessionId: string) => {
+      setIsOverflowMenuOpen(false);
+      vscode.postMessage({
+        sessionId,
+        type: "requestT3SessionBrowserAccess",
+      });
+    },
     onMoveSidebar: moveSidebar,
     onOpenHelp: openWorkspaceWelcome,
     onOpenSettings: openSidebarSettings,
@@ -1284,10 +1310,12 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
     onToggleSessionSearch: toggleSessionSearch,
     onToggleActiveSessionsSortMode: toggleActiveSessionsSortMode,
     onToggleBell: toggleCompletionBell,
+    onToggleShowLastInteractionTimeOnSessionCards: toggleShowLastInteractionTimeOnSessionCards,
     onToggleMenu: toggleOverflowMenu,
     onToggleScratchPad: openScratchPad,
     overflowMenuPosition,
     overflowMenuRef,
+    showLastInteractionTimeOnSessionCards,
   } satisfies RenderSidebarTopControlsOptions;
 
   return (
@@ -1521,6 +1549,17 @@ export function SidebarApp({ messageSource = window, vscode }: SidebarAppProps) 
             });
           }}
         />
+        <T3BrowserAccessModal
+          access={t3BrowserAccess}
+          isOpen={t3BrowserAccess !== undefined}
+          onClose={() => setT3BrowserAccess(undefined)}
+          onOpenLink={(url) => {
+            vscode.postMessage({
+              type: "openT3SessionBrowserAccessLink",
+              url,
+            });
+          }}
+        />
         <GitCommitModal
           draft={
             gitCommitDraft ?? {
@@ -1696,21 +1735,26 @@ function getCompletionBellMenuLabel(completionBellEnabled: boolean): string {
 }
 
 function getActiveSessionsSortMenuLabel(isManualActiveSessionsSort: boolean): string {
-  return isManualActiveSessionsSort ? "Sort: Manual" : "Sort: Last Activity";
+  return isManualActiveSessionsSort ? "Manual Sort" : "Last Activity Sort";
 }
 
 function getScratchPadMenuLabel(isScratchPadOpen: boolean): string {
   return isScratchPadOpen ? "Hide Scratch Pad" : "Scratch Pad";
 }
 
+function getSessionCardTimeToggleLabel(showLastInteractionTimeOnSessionCards: boolean): string {
+  return showLastInteractionTimeOnSessionCards ? "Last Active" : "Agent Icon";
+}
+
 type RenderSidebarTopControlsOptions = {
   completionBellEnabled: boolean;
+  browserAccessSessionId?: string;
   isManualActiveSessionsSort: boolean;
   isOverflowMenuOpen: boolean;
   isPreviousSessionsOpen: boolean;
   isScratchPadOpen: boolean;
   isSessionSearchOpen: boolean;
-  onAdjustTerminalFontSize: (delta: -1 | 1) => void;
+  onAccessT3FromBrowser: (sessionId: string) => void;
   onMoveSidebar: () => void;
   onOpenHelp: () => void;
   onOpenSettings: () => void;
@@ -1719,21 +1763,24 @@ type RenderSidebarTopControlsOptions = {
   onToggleSessionSearch: () => void;
   onToggleActiveSessionsSortMode: () => void;
   onToggleBell: () => void;
+  onToggleShowLastInteractionTimeOnSessionCards: () => void;
   onToggleMenu: (trigger: HTMLElement) => void;
   onToggleScratchPad: () => void;
   overflowMenuPosition?: FloatingMenuPosition;
   overflowMenuRef: RefObject<HTMLDivElement | null>;
+  showLastInteractionTimeOnSessionCards: boolean;
   showMenu?: boolean;
 };
 
 function renderSidebarTopControls({
   completionBellEnabled,
+  browserAccessSessionId,
   isManualActiveSessionsSort,
   isOverflowMenuOpen,
   isPreviousSessionsOpen,
   isScratchPadOpen,
   isSessionSearchOpen,
-  onAdjustTerminalFontSize,
+  onAccessT3FromBrowser,
   onMoveSidebar: _onMoveSidebar,
   onOpenHelp,
   onOpenSettings,
@@ -1742,10 +1789,12 @@ function renderSidebarTopControls({
   onToggleSessionSearch,
   onToggleActiveSessionsSortMode,
   onToggleBell,
+  onToggleShowLastInteractionTimeOnSessionCards,
   onToggleMenu,
   onToggleScratchPad,
   overflowMenuPosition,
   overflowMenuRef,
+  showLastInteractionTimeOnSessionCards,
   showMenu = true,
 }: RenderSidebarTopControlsOptions) {
   if (!showMenu) {
@@ -1816,35 +1865,16 @@ function renderSidebarTopControls({
               }}
             >
               <div className="session-context-menu-group">
-                <div
-                  className="session-context-menu-split-row"
-                  role="group"
-                  aria-label="Terminal zoom controls"
+                <button
+                  aria-checked={showLastInteractionTimeOnSessionCards}
+                  className="session-context-menu-item"
+                  onClick={onToggleShowLastInteractionTimeOnSessionCards}
+                  role="menuitemcheckbox"
+                  type="button"
                 >
-                  <button
-                    aria-label="Zoom Out"
-                    className="session-context-menu-split-item"
-                    onClick={() => onAdjustTerminalFontSize(-1)}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconMinus
-                      aria-hidden="true"
-                      className="session-context-menu-icon"
-                      size={14}
-                      stroke={1.8}
-                    />
-                  </button>
-                  <button
-                    aria-label="Zoom In"
-                    className="session-context-menu-split-item"
-                    onClick={() => onAdjustTerminalFontSize(1)}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <IconPlus aria-hidden="true" className="session-context-menu-icon" size={14} />
-                  </button>
-                </div>
+                  <IconEye aria-hidden="true" className="session-context-menu-icon" size={14} />
+                  {getSessionCardTimeToggleLabel(showLastInteractionTimeOnSessionCards)}
+                </button>
                 <button
                   className="session-context-menu-item"
                   onClick={onToggleBell}
@@ -1865,6 +1895,22 @@ function renderSidebarTopControls({
               </div>
               <div className="session-context-menu-divider" role="separator" />
               <div className="session-context-menu-group">
+                {browserAccessSessionId ? (
+                  <button
+                    className="session-context-menu-item"
+                    onClick={() => onAccessT3FromBrowser(browserAccessSessionId)}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <IconDeviceMobile
+                      aria-hidden="true"
+                      className="session-context-menu-icon"
+                      size={14}
+                      stroke={1.8}
+                    />
+                    Remote Access
+                  </button>
+                ) : null}
                 <button
                   className="session-context-menu-item"
                   onClick={onToggleActiveSessionsSortMode}

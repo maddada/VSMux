@@ -114,6 +114,7 @@ export function shouldBypassSidebarMessageQueue(message: SidebarToExtensionMessa
     case "refreshGitState":
     case "openSettings":
     case "promptFindPreviousSession":
+    case "openT3SessionBrowserAccessLink":
     case "syncSidebarAgentOrder":
     case "syncSidebarCommandOrder":
       return true;
@@ -204,6 +205,7 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
       return true;
     case "openSettings":
     case "toggleCompletionBell":
+    case "toggleShowLastInteractionTimeOnSessionCards":
     case "openWorkspaceWelcome":
     case "promptFindPreviousSession":
     case "refreshDaemonSessions":
@@ -212,6 +214,8 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
     case "createSession":
     case "openBrowser":
       return true;
+    case "openT3SessionBrowserAccessLink":
+      return typeof message.url === "string" && message.url.length > 0;
     case "adjustTerminalFontSize":
       return message.delta === -1 || message.delta === 1;
     case "killDaemonSession":
@@ -296,6 +300,7 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
     case "forkSession":
     case "fullReloadSession":
     case "setT3SessionThreadId":
+    case "requestT3SessionBrowserAccess":
       return (
         typeof message.sessionId === "string" &&
         message.sessionId.length > 0 &&

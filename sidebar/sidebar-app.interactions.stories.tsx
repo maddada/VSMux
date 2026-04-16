@@ -145,20 +145,6 @@ export const ToolbarActions: Story = {
       });
     });
 
-    await step("zoom terminals without closing the sidebar menu", async () => {
-      resetSidebarStoryMessages();
-      await hoverSidebarChrome(canvasElement.ownerDocument.body);
-      await userEvent.click(canvas.getByRole("button", { name: "Open sidebar menu" }));
-      await userEvent.click(await body.findByRole("menuitem", { name: "Zoom Out" }));
-      await expectMessage({ delta: -1, type: "adjustTerminalFontSize" });
-      await expect(body.getByRole("menuitem", { name: "Zoom In" })).toBeVisible();
-
-      resetSidebarStoryMessages();
-      await userEvent.click(body.getByRole("menuitem", { name: "Zoom In" }));
-      await expectMessage({ delta: 1, type: "adjustTerminalFontSize" });
-      await expect(body.getByRole("menuitem", { name: "Zoom Out" })).toBeVisible();
-    });
-
     await step("still create a session in a group after menu interactions", async () => {
       resetSidebarStoryMessages();
       const groupHeader = await findRequiredElement(

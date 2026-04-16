@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconX } from "@tabler/icons-react";
 import type { WorkspacePanelShowToastMessage } from "../shared/workspace-panel-contract";
+import { WorkspacePaneActionTooltip } from "./workspace-pane-action-tooltip";
 
 export const WORKSPACE_PANE_CLOSE_CONFIRM_DURATION_MS = 3_000;
 
@@ -85,28 +86,30 @@ export const WorkspacePaneCloseButton: React.FC<WorkspacePaneCloseButtonProps> =
 
   return (
     <div className="workspace-pane-close-control">
-      <button
-        aria-label={isConfirming ? "Confirm close session" : "Close session"}
-        className={`workspace-pane-close-button ${isConfirming ? "workspace-pane-close-button-confirming" : ""}`}
-        draggable={false}
-        onClick={(event) => {
-          event.stopPropagation();
+      <WorkspacePaneActionTooltip tooltip={isConfirming ? "Confirm Close" : "Close"}>
+        <button
+          aria-label={isConfirming ? "Confirm close session" : "Close session"}
+          className={`workspace-pane-close-button ${isConfirming ? "workspace-pane-close-button-confirming" : ""}`}
+          draggable={false}
+          onClick={(event) => {
+            event.stopPropagation();
 
-          if (isConfirming) {
-            clearConfirmation();
-            onConfirmClose();
-            return;
-          }
+            if (isConfirming) {
+              clearConfirmation();
+              onConfirmClose();
+              return;
+            }
 
-          armConfirmation();
-        }}
-        onMouseDown={(event) => {
-          event.stopPropagation();
-        }}
-        type="button"
-      >
-        <IconX aria-hidden size={14} stroke={1.8} />
-      </button>
+            armConfirmation();
+          }}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          type="button"
+        >
+          <IconX aria-hidden size={14} stroke={1.8} />
+        </button>
+      </WorkspacePaneActionTooltip>
     </div>
   );
 };

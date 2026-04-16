@@ -1,5 +1,6 @@
 import {
   createServer,
+  type Server as HttpServer,
   type IncomingHttpHeaders,
   type IncomingMessage,
   type OutgoingHttpHeaders,
@@ -14,6 +15,11 @@ import * as vscode from "vscode";
 import { getManagedT3WebDistPath } from "./managed-t3-paths";
 
 type AssetScope = "workspace" | "t3-embed";
+type AssetServerKind = "local" | "shared";
+type T3BrowserAccessDocumentResolver = (input: {
+  requestOrigin: string;
+  sessionId: string;
+}) => Promise<string | undefined>;
 
 const T3_PROXY_HOST = "127.0.0.1";
 const T3_PROXY_PORT = 3774;
@@ -32,12 +38,14 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
 
 export class WorkspaceAssetServer implements vscode.Disposable {
   private readonly roots: Record<AssetScope, string>;
-  private readonly server = createServer((request, response) => {
-    void this.handleRequest(request, response);
-  });
-  private listenPromise: Promise<number> | undefined;
-  private port: number | undefined;
+  private readonly localServer = this.createAssetServer();
+  private readonly sharedServer = this.createAssetServer();
+  private localListenPromise: Promise<number> | undefined;
+  private localPort: number | undefined;
+  private sharedListenPromise: Promise<number> | undefined;
+  private sharedPort: number | undefined;
   private t3ProxyAuthorizationToken: string | undefined;
+  private t3BrowserAccessDocumentResolver: T3BrowserAccessDocumentResolver | undefined;
 
   public constructor(context: vscode.ExtensionContext) {
     const packagedEmbedRoot = path.join(context.extensionPath, "out", "t3-embed");
@@ -47,52 +55,90 @@ export class WorkspaceAssetServer implements vscode.Disposable {
         : getManagedT3WebDistPath(context),
       workspace: path.join(context.extensionPath, "out", "workspace"),
     };
-    this.server.on("upgrade", (request, socket, head) => {
-      void this.handleUpgrade(request, socket, head);
-    });
   }
 
   public dispose(): void {
-    this.listenPromise = undefined;
-    this.port = undefined;
-    this.server.close();
+    this.localListenPromise = undefined;
+    this.localPort = undefined;
+    this.sharedListenPromise = undefined;
+    this.sharedPort = undefined;
+    this.localServer.close();
+    this.sharedServer.close();
   }
 
   public async getUrl(scope: AssetScope, relativePath: string): Promise<string> {
-    const port = await this.ensureListening();
+    const port = await this.ensureListening("local");
     const normalizedPath = normalizeRelativePath(relativePath);
     return `http://127.0.0.1:${String(port)}/${scope}/${normalizedPath}`;
   }
 
   public async getRootUrl(scope: AssetScope): Promise<string> {
-    const port = await this.ensureListening();
+    const port = await this.ensureListening("local");
     return `http://127.0.0.1:${String(port)}/${scope}`;
+  }
+
+  public async getT3BrowserAccessUrl(sessionId: string): Promise<string> {
+    const port = await this.ensureListening("shared");
+    return `http://127.0.0.1:${String(port)}/t3-share/${encodeURIComponent(sessionId)}`;
   }
 
   public setT3ProxyAuthorizationToken(token: string | undefined): void {
     this.t3ProxyAuthorizationToken = token?.trim() ? token : undefined;
   }
 
-  private async ensureListening(): Promise<number> {
-    if (this.port !== undefined) {
-      return this.port;
+  public setT3BrowserAccessDocumentResolver(
+    resolver: T3BrowserAccessDocumentResolver | undefined,
+  ): void {
+    this.t3BrowserAccessDocumentResolver = resolver;
+  }
+
+  private createAssetServer(): HttpServer {
+    const server = createServer((request, response) => {
+      void this.handleRequest(request, response);
+    });
+    server.on("upgrade", (request, socket, head) => {
+      void this.handleUpgrade(request, socket, head);
+    });
+    return server;
+  }
+
+  private async ensureListening(kind: AssetServerKind): Promise<number> {
+    const currentPort = kind === "local" ? this.localPort : this.sharedPort;
+    if (currentPort !== undefined) {
+      return currentPort;
     }
 
-    this.listenPromise ??= new Promise<number>((resolve, reject) => {
-      this.server.once("error", reject);
-      this.server.listen(0, "127.0.0.1", () => {
-        const address = this.server.address();
+    const existingPromise = kind === "local" ? this.localListenPromise : this.sharedListenPromise;
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const nextPromise = new Promise<number>((resolve, reject) => {
+      const server = kind === "local" ? this.localServer : this.sharedServer;
+      server.once("error", reject);
+      server.listen(0, kind === "local" ? "127.0.0.1" : "0.0.0.0", () => {
+        const address = server.address();
         if (!address || typeof address === "string") {
           reject(new Error("Workspace asset server failed to bind to a port."));
           return;
         }
 
-        this.port = address.port;
+        if (kind === "local") {
+          this.localPort = address.port;
+        } else {
+          this.sharedPort = address.port;
+        }
         resolve(address.port);
       });
     });
 
-    return this.listenPromise;
+    if (kind === "local") {
+      this.localListenPromise = nextPromise;
+    } else {
+      this.sharedListenPromise = nextPromise;
+    }
+
+    return nextPromise;
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -110,6 +156,26 @@ export class WorkspaceAssetServer implements vscode.Disposable {
 
       if (isT3ProxyPath(url.pathname)) {
         await this.proxyHttpRequest(url, request, response);
+        return;
+      }
+
+      const t3ShareSessionId = resolveT3ShareSessionId(url.pathname);
+      if (t3ShareSessionId) {
+        const html = await this.t3BrowserAccessDocumentResolver?.({
+          requestOrigin: getRequestOrigin(request),
+          sessionId: t3ShareSessionId,
+        });
+        if (!html) {
+          respondNotFound(request, response);
+          return;
+        }
+
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Type": "text/html; charset=utf-8",
+          ...createCorsHeaders(request),
+        });
+        response.end(html);
         return;
       }
 
@@ -226,6 +292,19 @@ function normalizeRelativePath(relativePath: string): string {
   return normalized;
 }
 
+function resolveT3ShareSessionId(pathname: string): string | undefined {
+  const match = pathname.match(/^\/t3-share\/([^/]+)$/u);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return undefined;
+  }
+}
+
 function isT3ProxyPath(pathname: string): boolean {
   return (
     pathname === "/ws" ||
@@ -237,6 +316,14 @@ function isT3ProxyPath(pathname: string): boolean {
 
 function getT3ProxyOrigin(): string {
   return `http://${T3_PROXY_HOST}:${String(T3_PROXY_PORT)}`;
+}
+
+function getRequestOrigin(request: IncomingMessage): string {
+  const host =
+    typeof request.headers.host === "string" && request.headers.host.length > 0
+      ? request.headers.host
+      : "127.0.0.1";
+  return `http://${host}`;
 }
 
 function createCorsHeaders(request: IncomingMessage): OutgoingHttpHeaders {

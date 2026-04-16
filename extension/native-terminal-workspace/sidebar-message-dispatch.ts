@@ -20,10 +20,12 @@ export type SidebarMessageHandlers = {
   forkSession: (sessionId: string) => Promise<void>;
   fullReloadGroup: (groupId: string) => Promise<void>;
   fullReloadSession: (sessionId: string) => Promise<void>;
+  openT3SessionBrowserAccessLink: (url: string) => Promise<void>;
   setGroupSleeping: (groupId: string, sleeping: boolean) => Promise<void>;
   setSessionFavorite: (sessionId: string, favorite: boolean) => Promise<void>;
   setSessionSleeping: (sessionId: string, sleeping: boolean) => Promise<void>;
   setT3SessionThreadId: (sessionId: string) => Promise<void>;
+  requestT3SessionBrowserAccess: (sessionId: string) => Promise<void>;
   cancelSidebarGitCommit: (requestId: string) => Promise<void>;
   createGroup: () => Promise<void>;
   createGroupFromSession: (sessionId: string) => Promise<void>;
@@ -81,6 +83,7 @@ export type SidebarMessageHandlers = {
   syncSidebarAgentOrder: (requestId: string, agentIds: readonly string[]) => Promise<void>;
   setSidebarGitPrimaryAction: (action: SidebarGitAction) => Promise<void>;
   toggleActiveSessionsSortMode: () => Promise<void>;
+  toggleShowLastInteractionTimeOnSessionCards: () => Promise<void>;
   setViewMode: (viewMode: TerminalViewMode) => Promise<void>;
   setVisibleCount: (visibleCount: VisibleSessionCount) => Promise<void>;
   syncGroupOrder: (groupIds: readonly string[]) => Promise<void>;
@@ -128,6 +131,9 @@ export async function dispatchSidebarMessage(
       return;
     case "toggleCompletionBell":
       await handlers.toggleCompletionBell();
+      return;
+    case "toggleShowLastInteractionTimeOnSessionCards":
+      await handlers.toggleShowLastInteractionTimeOnSessionCards();
       return;
     case "adjustTerminalFontSize":
       await handlers.adjustTerminalFontSize(message.delta);
@@ -268,6 +274,12 @@ export async function dispatchSidebarMessage(
       if (message.sessionId) {
         await handlers.setT3SessionThreadId(message.sessionId);
       }
+      return;
+    case "requestT3SessionBrowserAccess":
+      await handlers.requestT3SessionBrowserAccess(message.sessionId);
+      return;
+    case "openT3SessionBrowserAccessLink":
+      await handlers.openT3SessionBrowserAccessLink(message.url);
       return;
     case "restorePreviousSession":
       await handlers.restorePreviousSession(message.historyId);

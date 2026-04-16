@@ -223,6 +223,19 @@ export type SidebarPromptGitCommitMessage = {
   type: "promptGitCommit";
 };
 
+export type SidebarT3BrowserAccessMode = "external" | "local-network" | "local-only" | "tailscale";
+
+export type SidebarShowT3BrowserAccessMessage = {
+  endpointUrl: string;
+  localUrl: string;
+  mode: SidebarT3BrowserAccessMode;
+  note: string;
+  sessionId: string;
+  sessionTitle: string;
+  tailscaleEnabled: boolean;
+  type: "showT3BrowserAccess";
+};
+
 export type ExtensionToSidebarMessage =
   | SidebarHydrateMessage
   | SidebarSessionStateMessage
@@ -230,7 +243,8 @@ export type ExtensionToSidebarMessage =
   | SidebarPlayCompletionSoundMessage
   | SidebarOrderSyncResultMessage
   | SidebarDaemonSessionsStateMessage
-  | SidebarPromptGitCommitMessage;
+  | SidebarPromptGitCommitMessage
+  | SidebarShowT3BrowserAccessMessage;
 
 export type SidebarToExtensionMessage =
   | {
@@ -241,6 +255,9 @@ export type SidebarToExtensionMessage =
     }
   | {
       type: "toggleCompletionBell";
+    }
+  | {
+      type: "toggleShowLastInteractionTimeOnSessionCards";
     }
   | {
       delta: -1 | 1;
@@ -344,6 +361,14 @@ export type SidebarToExtensionMessage =
   | {
       type: "setT3SessionThreadId";
       sessionId: string;
+    }
+  | {
+      type: "requestT3SessionBrowserAccess";
+      sessionId: string;
+    }
+  | {
+      type: "openT3SessionBrowserAccessLink";
+      url: string;
     }
   | {
       historyId: string;

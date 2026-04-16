@@ -94,6 +94,7 @@
     "clsx": "^2.1.1",
     "ghostty-web": "^0.4.0",
     "lucide-react": "^0.561.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
@@ -113,6 +114,7 @@
     "@storybook/test-runner": "^0.24.3",
     "@tailwindcss/cli": "^4.1.17",
     "@types/node": "^25.5.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/vscode": "1.100.0",
@@ -606,10 +608,10 @@
           "description": "Show hotkey labels on session cards all the time instead of only revealing them when you hover a card."
         },
         "VSmux.showLastInteractionTimeOnSessionCards": {
-          "title": "Show Last Interaction Time On Session Cards",
+          "title": "Show Last Active Time By Default",
           "type": "boolean",
-          "default": true,
-          "description": "Show a small relative timestamp under each session title, like \"5m ago\", using the same timing style as T3 Code."
+          "default": false,
+          "description": "When enabled, session cards show a small relative timestamp by default and reveal the agent icon on hover. When disabled, the agent icon shows by default and the timestamp appears on hover."
         },
         "VSmux.showSidebarActions": {
           "title": "Show Sidebar Actions",

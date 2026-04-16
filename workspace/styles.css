@@ -52,6 +52,30 @@ body {
   color: #d8e1ee;
 }
 
+.workspace-tooltip-positioner {
+  z-index: 1400;
+}
+
+.workspace-tooltip-popup {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(16, 21, 31, 0.96), rgba(10, 14, 22, 0.94));
+  border: 1px solid rgba(129, 154, 201, 0.3);
+  border-radius: 10px;
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  color: #eef4ff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  max-width: 220px;
+  padding: 6px 9px;
+  white-space: pre-line;
+}
+
 .workspace-shell {
   background: #121212;
   box-sizing: border-box;
@@ -758,8 +782,17 @@ body {
   display: inline-flex;
 }
 
+.workspace-pane-action-divider {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  height: 14px;
+  margin: 0 2px 0 1px;
+  width: 1px;
+}
+
 .workspace-pane-rename-button,
 .workspace-pane-fork-button,
+.workspace-pane-font-size-button,
 .workspace-pane-sleep-button,
 .workspace-pane-refresh-button {
   align-items: center;
@@ -788,6 +821,8 @@ body {
 .workspace-pane-rename-button:focus-visible,
 .workspace-pane-fork-button:hover,
 .workspace-pane-fork-button:focus-visible,
+.workspace-pane-font-size-button:hover,
+.workspace-pane-font-size-button:focus-visible,
 .workspace-pane-sleep-button:hover,
 .workspace-pane-sleep-button:focus-visible,
 .workspace-pane-refresh-button:hover,
@@ -800,6 +835,7 @@ body {
 
 .workspace-pane-rename-button:active,
 .workspace-pane-fork-button:active,
+.workspace-pane-font-size-button:active,
 .workspace-pane-sleep-button:active,
 .workspace-pane-refresh-button:active {
   transform: scale(0.96);

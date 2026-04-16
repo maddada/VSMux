@@ -63,6 +63,47 @@ export async function createT3IframeSource(
   return createT3IframeHtml(payload);
 }
 
+export async function createT3BrowserAccessSource(
+  context: vscode.ExtensionContext,
+  sessionRecord: T3SessionRecord,
+  input: {
+    assetServerOrigin: string;
+    browserBootstrapToken: string;
+  },
+): Promise<string> {
+  const embeddedRoot = getEmbeddedT3Root(context);
+  const indexPath = path.join(embeddedRoot.fsPath, "index.html");
+  const assetRootUri = `${input.assetServerOrigin.replace(/\/$/, "")}/t3-embed`;
+  const iframeHostScriptUri = `${input.assetServerOrigin.replace(/\/$/, "")}/workspace/t3-frame-host.js`;
+
+  let html: string;
+  try {
+    html = await readFile(indexPath, "utf8");
+  } catch {
+    return createMissingIframeHtml();
+  }
+
+  const scriptPathMatch = html.match(/<script[^>]+src="([^"]+)"/i);
+  const stylePathMatch = html.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/i);
+  const scriptSrc = resolveEmbeddedAssetUrl(assetRootUri, scriptPathMatch?.[1]);
+  if (!scriptSrc) {
+    return createMissingIframeHtml();
+  }
+
+  return createT3IframeHtml({
+    bootstrapScriptSrc: iframeHostScriptUri,
+    browserBootstrapToken: input.browserBootstrapToken,
+    scriptSrc,
+    serverOrigin: input.assetServerOrigin,
+    sessionId: sessionRecord.sessionId,
+    sessionRecordTitle: sessionRecord.title,
+    styleHref: resolveEmbeddedAssetUrl(assetRootUri, stylePathMatch?.[1]),
+    threadId: sessionRecord.t3.threadId,
+    workspaceRoot: sessionRecord.t3.workspaceRoot,
+    wsUrl: toWebSocketOrigin(input.assetServerOrigin),
+  });
+}
+
 export function createPendingT3IframeSource(title = "T3 Code"): string {
   return createStatusIframeHtml(title, "Loading T3 Code…", {
     caption: "Preparing the embedded workspace.",

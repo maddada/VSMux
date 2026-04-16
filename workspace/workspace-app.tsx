@@ -1,3 +1,4 @@
+import { Tooltip } from "@base-ui/react/tooltip";
 import {
   useEffect,
   useMemo,
@@ -29,6 +30,7 @@ import {
   shouldPreferTerminalTitleForAgentIcon,
 } from "../shared/sidebar-agents";
 import { WorkspacePaneCloseButton } from "./workspace-pane-close-button";
+import { WorkspacePaneFontSizeControls } from "./workspace-pane-font-size-controls";
 import { WorkspacePaneForkButton } from "./workspace-pane-fork-button";
 import { WorkspacePaneRenameButton } from "./workspace-pane-rename-button";
 import { WorkspacePaneRefreshButton } from "./workspace-pane-refresh-button";
@@ -46,6 +48,7 @@ import { T3Pane } from "./t3-pane";
 import { WorkspaceWelcomeModal } from "./workspace-welcome-modal";
 
 type MessageSource = Pick<Window, "addEventListener" | "removeEventListener">;
+const WORKSPACE_TOOLTIP_DELAY_MS = 550;
 
 export type WorkspaceAppProps = {
   messageSource?: MessageSource;
@@ -1480,229 +1483,239 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ messageSource = wind
   }
 
   return (
-    <main
-      className={
-        visiblePanes.length === 0 ? "workspace-shell workspace-shell-empty" : "workspace-shell"
-      }
-      style={workspaceShellStyle}
-    >
-      {workspaceToast ? (
-        <div
-          aria-live="polite"
-          className={[
-            "workspace-toast",
-            workspaceToast.phase === "confirmed" || workspaceToast.phase === "fading"
-              ? "workspace-toast-confirmed"
-              : "",
-            workspaceToast.phase === "fading" ? "workspace-toast-fading" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          role="status"
-        >
-          <div className="workspace-toast-copy">
-            <strong>{workspaceToast.title}</strong>
-            <span>{workspaceToast.message}</span>
-          </div>
-        </div>
-      ) : null}
-      {orderedPanes.map((pane) => (
-        <WorkspacePaneView
-          completionFlashNonce={completionFlashNonceBySessionId[pane.sessionId] ?? 0}
-          debugLog={(event, payload) =>
-            postWorkspaceDebugLog(workspaceState.debuggingMode, event, payload)
-          }
-          fallbackLayoutStyle={
-            pane.isVisible
-              ? (visiblePaneLayoutBySessionId.get(workspaceState.focusedSessionId ?? "") ??
-                visiblePaneLayoutBySessionId.get(visiblePanes[0]?.sessionId ?? ""))
-              : undefined
-          }
-          isFocused={presentedFocusedSessionId === pane.sessionId}
-          isWorkspaceFocused={isWorkspaceFocused}
-          key={pane.kind === "terminal" ? `${pane.sessionId}:${pane.renderNonce}` : pane.sessionId}
-          layoutStyle={
-            pane.isVisible
-              ? visiblePaneLayoutBySessionId.get(pane.sessionId)
-              : (hiddenPaneInPlaceStyles.get(pane.sessionId) ??
-                hiddenPaneParkingStyles.get(pane.sessionId))
-          }
-          t3FocusSuppressedUntil={t3TerminalFocusGuardUntil}
-          onBoundsMeasured={(bounds) => recordPaneMeasuredBounds(pane.sessionId, bounds)}
-          onTerminalPointerIntent={
-            pane.kind === "terminal"
-              ? () => {
-                  blurAllCachedT3Runtimes((event, payload) =>
-                    postWorkspaceDebugLog(workspaceState?.debuggingMode, event, {
-                      reason: "terminalPointerIntent",
-                      source: "pointer",
-                      ...payload,
-                    }),
-                  );
-                  armT3TerminalFocusGuard(pane.sessionId, "pointer");
-                  postWorkspaceDebugLog(
-                    workspaceState?.debuggingMode,
-                    "focus.terminalPointerIntent",
-                    {
-                      sessionId: pane.sessionId,
-                    },
-                  );
-                }
-              : undefined
-          }
-          onFocus={() => requestFocusSession(pane.sessionId)}
-          onClose={() =>
-            postToExtension({
-              sessionId: pane.sessionId,
-              type: "closeSession",
-            })
-          }
-          onConfirmToastDismissed={dismissWorkspaceToast}
-          onConfirmToastShown={showWorkspaceToast}
-          onRename={() =>
-            postToExtension({
-              sessionId: pane.sessionId,
-              type: "promptRenameSession",
-            })
-          }
-          onFork={() =>
-            postToExtension({
-              sessionId: pane.sessionId,
-              type: "forkSession",
-            })
-          }
-          onT3ThreadChanged={handleT3ThreadChanged}
-          onReload={() => {
-            if (pane.kind === "terminal") {
-              postToExtension({
-                sessionId: pane.sessionId,
-                type: "fullReloadSession",
-              });
-              return;
-            }
-
-            postWorkspaceDebugLog(workspaceState.debuggingMode, "workspace.t3ReloadRequested", {
-              sessionId: pane.sessionId,
-            });
-            postToExtension({
-              sessionId: pane.sessionId,
-              type: "reloadT3Session",
-            });
-          }}
-          onToggleSleeping={() =>
-            postToExtension({
-              sessionId: pane.sessionId,
-              sleeping: pane.sessionRecord.isSleeping !== true,
-              type: "setSessionSleeping",
-            })
-          }
-          pane={pane}
-          registerTerminalPortalTarget={
-            pane.kind === "terminal" ? getTerminalPortalTargetRef(pane.sessionId) : undefined
-          }
-          canDrag={pane.kind === "terminal" && pane.isVisible && reorderablePaneIds.length > 1}
-          isDragging={draggedPaneId === pane.sessionId}
-          isDropTarget={dropTargetPaneId === pane.sessionId && draggedPaneId !== pane.sessionId}
-          onHeaderNativeDragStart={(event) => {
-            postWorkspaceDebugLog(workspaceState.debuggingMode, "drag.nativeDragPrevented", {
-              sourcePaneId: pane.sessionId,
-            });
-            preventWorkspacePaneNativeDrag(event);
-          }}
-          onHeaderPointerDown={(event) => {
-            if (pane.kind !== "terminal" || !pane.isVisible || event.button !== 0) {
-              return;
-            }
-
-            if (isWorkspacePaneHeaderInteractiveTarget(event.target)) {
-              postWorkspaceDebugLog(
-                workspaceState.debuggingMode,
-                "drag.pointerDownIgnoredForHeaderControl",
-                {
-                  sourcePaneId: pane.sessionId,
-                },
-              );
-              return;
-            }
-
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            postWorkspaceDebugLog(workspaceState.debuggingMode, "drag.pointerDown", {
-              clientX: Math.round(event.clientX),
-              clientY: Math.round(event.clientY),
-              pointerId: event.pointerId,
-              pointerType: event.pointerType,
-              sourcePaneId: pane.sessionId,
-            });
-            pointerDragStateRef.current = {
-              isDragging: false,
-              pointerId: event.pointerId,
-              pointerTarget: event.currentTarget,
-              sourcePaneId: pane.sessionId,
-              startX: event.clientX,
-              startY: event.clientY,
-            };
-            setDraggedPaneId(undefined);
-            setCurrentDropTargetPaneId(undefined);
-          }}
-        />
-      ))}
-      {terminalPanes.map((pane) => {
-        const target = terminalPortalTargetsRef.current.get(pane.sessionId);
-        if (!target) {
-          return null;
+    <Tooltip.Provider delay={WORKSPACE_TOOLTIP_DELAY_MS}>
+      <main
+        className={
+          visiblePanes.length === 0 ? "workspace-shell workspace-shell-empty" : "workspace-shell"
         }
-
-        return createPortal(
-          <TerminalPane
-            autoFocusRequest={
-              workspaceState.autoFocusRequest?.sessionId === pane.sessionId
-                ? workspaceState.autoFocusRequest
-                : undefined
-            }
-            connection={workspaceState.connection}
+        style={workspaceShellStyle}
+      >
+        {workspaceToast ? (
+          <div
+            aria-live="polite"
+            className={[
+              "workspace-toast",
+              workspaceToast.phase === "confirmed" || workspaceToast.phase === "fading"
+                ? "workspace-toast-confirmed"
+                : "",
+              workspaceToast.phase === "fading" ? "workspace-toast-fading" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            role="status"
+          >
+            <div className="workspace-toast-copy">
+              <strong>{workspaceToast.title}</strong>
+              <span>{workspaceToast.message}</span>
+            </div>
+          </div>
+        ) : null}
+        {orderedPanes.map((pane) => (
+          <WorkspacePaneView
+            completionFlashNonce={completionFlashNonceBySessionId[pane.sessionId] ?? 0}
             debugLog={(event, payload) =>
               postWorkspaceDebugLog(workspaceState.debuggingMode, event, payload)
             }
-            debuggingMode={workspaceState.debuggingMode}
-            isFocused={presentedFocusedSessionId === pane.sessionId}
-            isVisible={pane.isVisible}
-            onLagDetected={handleTerminalLagDetected}
-            onActivate={(source) => handleTerminalActivate(pane.sessionId, source)}
-            onTerminalEnter={() => handleTerminalEnter(pane.sessionId)}
-            pane={pane}
-            refreshRequestId={0}
-            scrollToBottomRequestId={
-              terminalScrollRequest?.sessionId === pane.sessionId
-                ? terminalScrollRequest.requestId
+            fallbackLayoutStyle={
+              pane.isVisible
+                ? (visiblePaneLayoutBySessionId.get(workspaceState.focusedSessionId ?? "") ??
+                  visiblePaneLayoutBySessionId.get(visiblePanes[0]?.sessionId ?? ""))
                 : undefined
             }
-            terminalAppearance={workspaceState.terminalAppearance}
-          />,
-          target,
-          pane.sessionId,
-        );
-      })}
-      {visiblePanes.length === 0 ? (
-        <div className="workspace-empty-state">No sessions in this group.</div>
-      ) : null}
-      <WorkspaceWelcomeModal
-        isOpen={isWelcomeModalOpen}
-        mode={welcomeModalMode ?? "optional"}
-        codexSettingConfirmation={codexSettingConfirmation}
-        onApplyCodexTerminalTitle={() => {
-          postToExtension({ type: "applyCodexTerminalTitle" });
-        }}
-        onApplyCodexStatusLine={() => {
-          postToExtension({ type: "applyCodexStatusLine" });
-        }}
-        onClose={() => setWelcomeModalMode(undefined)}
-        onComplete={() => {
-          setWelcomeModalMode(undefined);
-          postToExtension({ type: "completeWelcome" });
-        }}
-      />
-    </main>
+            isFocused={presentedFocusedSessionId === pane.sessionId}
+            isWorkspaceFocused={isWorkspaceFocused}
+            key={
+              pane.kind === "terminal" ? `${pane.sessionId}:${pane.renderNonce}` : pane.sessionId
+            }
+            layoutStyle={
+              pane.isVisible
+                ? visiblePaneLayoutBySessionId.get(pane.sessionId)
+                : (hiddenPaneInPlaceStyles.get(pane.sessionId) ??
+                  hiddenPaneParkingStyles.get(pane.sessionId))
+            }
+            t3FocusSuppressedUntil={t3TerminalFocusGuardUntil}
+            onBoundsMeasured={(bounds) => recordPaneMeasuredBounds(pane.sessionId, bounds)}
+            onTerminalPointerIntent={
+              pane.kind === "terminal"
+                ? () => {
+                    blurAllCachedT3Runtimes((event, payload) =>
+                      postWorkspaceDebugLog(workspaceState?.debuggingMode, event, {
+                        reason: "terminalPointerIntent",
+                        source: "pointer",
+                        ...payload,
+                      }),
+                    );
+                    armT3TerminalFocusGuard(pane.sessionId, "pointer");
+                    postWorkspaceDebugLog(
+                      workspaceState?.debuggingMode,
+                      "focus.terminalPointerIntent",
+                      {
+                        sessionId: pane.sessionId,
+                      },
+                    );
+                  }
+                : undefined
+            }
+            onFocus={() => requestFocusSession(pane.sessionId)}
+            onClose={() =>
+              postToExtension({
+                sessionId: pane.sessionId,
+                type: "closeSession",
+              })
+            }
+            onConfirmToastDismissed={dismissWorkspaceToast}
+            onConfirmToastShown={showWorkspaceToast}
+            onRename={() =>
+              postToExtension({
+                sessionId: pane.sessionId,
+                type: "promptRenameSession",
+              })
+            }
+            onAdjustTerminalFontSize={(delta) =>
+              postToExtension({
+                delta,
+                type: "adjustTerminalFontSize",
+              })
+            }
+            onFork={() =>
+              postToExtension({
+                sessionId: pane.sessionId,
+                type: "forkSession",
+              })
+            }
+            onT3ThreadChanged={handleT3ThreadChanged}
+            onReload={() => {
+              if (pane.kind === "terminal") {
+                postToExtension({
+                  sessionId: pane.sessionId,
+                  type: "fullReloadSession",
+                });
+                return;
+              }
+
+              postWorkspaceDebugLog(workspaceState.debuggingMode, "workspace.t3ReloadRequested", {
+                sessionId: pane.sessionId,
+              });
+              postToExtension({
+                sessionId: pane.sessionId,
+                type: "reloadT3Session",
+              });
+            }}
+            onToggleSleeping={() =>
+              postToExtension({
+                sessionId: pane.sessionId,
+                sleeping: pane.sessionRecord.isSleeping !== true,
+                type: "setSessionSleeping",
+              })
+            }
+            pane={pane}
+            registerTerminalPortalTarget={
+              pane.kind === "terminal" ? getTerminalPortalTargetRef(pane.sessionId) : undefined
+            }
+            canDrag={pane.kind === "terminal" && pane.isVisible && reorderablePaneIds.length > 1}
+            isDragging={draggedPaneId === pane.sessionId}
+            isDropTarget={dropTargetPaneId === pane.sessionId && draggedPaneId !== pane.sessionId}
+            onHeaderNativeDragStart={(event) => {
+              postWorkspaceDebugLog(workspaceState.debuggingMode, "drag.nativeDragPrevented", {
+                sourcePaneId: pane.sessionId,
+              });
+              preventWorkspacePaneNativeDrag(event);
+            }}
+            onHeaderPointerDown={(event) => {
+              if (pane.kind !== "terminal" || !pane.isVisible || event.button !== 0) {
+                return;
+              }
+
+              if (isWorkspacePaneHeaderInteractiveTarget(event.target)) {
+                postWorkspaceDebugLog(
+                  workspaceState.debuggingMode,
+                  "drag.pointerDownIgnoredForHeaderControl",
+                  {
+                    sourcePaneId: pane.sessionId,
+                  },
+                );
+                return;
+              }
+
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              postWorkspaceDebugLog(workspaceState.debuggingMode, "drag.pointerDown", {
+                clientX: Math.round(event.clientX),
+                clientY: Math.round(event.clientY),
+                pointerId: event.pointerId,
+                pointerType: event.pointerType,
+                sourcePaneId: pane.sessionId,
+              });
+              pointerDragStateRef.current = {
+                isDragging: false,
+                pointerId: event.pointerId,
+                pointerTarget: event.currentTarget,
+                sourcePaneId: pane.sessionId,
+                startX: event.clientX,
+                startY: event.clientY,
+              };
+              setDraggedPaneId(undefined);
+              setCurrentDropTargetPaneId(undefined);
+            }}
+          />
+        ))}
+        {terminalPanes.map((pane) => {
+          const target = terminalPortalTargetsRef.current.get(pane.sessionId);
+          if (!target) {
+            return null;
+          }
+
+          return createPortal(
+            <TerminalPane
+              autoFocusRequest={
+                workspaceState.autoFocusRequest?.sessionId === pane.sessionId
+                  ? workspaceState.autoFocusRequest
+                  : undefined
+              }
+              connection={workspaceState.connection}
+              debugLog={(event, payload) =>
+                postWorkspaceDebugLog(workspaceState.debuggingMode, event, payload)
+              }
+              debuggingMode={workspaceState.debuggingMode}
+              isFocused={presentedFocusedSessionId === pane.sessionId}
+              isVisible={pane.isVisible}
+              onLagDetected={handleTerminalLagDetected}
+              onActivate={(source) => handleTerminalActivate(pane.sessionId, source)}
+              onTerminalEnter={() => handleTerminalEnter(pane.sessionId)}
+              pane={pane}
+              refreshRequestId={0}
+              scrollToBottomRequestId={
+                terminalScrollRequest?.sessionId === pane.sessionId
+                  ? terminalScrollRequest.requestId
+                  : undefined
+              }
+              terminalAppearance={workspaceState.terminalAppearance}
+            />,
+            target,
+            pane.sessionId,
+          );
+        })}
+        {visiblePanes.length === 0 ? (
+          <div className="workspace-empty-state">No sessions in this group.</div>
+        ) : null}
+        <WorkspaceWelcomeModal
+          isOpen={isWelcomeModalOpen}
+          mode={welcomeModalMode ?? "optional"}
+          codexSettingConfirmation={codexSettingConfirmation}
+          onApplyCodexTerminalTitle={() => {
+            postToExtension({ type: "applyCodexTerminalTitle" });
+          }}
+          onApplyCodexStatusLine={() => {
+            postToExtension({ type: "applyCodexStatusLine" });
+          }}
+          onClose={() => setWelcomeModalMode(undefined)}
+          onComplete={() => {
+            setWelcomeModalMode(undefined);
+            postToExtension({ type: "completeWelcome" });
+          }}
+        />
+      </main>
+    </Tooltip.Provider>
   );
 };
 
@@ -1724,6 +1737,7 @@ type WorkspacePaneViewProps = {
   onConfirmToastDismissed: (toast: WorkspacePanelShowToastMessage) => void;
   onConfirmToastShown: (toast: WorkspacePanelShowToastMessage) => void;
   onFork: () => void;
+  onAdjustTerminalFontSize: (delta: -1 | 1) => void;
   onT3ThreadChanged: (payload: { sessionId: string; threadId: string; title?: string }) => void;
   onRename: () => void;
   onReload: () => void;
@@ -1753,6 +1767,7 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
   onConfirmToastDismissed,
   onConfirmToastShown,
   onFork,
+  onAdjustTerminalFontSize,
   onT3ThreadChanged,
   onRename,
   onBoundsMeasured,
@@ -1902,9 +1917,18 @@ const WorkspacePaneView: React.FC<WorkspacePaneViewProps> = ({
         </div>
         {pane.kind === "terminal" || pane.kind === "t3" ? (
           <div className="workspace-pane-header-actions">
+            {pane.kind === "terminal" ? (
+              <WorkspacePaneFontSizeControls onAdjustTerminalFontSize={onAdjustTerminalFontSize} />
+            ) : null}
+            {pane.kind === "terminal" ? (
+              <span aria-hidden="true" className="workspace-pane-action-divider" />
+            ) : null}
             {pane.kind === "terminal" ? <WorkspacePaneRenameButton onRename={onRename} /> : null}
             {canFork ? <WorkspacePaneForkButton onFork={onFork} /> : null}
             {canReload ? <WorkspacePaneRefreshButton onRefresh={onReload} /> : null}
+            {pane.kind === "terminal" || canFork || canReload ? (
+              <span aria-hidden="true" className="workspace-pane-action-divider" />
+            ) : null}
             <WorkspacePaneSleepButton
               isSleeping={pane.sessionRecord.isSleeping === true}
               onToggleSleeping={onToggleSleeping}

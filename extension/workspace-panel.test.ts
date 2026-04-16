@@ -46,6 +46,7 @@ const { closeTabGroupsMock, executeCommandMock } = vi.hoisted(() => ({
 
 vi.mock("vscode", () => ({
   Uri: {
+    file: (path: string) => ({ fsPath: path }),
     joinPath: (...parts: unknown[]) => parts,
   },
   TabInputWebview: class TabInputWebview {
@@ -81,7 +82,7 @@ vi.mock("vscode", () => ({
   },
   workspace: {
     getConfiguration: vi.fn(() => ({
-      get: vi.fn(() => false),
+      get: vi.fn((_key: string, defaultValue?: unknown) => defaultValue),
     })),
   },
 }));
@@ -307,6 +308,31 @@ describe("WorkspacePanelManager", () => {
     expect(onMessage).toHaveBeenCalledWith({
       sessionId: "session-1",
       type: "promptRenameSession",
+    });
+
+    manager.dispose();
+  });
+
+  test("should forward adjust terminal font size messages from the workspace webview", async () => {
+    const onMessage = vi.fn();
+    const manager = new WorkspacePanelManager({
+      context: createMockContext(),
+      onMessage,
+    });
+
+    await manager.reveal();
+
+    const panel = createdPanels[0];
+    expect(panel).toBeDefined();
+
+    panel.webview.messageListeners[0]?.({
+      delta: -1,
+      type: "adjustTerminalFontSize",
+    });
+
+    expect(onMessage).toHaveBeenCalledWith({
+      delta: -1,
+      type: "adjustTerminalFontSize",
     });
 
     manager.dispose();

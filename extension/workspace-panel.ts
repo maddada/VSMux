@@ -335,6 +335,9 @@ function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToEx
       typeof message.sleeping === "boolean"
     );
   }
+  if (message.type === "adjustTerminalFontSize") {
+    return message.delta === -1 || message.delta === 1;
+  }
   if (message.type === "syncPaneOrder" || message.type === "syncSessionOrder") {
     return (
       typeof message.groupId === "string" &&

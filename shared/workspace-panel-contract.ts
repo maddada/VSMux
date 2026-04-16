@@ -170,6 +170,11 @@ export type WorkspacePanelPromptRenameSessionMessage = {
   sessionId: string;
 };
 
+export type WorkspacePanelAdjustTerminalFontSizeMessage = {
+  delta: -1 | 1;
+  type: "adjustTerminalFontSize";
+};
+
 export type WorkspacePanelForkSessionMessage = {
   type: "forkSession";
   sessionId: string;
@@ -238,6 +243,7 @@ export type WorkspacePanelToExtensionMessage =
   | WorkspacePanelCloseSessionMessage
   | WorkspacePanelFullReloadSessionMessage
   | WorkspacePanelPromptRenameSessionMessage
+  | WorkspacePanelAdjustTerminalFontSizeMessage
   | WorkspacePanelForkSessionMessage
   | WorkspacePanelSetSessionSleepingMessage
   | WorkspacePanelSyncPaneOrderMessage
