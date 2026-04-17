@@ -26,7 +26,7 @@ Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Screenshot
 
-<img width="1000" alt="VSmux screenshot" src="https://github.com/user-attachments/assets/556c1190-4e7e-4965-9ff3-2ac2c5daef3a" />
+<img width="1000" alt="2026-0fsfsfs4-14_sfsdCodedsds_12-52-3d7@2x" src="https://github.com/user-attachments/assets/b38e5dd9-8658-4a5c-87f6-63d836146158" />
 
 ## Demo Video
 
