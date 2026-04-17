@@ -26,9 +26,9 @@ Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Screenshot
 
-<img width="1000" alt="2026-0fsfsfs4-14_sfsdCodedsds_12-52-3d7@2x" src="https://github.com/user-attachments/assets/b38e5dd9-8658-4a5c-87f6-63d836146158" />
+<img width="1000" alt="2026-0ffsafssfffsfs4-14_sfsdCodedsds_12-52-3d7@2x" src="https://github.com/user-attachments/assets/9ea0bcd8-38ea-4f87-9d78-ba91e76088c2" />
 
-## Demo Video
+## Early Version Demo Video (Will rerecord soon)
 
 https://github.com/user-attachments/assets/5b41df9a-bb2e-45f3-b8bd-ed3d6b7e2968
 
@@ -52,6 +52,7 @@ Then this is the extension for you! You get a very nice interface to work with y
 
 ## Main Features at a Glance
 
+- **Remote access** to your T3code & Agent CLI sessions from your phone (Overflow menu -> Remote Access)
 - **Multiplexed Split Views** — Split your workspace into multiple panes (e.g., view 2 up to 9 sessions at once) to monitor and interact with several tasks simultaneously, complete with per-pane zoom controls for easier reading.
 - **Unified Session Search & History** — Quickly search across all your sessions from various tools (WSL, Cloud Code, Codex) in one centralized location, rather than hunting through different tabs.
 - **Session Management & Organization** — Group, sort manually, or organize your sessions by recent activity to maintain a tidy workspace.
@@ -98,122 +99,11 @@ This exposes repository artifacts directly inside the Source Control UI, includi
 This lets you write your prompt inside your editor instead strugling with the annoying input box that these AI tools provide.
 No more [50 lines pasted] nonsense. Paste all the lines you want and even select parts of them and use inline AI to edit those.
 
-Gist on how to do this
-
----
-
-## Settings
-
-| Setting                                  | Description                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `VSmux.backgroundSessionTimeoutMinutes`  | Controls how long detached background sessions stay alive after the last VSmux window disconnects |
-| `VSmux.sidebarTheme`                     | Changes the sidebar theme preset                                                                  |
-| `VSmux.showCloseButtonOnSessionCards`    | Shows or hides the close button on session cards                                                  |
-| `VSmux.sendRenameCommandOnSidebarRename` | Stages `/rename <new name>` in the terminal when you rename from the sidebar                      |
-
----
-
-## Detailed Feature Breakdown
-
-### Session Management
-
-- **Create, rename, and close** terminal sessions from the sidebar
-- **Session groups** — organize sessions into up to 4 named groups, rename groups, and drag sessions between them
-- **Drag-and-drop reordering** — reorder sessions within and across groups, reorder command buttons
-- **Session aliases** — each session gets an auto-generated word alias (Atlas, Beacon, Comet, etc.)
-- **Previous session history** — closed sessions are archived (up to 200) and can be browsed or restored from a modal
-
-### Layout & Views
-
-- **Configurable visible count** — show 1, 2, 3, 4, 6, or 9 sessions at once
-- **Session slot hotkeys** — jump to any session slot with Cmd+Alt+1–9
-- **Group focus hotkeys** — switch between groups with Cmd/Ctrl+Alt+Shift+1–4
-- **Directional focus navigation** — move focus up/right/down/left across sessions with Cmd/Ctrl+Alt+Shift+Arrow keys
-- **Split count hotkeys** — set 1, 2, 3, 4, 6, or 9 visible splits with the Cmd/Ctrl+Alt+S chord
-
-### Agent Launchers
-
-- **Built-in agent buttons** — one-click launch for T3 Code, Codex, Claude Code, OpenCode, and Gemini
-- **Custom agents** — add your own agent launchers with custom commands and names
-- **Agent icon detection** — session cards show the agent logo watermark based on what's running
-- **Edit and delete agents** — right-click context menu on agent buttons
-
-### Command Shortcuts
-
-- **Sidebar command buttons** — quick-launch buttons for Dev, Build, Test, Setup (or your own)
-- **Custom commands** — create commands with a name, shell command, and optional close-on-exit behavior
-- **Drag-and-drop reordering** — reorder command buttons in the sidebar
-- **Edit and delete commands** — right-click context menu on command buttons
-
-### Activity Tracking
-
-- **Three activity states** — idle, working, and attention indicators on session cards
-- **Claude Code title detection** — automatically detects Claude Code idle/working state from terminal title
-- **Shell integration** — detects agent start/stop lifecycle events via control sequences
-- **Codex log pattern matching** — parses Codex CLI log output for task_started/task_complete events
-- **Completion bell** — plays a sound when an agent finishes (toggle per project from the sidebar)
-- **10 completion sounds** — Arcade, African, Afrobeat, EDM, Come Back To The Code, Glass, Ping, Shamisen, Superset Doo-Wap, Superset Quick
-
-### T3 Code Integration
-
-- **Embedded T3 sessions** — T3 Code runs directly inside the VSmux sidebar as a webview
-- **Remote T3 browser access** — open an active T3 session from your phone or another browser with QR-based share links and Tailscale/LAN fallback handling
-- **Clipboard bridging & native fallback** — pasted images and file-like clipboard content can be bridged into embedded T3 sessions more reliably, including a native macOS clipboard fallback when the web clipboard is empty
-- **T3 activity monitoring** — WebSocket connection to local T3 runtime tracks thread activity in real time
-- **T3 session lifecycle** — automatic supervision, sync, and management of T3 sessions
-
-### Theming
-
-- **11 sidebar theme presets** — Auto, Plain, Dark Green/Blue/Red/Pink/Orange, Light Blue/Green/Pink/Orange
-- **Auto theme** — follows the active VS Code theme (dark or light)
-
-### Keyboard Shortcuts
-
-| Action                   | macOS                       | Windows/Linux                |
-| ------------------------ | --------------------------- | ---------------------------- |
-| Focus session slot 1–9   | Cmd+Alt+1–9                 | Ctrl+Alt+1–9                 |
-| New session              | Cmd+Alt+N                   | Ctrl+Alt+N                   |
-| Open settings            | Cmd+Alt+,                   | Ctrl+Alt+,                   |
-| Change sidebar           | Cmd+Alt+B                   | Ctrl+Alt+B                   |
-| Focus group 1–4          | Cmd+Alt+Shift+1–4           | Ctrl+Alt+Shift+1–4           |
-| Focus up/right/down/left | Cmd+Alt+Shift+Arrow         | Ctrl+Alt+Shift+Arrow         |
-| Rename active session    | Cmd+Alt+R                   | Ctrl+Alt+R                   |
-| Show 1/2/3/4/6/9 splits  | Cmd+Alt+S, then 1/2/3/4/6/9 | Ctrl+Alt+S, then 1/2/3/4/6/9 |
-
-### Other
-
-- **Sidebar rename → terminal rename** — renaming from the sidebar optionally stages `/rename <name>` in the terminal
-- **Cmd+click or middle-click to close** — close sessions without needing a visible close button
-- **Configurable close button visibility** — show/hide close buttons on session cards
-- **Configurable hotkey label visibility** — show hotkey labels on cards always or only on hover
-- **Background session timeout** — configurable timeout for detached background sessions (or keep alive forever)
-- **Debug panel** — inspect terminal workspace state and layout operations in real time
-- **Companion app** — works with [agent-manager-x](https://github.com/maddada/agent-manager-x) for a floating macOS status bar
-
----
-
-## Local T3 Embed Setup
-
-The T3 embed frontend is intentionally local-only and gitignored.
-
-Use the dedicated update/setup guide here:
-
-- [docs/2026-04-03-how-to-update-t3-code.md](./docs/2026-04-03-how-to-update-t3-code.md)
-
-That document is the current source of truth for:
-
-- refreshing the vendored `t3code` version from upstream `main`
-- rebuilding the local embed bundle
-- testing the update safely in a separate worktree
-- avoiding the protocol/runtime issues that broke earlier attempts
-
----
+Gist on how to do this: https://gist.github.com/maddada/6eec96f4c8b467b81d69d291d4ac130e
 
 ## Companion App
 
 VSmux works great with my other tool that shows all running agent sessions in a mini floating bar on macOS (with running/waiting/done indicators). Check it out here: https://github.com/maddada/agent-manager-x
-
----
 
 ## Contributions Welcome
 
