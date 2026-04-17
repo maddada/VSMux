@@ -8,7 +8,8 @@ All notable user-facing changes are documented in this file.
 - Embedded T3 paste flows are stronger on macOS now because VSmux can fall back to a native clipboard read for images, files, and text when the browser clipboard APIs return nothing.
 - Workspace appearance controls behave better now: terminal font size and T3 zoom settings are cached more reliably, pane zoom controls support quick reset, and T3 thread navigation preserves session bindings by opening or focusing the matching session instead of mutating the current one in place.
 - The sidebar has been polished again, with clearer top-toolbar button placement for search, previous sessions, and pinned prompts, calmer group header interactions, smoother browser-group behavior, improved icon choices, and a larger pinned-prompt editor.
-- Agent shell hook responses are now handled more completely, which helps shell-driven state updates land more reliably.
+- Agent shell hook responses are now handled more completely, which helps shell-driven state updates land more reliably across supported CLIs.
+- Fresh Codex sessions can now auto-rename from the first meaningful prompt, so new tabs start with a useful title earlier instead of lingering on a generic agent name.
 
 ## 4.1.0 - 2026-04-16
 

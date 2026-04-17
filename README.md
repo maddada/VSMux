@@ -14,6 +14,7 @@ Download links:
 - T3 paste handling is stronger on macOS now, with a native clipboard fallback for pasted images, files, and text when the browser clipboard APIs come back empty.
 - Workspace readability controls are smoother now: terminal font size and T3 zoom preferences stay in sync more reliably, pane zoom controls support quick reset, and thread navigation inside T3 preserves session bindings more cleanly.
 - The sidebar has another polish pass, including clearer top-toolbar actions for search/history/pinned prompts, calmer group header interactions, a larger pinned-prompt editor, and tidier icon/header styling.
+- Codex sessions title themselves more helpfully now: VSmux can react to richer agent shell hook responses and auto-rename fresh Codex sessions from the first real prompt instead of leaving them with generic titles.
 
 ### Previous Release: 4.1.0
 
