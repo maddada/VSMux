@@ -53,7 +53,6 @@ function createHandlers(): SidebarMessageHandlers {
     setGroupSleeping: vi.fn(async () => undefined),
     setSessionFavorite: vi.fn(async () => undefined),
     setSessionSleeping: vi.fn(async () => undefined),
-    setT3SessionThreadId: vi.fn(async () => undefined),
     toggleActiveSessionsSortMode: vi.fn(async () => undefined),
     toggleShowLastInteractionTimeOnSessionCards: vi.fn(async () => undefined),
     setViewMode: vi.fn(async () => undefined),
@@ -130,21 +129,6 @@ describe("dispatchSidebarMessage", () => {
 
     expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
     expect(handlers.forkSession).toHaveBeenCalledWith("session-3");
-  });
-
-  test("should route setT3SessionThreadId to the matching handler", async () => {
-    const handlers = createHandlers();
-
-    await dispatchSidebarMessage(
-      {
-        sessionId: "session-3",
-        type: "setT3SessionThreadId",
-      },
-      handlers,
-    );
-
-    expect(handlers.clearStartupSidebarRefreshes).toHaveBeenCalledTimes(1);
-    expect(handlers.setT3SessionThreadId).toHaveBeenCalledWith("session-3");
   });
 
   test("should route setSessionSleeping to the matching handler", async () => {

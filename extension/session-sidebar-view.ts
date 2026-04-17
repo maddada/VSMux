@@ -302,7 +302,6 @@ export function isSidebarMessage(candidate: unknown): candidate is SidebarToExte
     case "copyResumeCommand":
     case "forkSession":
     case "fullReloadSession":
-    case "setT3SessionThreadId":
     case "requestT3SessionBrowserAccess":
       return (
         typeof message.sessionId === "string" &&

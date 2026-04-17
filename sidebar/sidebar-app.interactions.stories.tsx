@@ -691,7 +691,7 @@ export const SessionCardActions: Story = {
       const sessionCard = await findSessionCard();
       await userEvent.dblClick(sessionCard);
 
-      await expectMessage({ sessionId: "session-3", type: "promptRenameSession" });
+      await expectNoMessage({ type: "promptRenameSession" });
     });
 
     await step("rename through the session context menu", async () => {
@@ -762,6 +762,36 @@ export const SessionCardActions: Story = {
       await userEvent.click(await body.findByRole("menuitem", { name: "Terminate" }));
 
       await expectMessage({ sessionId: "session-3", type: "closeSession" });
+    });
+  },
+};
+
+export const SessionCardDoubleClickRenameEnabled: Story = {
+  args: {
+    renameSessionOnDoubleClick: true,
+  },
+  play: async ({ canvas, step, userEvent }) => {
+    const findSessionCard = () => canvas.findByRole("button", { name: /Harbor Vale/i });
+    const findBrowserCard = () =>
+      canvas.findByRole("button", { name: /Auto Thread Naming \(WT\)/i });
+
+    await waitForReadyMessage();
+    resetSidebarStoryMessages();
+
+    await step("rename a session with a double click when enabled", async () => {
+      const sessionCard = await findSessionCard();
+      await userEvent.dblClick(sessionCard);
+
+      await expectMessage({ sessionId: "session-3", type: "promptRenameSession" });
+    });
+
+    await step("keep browser double clicks ignored when rename is enabled", async () => {
+      resetSidebarStoryMessages();
+
+      const browserCard = await findBrowserCard();
+      await userEvent.dblClick(browserCard);
+
+      await expectNoMessage({ type: "promptRenameSession" });
     });
   },
 };

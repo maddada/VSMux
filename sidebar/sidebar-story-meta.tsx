@@ -9,6 +9,7 @@ export const DEFAULT_SIDEBAR_STORY_ARGS: SidebarStoryArgs = {
   fixture: "default",
   highlightedVisibleCount: 1,
   isFocusModeActive: false,
+  renameSessionOnDoubleClick: false,
   showCloseButtonOnSessionCards: false,
   showHotkeysOnSessionCards: false,
   showLastInteractionTimeOnSessionCards: false,
@@ -27,6 +28,7 @@ export const SIDEBAR_STORY_ARG_TYPES: NonNullable<Meta<SidebarStoryArgs>["argTyp
   fixture: {
     control: "select",
     options: [
+      "browser-groups",
       "default",
       "sort-toggle-demo",
       "selector-states",
@@ -40,6 +42,9 @@ export const SIDEBAR_STORY_ARG_TYPES: NonNullable<Meta<SidebarStoryArgs>["argTyp
     options: [1, 2, 3, 4, 6, 9],
   },
   isFocusModeActive: {
+    control: "boolean",
+  },
+  renameSessionOnDoubleClick: {
     control: "boolean",
   },
   showCloseButtonOnSessionCards: {
@@ -81,16 +86,20 @@ export const SIDEBAR_STORY_DECORATORS = [
   (Story: () => JSX.Element) => (
     <div
       style={{
+        boxSizing: "border-box",
         display: "grid",
+        height: "100vh",
         justifyItems: "center",
-        minHeight: "100vh",
+        overflow: "hidden",
         padding: "16px",
       }}
     >
       <div
         style={{
-          height: "950px",
-          overflow: "auto",
+          height: "100%",
+          maxHeight: "950px",
+          minHeight: 0,
+          overflow: "hidden",
           width: "300px",
         }}
       >

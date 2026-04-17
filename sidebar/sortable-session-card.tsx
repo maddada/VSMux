@@ -1,7 +1,6 @@
 import {
   IconCopy,
   IconGitFork,
-  IconHash,
   IconMoon,
   IconPencil,
   IconPlayerPlay,
@@ -141,15 +140,21 @@ export function SortableSessionCard({
   vscode,
 }: SortableSessionCardProps) {
   const session = useSidebarStore((state) => state.sessionsById[sessionId]);
-  const { showCloseButton, showDebugSessionNumbers, showHotkeys, showLastInteractionTime } =
-    useSidebarStore(
-      useShallow((state) => ({
-        showCloseButton: state.hud.showCloseButtonOnSessionCards,
-        showDebugSessionNumbers: state.hud.debuggingMode,
-        showHotkeys: state.hud.showHotkeysOnSessionCards,
-        showLastInteractionTime: state.hud.showLastInteractionTimeOnSessionCards,
-      })),
-    );
+  const {
+    renameSessionOnDoubleClick,
+    showCloseButton,
+    showDebugSessionNumbers,
+    showHotkeys,
+    showLastInteractionTime,
+  } = useSidebarStore(
+    useShallow((state) => ({
+      renameSessionOnDoubleClick: state.hud.renameSessionOnDoubleClick,
+      showCloseButton: state.hud.showCloseButtonOnSessionCards,
+      showDebugSessionNumbers: state.hud.debuggingMode,
+      showHotkeys: state.hud.showHotkeysOnSessionCards,
+      showLastInteractionTime: state.hud.showLastInteractionTimeOnSessionCards,
+    })),
+  );
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition>();
   const [completionFlashRunId, setCompletionFlashRunId] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -157,7 +162,6 @@ export function SortableSessionCard({
   const debugInstanceIdRef = useRef(createSidebarDebugInstanceId());
   const isBrowserSession = session?.sessionKind === "browser" || session?.kind === "browser";
   const isT3Session = session?.sessionKind === "t3";
-  const canSetT3ThreadId = isT3Session;
   const canFavoriteSession = !isBrowserSession;
   const canForkSession = session ? !isBrowserSession && supportsFork(session) : false;
   const canCopyResumeCommand = session
@@ -399,14 +403,6 @@ export function SortableSessionCard({
     });
   };
 
-  const requestSetT3ThreadId = () => {
-    setContextMenuPosition(undefined);
-    vscode.postMessage({
-      sessionId: session.sessionId,
-      type: "setT3SessionThreadId",
-    });
-  };
-
   const requestT3BrowserAccess = () => {
     setContextMenuPosition(undefined);
     vscode.postMessage({
@@ -478,7 +474,7 @@ export function SortableSessionCard({
   }
 
   const sessionActions: SessionContextMenuAction[] = [];
-  if (canSetT3ThreadId) {
+  if (isT3Session) {
     sessionActions.push({
       icon: (
         <IconDeviceMobile
@@ -491,14 +487,6 @@ export function SortableSessionCard({
       key: "browser-access",
       label: "Remote Access",
       onClick: requestT3BrowserAccess,
-    });
-    sessionActions.push({
-      icon: (
-        <IconHash aria-hidden="true" className="session-context-menu-icon" size={16} stroke={1.8} />
-      ),
-      key: "set-thread-id",
-      label: "Set Thread ID",
-      onClick: requestSetT3ThreadId,
     });
   }
   if (canCopyResumeCommand) {
@@ -715,7 +703,7 @@ export function SortableSessionCard({
               requestFocusSession();
             }}
             onDoubleClick={(event) => {
-              if (isBrowserSession) {
+              if (isBrowserSession || !renameSessionOnDoubleClick) {
                 return;
               }
 

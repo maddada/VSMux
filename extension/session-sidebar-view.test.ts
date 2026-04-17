@@ -81,24 +81,6 @@ describe("isSidebarMessage", () => {
     ).toBe(false);
   });
 
-  test("should accept setT3SessionThreadId messages with a session id", () => {
-    expect(
-      isSidebarMessage({
-        sessionId: "session-7",
-        type: "setT3SessionThreadId",
-      }),
-    ).toBe(true);
-  });
-
-  test("should reject setT3SessionThreadId messages without a session id", () => {
-    expect(
-      isSidebarMessage({
-        sessionId: "",
-        type: "setT3SessionThreadId",
-      }),
-    ).toBe(false);
-  });
-
   test("should accept setSessionFavorite messages with a boolean favorite value", () => {
     expect(
       isSidebarMessage({

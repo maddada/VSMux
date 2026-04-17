@@ -12,6 +12,7 @@ const DEFAULT_STORY_ARGS: SidebarStoryArgs = {
   fixture: "default",
   highlightedVisibleCount: 1,
   isFocusModeActive: false,
+  renameSessionOnDoubleClick: false,
   showCloseButtonOnSessionCards: false,
   showHotkeysOnSessionCards: false,
   showLastInteractionTimeOnSessionCards: false,

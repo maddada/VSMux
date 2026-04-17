@@ -23,6 +23,7 @@ import {
 } from "./sidebar-story-fixture-helpers";
 
 export type SidebarStoryFixture =
+  | "browser-groups"
   | "default"
   | "sort-toggle-demo"
   | "selector-states"
@@ -36,6 +37,7 @@ export type SidebarStoryArgs = {
   fixture: SidebarStoryFixture;
   highlightedVisibleCount: VisibleSessionCount;
   isFocusModeActive: boolean;
+  renameSessionOnDoubleClick: boolean;
   showCloseButtonOnSessionCards: boolean;
   showHotkeysOnSessionCards: boolean;
   showLastInteractionTimeOnSessionCards: boolean;
@@ -96,6 +98,7 @@ export function createSidebarStoryMessage(args: SidebarStoryArgs): SidebarHydrat
     pendingAgentIds: [],
     sectionVisibility: createDefaultSidebarSectionVisibility(),
     createSessionOnSidebarDoubleClick: args.createSessionOnSidebarDoubleClick,
+    renameSessionOnDoubleClick: args.renameSessionOnDoubleClick,
     showCloseButtonOnSessionCards: args.showCloseButtonOnSessionCards,
     showHotkeysOnSessionCards: args.showHotkeysOnSessionCards,
     showLastInteractionTimeOnSessionCards: args.showLastInteractionTimeOnSessionCards,

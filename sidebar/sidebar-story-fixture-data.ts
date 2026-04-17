@@ -80,6 +80,129 @@ const DEFAULT_GROUPS: SidebarStoryGroup[] = [
   },
 ];
 
+const BROWSER_GROUPS: SidebarStoryGroup[] = [
+  {
+    groupId: "browser-main",
+    isActive: false,
+    kind: "browser",
+    sessions: [
+      {
+        ...createStorySession({
+          alias: "22",
+          detail: "https://chatgpt.com",
+          isFocused: true,
+          isVisible: true,
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-1",
+          shortcutLabel: "⌘⌥1",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "Auto Thread Naming (WT)",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-2",
+          shortcutLabel: "⌘⌥2",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "DPCode Embed UI Changes",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-3",
+          shortcutLabel: "⌘⌥3",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "T3Code Paste Issue",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-4",
+          shortcutLabel: "⌘⌥4",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "Collapsed Group Click Fix",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-5",
+          shortcutLabel: "⌘⌥5",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "T3 Code",
+          detail: "https://t3.chat",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-6",
+          shortcutLabel: "⌘⌥6",
+        }),
+        agentIcon: "t3",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "Pinned Prompts",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-7",
+          shortcutLabel: "⌘⌥7",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+      {
+        ...createStorySession({
+          alias: "Auto Thread Naming",
+          detail: "https://chatgpt.com",
+          lastInteractionAt: secondsAgo(2),
+          sessionId: "browser-session-8",
+          shortcutLabel: "⌘⌥8",
+        }),
+        agentIcon: "browser",
+        kind: "browser",
+        sessionKind: "browser",
+      },
+    ],
+    title: "Main",
+  },
+  {
+    groupId: "browser-ghostty",
+    isActive: false,
+    kind: "browser",
+    sessions: [],
+    title: "Ghostty",
+  },
+  {
+    groupId: "browser-cicd",
+    isActive: false,
+    kind: "browser",
+    sessions: [],
+    title: "CI/CD",
+  },
+];
+
 const SELECTOR_STATE_GROUPS: SidebarStoryGroup[] = [
   {
     groupId: "group-1",
@@ -372,6 +495,7 @@ const THREE_GROUPS_STRESS: SidebarStoryGroup[] = [
 ];
 
 export const GROUPS_BY_FIXTURE: Record<SidebarStoryFixture, SidebarStoryGroup[]> = {
+  "browser-groups": BROWSER_GROUPS,
   default: DEFAULT_GROUPS,
   "empty-groups": EMPTY_GROUPS,
   "overflow-stress": OVERFLOW_STRESS_GROUPS,
