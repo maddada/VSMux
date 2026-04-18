@@ -8,16 +8,16 @@ Download links:
   <tr>
     <td align="center" width="50%">
       <a href="https://marketplace.visualstudio.com/items?itemName=maddada.VSmux">
-        <img src="./media/readme-download-vscode-tile.svg" alt="Visual Studio Code" width="80" /><br />
+        <img src="./media/readme-download-vscode-tile.png" alt="Visual Studio Code" width="80" /><br />
         <strong>Download for VS Code</strong><br />
         Extensions Marketplace
       </a>
     </td>
     <td align="center" width="50%">
       <a href="https://open-vsx.org/extension/maddada/VSmux">
-        <img src="./media/readme-download-cursor-tile.svg" alt="Cursor" width="80" />
-        <img src="./media/readme-download-antigravity-tile.svg" alt="Antigravity" width="80" />
-        <img src="./media/readme-download-windsurf-tile.svg" alt="Windsurf" width="80" />
+        <img src="./media/readme-download-cursor-tile.png" alt="Cursor" width="80" />
+        <img src="./media/readme-download-antigravity-tile.png" alt="Antigravity" width="80" />
+        <img src="./media/readme-download-windsurf-tile.png" alt="Windsurf" width="80" />
         <br />
         <strong>Download for Cursor / Antigravity / Others</strong><br />
         Open VSX Registry
