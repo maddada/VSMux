@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { networkInterfaces } from "node:os";
-import * as vscode from "vscode";
 
 export type T3BrowserAccessMode = "external" | "local-network" | "local-only" | "tailscale";
 
@@ -28,38 +27,32 @@ let cachedTailscaleStatus:
 
 export async function resolveT3BrowserAccessLink(localUrl: string): Promise<T3BrowserAccessLink> {
   const parsedLocalUrl = new URL(localUrl);
-  const tunneledUrl = await resolveExternalUrl(parsedLocalUrl);
   const tailscaleStatus = getTailscaleStatus();
-  if (tunneledUrl) {
-    return {
-      endpointUrl: tunneledUrl,
-      localUrl,
-      mode: "external",
-      note: "This link is being exposed by VS Code and can be opened outside the editor.",
-      tailscaleEnabled: tailscaleStatus.enabled,
-    };
-  }
-
   const localNetworkHost = detectLocalNetworkHost();
-  if (localNetworkHost) {
-    return {
-      endpointUrl: replaceUrlHost(parsedLocalUrl, localNetworkHost),
-      localUrl,
-      mode: "local-network",
-      note: tailscaleStatus.enabled
-        ? "This uses your machine's local network address for the simplest same-network phone access. Tailscale is still available if you need cross-network access."
-        : "This uses your machine's local network address because no Tailscale address was detected.",
-      tailscaleEnabled: tailscaleStatus.enabled,
-    };
-  }
+  const localNetworkUrl = localNetworkHost
+    ? replaceUrlHost(parsedLocalUrl, localNetworkHost)
+    : undefined;
 
   if (tailscaleStatus.ipv4) {
     return {
       endpointUrl: replaceUrlHost(parsedLocalUrl, tailscaleStatus.ipv4),
-      localUrl,
+      localUrl: localNetworkUrl ?? localUrl,
       mode: "tailscale",
-      note: "This uses your machine's Tailscale address. Open it while your phone is connected to the same Tailnet.",
+      note: localNetworkUrl
+        ? "QR code and Copy link use your machine's Tailscale address. Open link uses your machine's local network address."
+        : "QR code and Copy link use your machine's Tailscale address. No local network address was detected, so Open link falls back to this machine only.",
       tailscaleEnabled: true,
+    };
+  }
+
+  if (localNetworkHost) {
+    const resolvedLocalNetworkUrl = replaceUrlHost(parsedLocalUrl, localNetworkHost);
+    return {
+      endpointUrl: resolvedLocalNetworkUrl,
+      localUrl: resolvedLocalNetworkUrl,
+      mode: "local-network",
+      note: "Tailscale is not connected, so QR code, Copy link, and Open link all use your machine's local network address.",
+      tailscaleEnabled: tailscaleStatus.enabled,
     };
   }
 
@@ -67,22 +60,9 @@ export async function resolveT3BrowserAccessLink(localUrl: string): Promise<T3Br
     endpointUrl: localUrl,
     localUrl,
     mode: "local-only",
-    note: "No Tailscale or LAN address was detected, so this link only works on this machine for now.",
+    note: "No Tailscale or local network address was detected, so QR code, Copy link, and Open link only work on this machine for now.",
     tailscaleEnabled: tailscaleStatus.enabled,
   };
-}
-
-async function resolveExternalUrl(localUrl: URL): Promise<string | undefined> {
-  try {
-    const externalUri = await vscode.env.asExternalUri(vscode.Uri.parse(localUrl.toString()));
-    const parsedExternalUrl = new URL(externalUri.toString());
-    if (isLoopbackHost(parsedExternalUrl.hostname)) {
-      return undefined;
-    }
-    return parsedExternalUrl.toString();
-  } catch {
-    return undefined;
-  }
 }
 
 export function getTailscaleStatus(): TailscaleStatus {
@@ -157,10 +137,6 @@ function replaceUrlHost(url: URL, hostname: string): string {
 
 function isIpv4Host(value: string): boolean {
   return /^(?:\d{1,3}\.){3}\d{1,3}$/u.test(value);
-}
-
-function isLoopbackHost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
 function isPrivateIpv4Host(hostname: string): boolean {
