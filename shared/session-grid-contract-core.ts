@@ -49,6 +49,7 @@ export type SessionKind = "browser" | "terminal" | "t3";
 export type TerminalEngine = "ghostty" | "xterm";
 
 export type T3SessionMetadata = {
+  boundThreadId?: string;
   projectId: string;
   serverOrigin: string;
   threadId: string;

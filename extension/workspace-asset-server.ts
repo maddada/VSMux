@@ -12,9 +12,13 @@ import { connect } from "node:net";
 import * as path from "node:path";
 import type { Duplex } from "node:stream";
 import * as vscode from "vscode";
-import { getManagedT3WebDistPath } from "./managed-t3-paths";
+import {
+  getManagedT3BundledWebDirectoryName,
+  getManagedT3WebDistPath,
+  type ManagedT3Provider,
+} from "./managed-t3-paths";
 
-type AssetScope = "workspace" | "t3-embed";
+type AssetScope = "workspace" | "dpcode-embed" | "t3code-embed";
 type AssetServerKind = "local" | "shared";
 type T3BrowserAccessDocumentResolver = (input: {
   requestOrigin: string;
@@ -49,11 +53,9 @@ export class WorkspaceAssetServer implements vscode.Disposable {
   private t3BrowserAccessDocumentResolver: T3BrowserAccessDocumentResolver | undefined;
 
   public constructor(context: vscode.ExtensionContext) {
-    const packagedEmbedRoot = path.join(context.extensionPath, "out", "t3-embed");
     this.roots = {
-      "t3-embed": existsSync(path.join(packagedEmbedRoot, "index.html"))
-        ? packagedEmbedRoot
-        : getManagedT3WebDistPath(context),
+      "dpcode-embed": resolveManagedT3WebRoot("dpcode", context),
+      "t3code-embed": resolveManagedT3WebRoot("t3code", context),
       workspace: path.join(context.extensionPath, "out", "workspace"),
     };
   }
@@ -246,7 +248,7 @@ export class WorkspaceAssetServer implements vscode.Disposable {
       }
 
       const [scope, ...pathSegments] = url.pathname.split("/").filter(Boolean);
-      if (scope !== "workspace" && scope !== "t3-embed") {
+      if (scope !== "workspace" && scope !== "dpcode-embed" && scope !== "t3code-embed") {
         respondNotFound(request, response);
         return;
       }
@@ -388,6 +390,22 @@ function isT3ProxyPath(pathname: string): boolean {
 
 function getT3ProxyOrigin(): string {
   return `http://${T3_PROXY_HOST}:${String(T3_PROXY_PORT)}`;
+}
+
+function resolveManagedT3WebRoot(
+  provider: ManagedT3Provider,
+  context: Pick<vscode.ExtensionContext, "extensionPath">,
+): string {
+  const bundledRoot = path.join(
+    context.extensionPath,
+    "out",
+    getManagedT3BundledWebDirectoryName(provider),
+  );
+  if (existsSync(path.join(bundledRoot, "index.html"))) {
+    return bundledRoot;
+  }
+
+  return getManagedT3WebDistPath(provider, context);
 }
 
 function getRequestOrigin(request: IncomingMessage): string {

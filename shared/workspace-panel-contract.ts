@@ -189,7 +189,11 @@ export type WorkspacePanelFocusSessionMessage = {
   sessionId: string;
 };
 
-export type WorkspacePanelAcknowledgeSessionAttentionReason = "click" | "focusDwell" | "typing";
+export type WorkspacePanelAcknowledgeSessionAttentionReason =
+  | "click"
+  | "escape"
+  | "focusDwell"
+  | "typing";
 
 export type WorkspacePanelAcknowledgeSessionAttentionMessage = {
   type: "acknowledgeSessionAttention";

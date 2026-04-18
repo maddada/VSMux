@@ -14,10 +14,15 @@ import {
 } from "./t3-rpc-protocol";
 import {
   getConfiguredManagedT3RepoRoot,
-  getManagedT3EntrypointPath as getResolvedManagedT3EntrypointPath,
+  getManagedT3BundledServerDirectoryName,
+  getManagedT3BundledWebDirectoryName,
+  getManagedT3EntrypointPath,
+  getManagedT3Provider,
+  getManagedT3ProviderDisplayName,
   getManagedT3RepoRoot,
   getManagedT3WebDistPath,
-  getManagedT3WindowsEntrypointPath as getResolvedManagedT3WindowsEntrypointPath,
+  getManagedT3WindowsEntrypointPath,
+  type ManagedT3Provider,
 } from "./managed-t3-paths";
 import { getDefaultShell, getDefaultWorkspaceCwd } from "./terminal-workspace-helpers";
 
@@ -34,7 +39,6 @@ const SOCKET_CONNECT_RETRY_DELAY_MS = 250;
 const LEASE_HEARTBEAT_MS = 30_000;
 const LEASE_GRACE_MS = 180_000;
 const RUNTIME_STORAGE_DIR_NAME = "t3-runtime";
-const MANAGED_T3_HOME_DIR_NAME = "managed-home-dpcode-0.0.17";
 const LEASES_DIR_NAME = "leases";
 const SUPERVISOR_STATE_FILE = "supervisor.json";
 const SUPERVISOR_LAUNCH_LOCK_FILE = "supervisor-launch.lock";
@@ -45,12 +49,14 @@ type ManagedT3RuntimeSource =
       kind: "bundled";
       entrypoint: string;
       nodeModulesPath: string;
+      provider: ManagedT3Provider;
       root: string;
     }
   | {
       kind: "external";
       entrypoint: string;
       nodeModulesPath: string;
+      provider: ManagedT3Provider;
       repoRoot: string;
     };
 
@@ -105,7 +111,15 @@ type PendingRequest = {
 };
 
 type T3RuntimeAuthState = {
+  desktopBootstrapToken?: string;
   ownerBearerToken?: string;
+  provider?: ManagedT3Provider;
+};
+
+type ManagedBootstrapEnvelope = {
+  authState: T3RuntimeAuthState;
+  bootstrapJson?: string;
+  env?: Record<string, string>;
 };
 
 export class T3RuntimeManager implements vscode.Disposable {
@@ -158,7 +172,7 @@ export class T3RuntimeManager implements vscode.Disposable {
   }> {
     await this.ensureRunning(workspaceRoot, startupCommand);
     const authState = await this.ensureAuthStateReady();
-    const browserBootstrapToken = await this.issueBrowserBootstrapToken(authState.ownerBearerToken);
+    const browserBootstrapToken = await this.issueBrowserBootstrapToken(authState);
     return {
       browserBootstrapToken,
       ownerBearerToken: authState.ownerBearerToken,
@@ -249,6 +263,14 @@ export class T3RuntimeManager implements vscode.Disposable {
       threadId,
       workspaceRoot,
     };
+  }
+
+  public async fetchActivitySnapshot(
+    workspaceRoot = getDefaultWorkspaceCwd(),
+    startupCommand = DEFAULT_T3_COMMAND,
+  ): Promise<Pick<T3Snapshot, "threads">> {
+    await this.ensureRunning(workspaceRoot, startupCommand);
+    return this.getSnapshot();
   }
 
   public async ensureThreadSession(
@@ -347,7 +369,7 @@ export class T3RuntimeManager implements vscode.Disposable {
     const resolvedStartupCommand = this.resolveStartupCommand(startupCommand);
     await this.ensureRuntimeStorage();
     if (shouldResolveManagedRuntime(startupCommand)) {
-      const runtimeSource = resolveManagedT3RuntimeSource(this.context);
+      const runtimeSource = resolveManagedT3RuntimeSource(undefined, this.context);
       await this.ensureManagedRuntimeEntrypoint(runtimeSource);
       await this.ensureManagedRuntimeDependencies(runtimeSource);
     }
@@ -433,11 +455,55 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private async getSnapshot(): Promise<T3Snapshot> {
+    if (getManagedT3Provider() === "t3code") {
+      return this.fetchAuthenticatedJson<T3Snapshot>("/api/orchestration/snapshot");
+    }
+
     return this.request("orchestration.getSnapshot");
   }
 
   private async dispatchCommand(command: Record<string, unknown>): Promise<unknown> {
+    if (getManagedT3Provider() === "t3code") {
+      return this.fetchAuthenticatedJson("/api/orchestration/dispatch", {
+        body: JSON.stringify(command),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+    }
+
     return this.request("orchestration.dispatchCommand", { command });
+  }
+
+  private async fetchAuthenticatedJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const authState = await this.ensureAuthStateReady();
+    const headers = new Headers(init?.headers);
+    headers.set("authorization", `Bearer ${authState.ownerBearerToken}`);
+    const response = await fetch(new URL(path, getT3Origin()), {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(await this.formatHttpFailure(response, path));
+    }
+
+    return (await response.json()) as T;
+  }
+
+  private async formatHttpFailure(response: Response, path: string): Promise<string> {
+    try {
+      const body = (await response.json()) as { error?: string; message?: string };
+      const detail = body.error ?? body.message;
+      if (typeof detail === "string" && detail.trim()) {
+        return detail;
+      }
+    } catch {
+      // Fall back to the status code below when the response body is not JSON.
+    }
+
+    return `Managed T3 request failed for ${path} (${response.status}).`;
   }
 
   private async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
@@ -569,6 +635,9 @@ export class T3RuntimeManager implements vscode.Disposable {
         nodeRuntimePath,
         [
           supervisorScriptPath,
+          ...(bootstrapEnvelope.bootstrapJson
+            ? ["--bootstrap-json", bootstrapEnvelope.bootstrapJson]
+            : []),
           "--command",
           resolvedStartupCommand,
           "--cwd",
@@ -591,7 +660,7 @@ export class T3RuntimeManager implements vscode.Disposable {
           env: {
             ...process.env,
             T3CODE_HOME: this.getManagedT3HomePath(),
-            T3CODE_AUTH_TOKEN: String(bootstrapEnvelope.authToken),
+            ...bootstrapEnvelope.env,
           },
           stdio: "ignore",
         },
@@ -648,21 +717,22 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private async ensureManagedRuntimeEntrypoint(
-    runtimeSource = resolveManagedT3RuntimeSource(this.context),
+    runtimeSource = resolveManagedT3RuntimeSource(undefined, this.context),
   ): Promise<void> {
     const repoRoot =
       runtimeSource.kind === "external" ? runtimeSource.repoRoot : runtimeSource.root;
     const entrypoint = runtimeSource.entrypoint;
+    const providerDisplayName = getManagedT3ProviderDisplayName(runtimeSource.provider);
     await stat(entrypoint).catch(() => {
       throw new Error(
         runtimeSource.kind === "external"
           ? [
-              "The managed DP Code runtime source is missing.",
+              `The managed ${providerDisplayName} runtime source is missing.`,
               `Expected: ${entrypoint}`,
-              `Sync the sibling dpcode-embed checkout at ${repoRoot} and reinstall the main-branch VSIX.`,
+              `Sync the sibling ${runtimeSource.provider}-embed checkout at ${repoRoot} and reinstall the main-branch VSIX.`,
             ].join(" ")
           : [
-              "The bundled DP Code runtime is missing.",
+              `The bundled ${providerDisplayName} runtime is missing.`,
               `Expected: ${entrypoint}`,
               "Rebuild and reinstall the VSIX so the packaged runtime assets are included.",
             ].join(" "),
@@ -671,19 +741,20 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private async ensureManagedRuntimeDependencies(
-    runtimeSource = resolveManagedT3RuntimeSource(this.context),
+    runtimeSource = resolveManagedT3RuntimeSource(undefined, this.context),
   ): Promise<void> {
     const nodeModulesPath = runtimeSource.nodeModulesPath;
+    const providerDisplayName = getManagedT3ProviderDisplayName(runtimeSource.provider);
     await stat(nodeModulesPath).catch(() => {
       throw new Error(
         runtimeSource.kind === "external"
           ? [
-              "Managed DP Code dependencies are missing.",
+              `Managed ${providerDisplayName} dependencies are missing.`,
               `Expected: ${nodeModulesPath}`,
               `Run 'bun install' in ${runtimeSource.repoRoot}, then run 'pnpm run t3:embed:build'.`,
             ].join(" ")
           : [
-              "Bundled DP Code dependencies are missing.",
+              `Bundled ${providerDisplayName} dependencies are missing.`,
               `Expected: ${nodeModulesPath}`,
               "Rebuild and reinstall the VSIX so the packaged runtime dependencies are included.",
             ].join(" "),
@@ -695,7 +766,7 @@ export class T3RuntimeManager implements vscode.Disposable {
       if (bunVersion && compareSemverStrings(bunVersion, MINIMUM_MANAGED_T3_BUN_VERSION) < 0) {
         throw new Error(
           [
-            `Managed DP Code requires Bun ${MINIMUM_MANAGED_T3_BUN_VERSION} or newer.`,
+            `Managed ${providerDisplayName} requires Bun ${MINIMUM_MANAGED_T3_BUN_VERSION} or newer.`,
             `Found: ${bunVersion}.`,
             `Upgrade Bun, then run 'bun install' in ${runtimeSource.repoRoot} and 'pnpm run t3:embed:build'.`,
           ].join(" "),
@@ -703,11 +774,14 @@ export class T3RuntimeManager implements vscode.Disposable {
       }
 
       if (process.platform === "win32") {
-        const windowsEntrypoint = getManagedT3WindowsEntrypointPath(this.context);
+        const windowsEntrypoint = getManagedT3WindowsEntrypointPath(
+          runtimeSource.provider,
+          this.context,
+        );
         await stat(windowsEntrypoint).catch(() => {
           throw new Error(
             [
-              "Managed DP Code server build output is missing on Windows.",
+              `Managed ${providerDisplayName} server build output is missing on Windows.`,
               `Expected: ${windowsEntrypoint}`,
               `Run 'bun run build' in ${join(runtimeSource.repoRoot, "apps", "server")}, then reinstall the main-branch VSIX.`,
             ].join(" "),
@@ -717,21 +791,39 @@ export class T3RuntimeManager implements vscode.Disposable {
     }
   }
 
-  private async createManagedBootstrapEnvelope(): Promise<
-    Record<string, string | boolean | number>
-  > {
+  private async createManagedBootstrapEnvelope(): Promise<ManagedBootstrapEnvelope> {
+    const provider = getManagedT3Provider();
+    if (provider === "t3code") {
+      const desktopBootstrapToken = randomUUID();
+      const authState: T3RuntimeAuthState = {
+        desktopBootstrapToken,
+        provider,
+      };
+      await this.writeAuthState(authState);
+      return {
+        authState,
+        bootstrapJson: JSON.stringify({
+          desktopBootstrapToken,
+          host: T3_HOST,
+          mode: "desktop",
+          noBrowser: true,
+          port: T3_PORT,
+          t3Home: this.getManagedT3HomePath(),
+        }),
+      };
+    }
+
     const authToken = randomUUID();
     const authState: T3RuntimeAuthState = {
       ownerBearerToken: authToken,
+      provider,
     };
     await this.writeAuthState(authState);
     return {
-      authToken,
-      host: T3_HOST,
-      mode: "desktop",
-      noBrowser: true,
-      port: T3_PORT,
-      t3Home: this.getManagedT3HomePath(),
+      authState,
+      env: {
+        T3CODE_AUTH_TOKEN: authToken,
+      },
     };
   }
 
@@ -739,11 +831,42 @@ export class T3RuntimeManager implements vscode.Disposable {
     Required<Pick<T3RuntimeAuthState, "ownerBearerToken">>
   > {
     const current = await this.readAuthState();
+    const provider = getManagedT3Provider();
+    if (provider === "t3code") {
+      if (current?.provider && current.provider !== provider) {
+        throw new Error("Managed T3 auth state belongs to a different provider.");
+      }
+      if (
+        current?.ownerBearerToken &&
+        (await this.isBearerSessionValid(current.ownerBearerToken, provider))
+      ) {
+        return {
+          ownerBearerToken: current.ownerBearerToken,
+        };
+      }
+
+      if (!current?.desktopBootstrapToken) {
+        throw new Error("Managed T3 auth state is missing.");
+      }
+
+      const ownerBearerToken = await this.exchangeDesktopBootstrapForOwnerBearerSession(
+        current.desktopBootstrapToken,
+      );
+      await this.writeAuthState({
+        ...current,
+        ownerBearerToken,
+        provider,
+      });
+      return {
+        ownerBearerToken,
+      };
+    }
+
     if (!current?.ownerBearerToken) {
       throw new Error("Managed T3 auth state is missing.");
     }
 
-    if (await this.isBearerSessionValid(current.ownerBearerToken)) {
+    if (await this.isBearerSessionValid(current.ownerBearerToken, provider)) {
       return {
         ownerBearerToken: current.ownerBearerToken,
       };
@@ -759,7 +882,10 @@ export class T3RuntimeManager implements vscode.Disposable {
       if (
         typeof parsed !== "object" ||
         parsed === null ||
-        (parsed.ownerBearerToken !== undefined && typeof parsed.ownerBearerToken !== "string")
+        (parsed.desktopBootstrapToken !== undefined &&
+          typeof parsed.desktopBootstrapToken !== "string") ||
+        (parsed.ownerBearerToken !== undefined && typeof parsed.ownerBearerToken !== "string") ||
+        (parsed.provider !== undefined && !["dpcode", "t3code"].includes(parsed.provider))
       ) {
         return undefined;
       }
@@ -773,16 +899,83 @@ export class T3RuntimeManager implements vscode.Disposable {
     await writeFile(this.getAuthStatePath(), JSON.stringify(state, null, 2), "utf8");
   }
 
-  private async issueBrowserBootstrapToken(ownerBearerToken: string): Promise<string> {
-    return ownerBearerToken;
+  private async issueBrowserBootstrapToken(authState: {
+    desktopBootstrapToken?: string;
+    ownerBearerToken: string;
+  }): Promise<string> {
+    return getManagedT3Provider() === "t3code" ? "" : authState.ownerBearerToken;
   }
 
   private async issueWebSocketToken(ownerBearerToken: string): Promise<string> {
-    return ownerBearerToken;
+    if (getManagedT3Provider() !== "t3code") {
+      return ownerBearerToken;
+    }
+
+    const response = await fetch(new URL("/api/auth/ws-token", getT3Origin()), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${ownerBearerToken}`,
+      },
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to issue websocket token (${response.status}).`);
+    }
+
+    const body = (await response.json()) as { token?: string };
+    if (typeof body.token !== "string" || !body.token.trim()) {
+      throw new Error("Managed T3 websocket token response is invalid.");
+    }
+
+    return body.token;
   }
 
-  private async isBearerSessionValid(ownerBearerToken: string): Promise<boolean> {
+  private async exchangeDesktopBootstrapForOwnerBearerSession(
+    desktopBootstrapToken: string,
+  ): Promise<string> {
+    const response = await fetch(new URL("/api/auth/bootstrap/bearer", getT3Origin()), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        credential: desktopBootstrapToken,
+      }),
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to bootstrap managed T3 bearer session (${response.status}).`);
+    }
+
+    const body = (await response.json()) as { sessionToken?: string };
+    if (typeof body.sessionToken !== "string" || !body.sessionToken.trim()) {
+      throw new Error("Managed T3 bearer bootstrap response is invalid.");
+    }
+
+    return body.sessionToken;
+  }
+
+  private async isBearerSessionValid(
+    ownerBearerToken: string,
+    provider = getManagedT3Provider(),
+  ): Promise<boolean> {
     try {
+      if (provider === "t3code") {
+        const response = await fetch(new URL("/api/auth/session", getT3Origin()), {
+          headers: {
+            authorization: `Bearer ${ownerBearerToken}`,
+          },
+          method: "GET",
+          signal: AbortSignal.timeout(1_500),
+        });
+        if (!response.ok) {
+          return false;
+        }
+
+        const body = (await response.json()) as { authenticated?: boolean };
+        return body.authenticated === true;
+      }
+
       const url = new URL(getT3WebSocketUrl());
       url.searchParams.set("token", ownerBearerToken);
       const socket = await openWebSocket(url.toString(), SOCKET_CONNECT_TIMEOUT_MS);
@@ -794,10 +987,11 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private async getAuthenticatedWebSocketUrl(): Promise<string> {
+    const provider = getManagedT3Provider();
     const authState = await this.ensureAuthStateReady();
     const wsToken = await this.issueWebSocketToken(authState.ownerBearerToken);
     const url = new URL(getT3WebSocketUrl());
-    url.searchParams.set("token", wsToken);
+    url.searchParams.set(provider === "t3code" ? "wsToken" : "token", wsToken);
     return url.toString();
   }
 
@@ -819,7 +1013,10 @@ export class T3RuntimeManager implements vscode.Disposable {
   }
 
   private getManagedT3HomePath(): string {
-    return join(this.getRuntimeStoragePath(), MANAGED_T3_HOME_DIR_NAME);
+    return join(
+      this.getRuntimeStoragePath(),
+      getManagedT3HomeDirectoryName(getManagedT3Provider()),
+    );
   }
 
   private getLeaseDirectoryPath(): string {
@@ -952,7 +1149,7 @@ export class T3RuntimeManager implements vscode.Disposable {
       return trimmedCommand;
     }
 
-    return createManagedStartupCommand(resolveManagedT3RuntimeSource(this.context));
+    return createManagedStartupCommand(resolveManagedT3RuntimeSource(undefined, this.context));
   }
 }
 
@@ -962,21 +1159,28 @@ function getT3Origin(): string {
 
 function createManagedStartupCommand(runtimeSource: ManagedT3RuntimeSource): string {
   const entrypoint = shellQuote(runtimeSource.entrypoint);
+  const sharedArgs = `--mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser${
+    runtimeSource.provider === "t3code" ? " --bootstrap-fd 3" : ""
+  }`;
   if (runtimeSource.kind === "bundled" || process.platform === "win32") {
-    return createNodeStartupCommand(entrypoint);
+    return createNodeStartupCommand(entrypoint, sharedArgs);
   }
 
   const bunPath = shellQuote(getBunRuntimePath());
-  return `${bunPath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser`;
+  return `${bunPath} ${entrypoint} ${sharedArgs}`;
 }
 
-function createNodeStartupCommand(entrypoint: string): string {
+function getManagedT3HomeDirectoryName(provider: ManagedT3Provider): string {
+  return provider === "dpcode" ? "managed-home-dpcode-0.0.17" : "managed-home-t3code-0.0.0";
+}
+
+function createNodeStartupCommand(entrypoint: string, sharedArgs: string): string {
   const nodePath = shellQuote(getNodeRuntimePath());
   if (process.platform === "win32") {
-    return `& ${nodePath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser`;
+    return `& ${nodePath} ${entrypoint} ${sharedArgs}`;
   }
 
-  return `${nodePath} ${entrypoint} --mode desktop --host ${T3_HOST} --port ${String(T3_PORT)} --no-browser`;
+  return `${nodePath} ${entrypoint} ${sharedArgs}`;
 }
 
 function shouldResolveManagedRuntime(startupCommand: string): boolean {
@@ -1149,51 +1353,46 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-function getManagedT3EntrypointPath(
-  context?: Pick<vscode.ExtensionContext, "extensionPath">,
-): string {
-  return getResolvedManagedT3EntrypointPath(context);
-}
-
-function getManagedT3WindowsEntrypointPath(
-  context?: Pick<vscode.ExtensionContext, "extensionPath">,
-): string {
-  return getResolvedManagedT3WindowsEntrypointPath(context);
-}
-
 function getBundledT3ServerRootCandidates(
+  provider: ManagedT3Provider,
   context?: Pick<vscode.ExtensionContext, "extensionPath">,
 ): string[] {
+  const bundledDirectoryName = getManagedT3BundledServerDirectoryName(provider);
   const candidates = new Set<string>();
   if (context?.extensionPath) {
-    candidates.add(join(context.extensionPath, "out", "dpcode-server"));
-    candidates.add(join(context.extensionPath, "dpcode-server"));
-    candidates.add(join(dirname(context.extensionPath), "out", "dpcode-server"));
+    candidates.add(join(context.extensionPath, "out", bundledDirectoryName));
+    candidates.add(join(context.extensionPath, bundledDirectoryName));
+    candidates.add(join(dirname(context.extensionPath), "out", bundledDirectoryName));
   }
-  candidates.add(join(process.cwd(), "out", "dpcode-server"));
-  candidates.add(join(process.cwd(), "dpcode-server"));
-  candidates.add(join(dirname(process.cwd()), "out", "dpcode-server"));
+  candidates.add(join(process.cwd(), "out", bundledDirectoryName));
+  candidates.add(join(process.cwd(), bundledDirectoryName));
+  candidates.add(join(dirname(process.cwd()), "out", bundledDirectoryName));
   return [...candidates];
 }
 
 function getBundledT3ServerRoot(
+  provider: ManagedT3Provider,
   context?: Pick<vscode.ExtensionContext, "extensionPath">,
 ): string | undefined {
-  return getBundledT3ServerRootCandidates(context).find((candidate) =>
-    existsSync(join(candidate, "dist", "index.mjs")),
+  return getBundledT3ServerRootCandidates(provider, context).find((candidate) =>
+    existsSync(join(candidate, "dist", provider === "t3code" ? "bin.mjs" : "index.mjs")),
   );
 }
 
 function getBundledT3ServerEntrypointPath(
+  provider: ManagedT3Provider,
   context?: Pick<vscode.ExtensionContext, "extensionPath">,
 ): string | undefined {
-  const bundledRoot = getBundledT3ServerRoot(context);
-  return bundledRoot ? join(bundledRoot, "dist", "index.mjs") : undefined;
+  const bundledRoot = getBundledT3ServerRoot(provider, context);
+  return bundledRoot
+    ? join(bundledRoot, "dist", provider === "t3code" ? "bin.mjs" : "index.mjs")
+    : undefined;
 }
 
 async function getManagedRuntimeBuildTimestamp(
   context?: Pick<vscode.ExtensionContext, "extensionPath">,
 ): Promise<number | undefined> {
+  const provider = getManagedT3Provider();
   const candidatePaths = new Set<string>();
   const addCandidate = (value: string | undefined): void => {
     const trimmed = value?.trim();
@@ -1211,16 +1410,31 @@ async function getManagedRuntimeBuildTimestamp(
   for (const root of extensionRoots) {
     addCandidate(join(root, "out", "workspace", "t3-frame-host.js"));
     addCandidate(join(root, "workspace", "t3-frame-host.js"));
-    addCandidate(join(root, "out", "t3-embed", "index.html"));
-    addCandidate(join(root, "t3-embed", "index.html"));
-    addCandidate(join(root, "out", "dpcode-server", "dist", "index.mjs"));
-    addCandidate(join(root, "dpcode-server", "dist", "index.mjs"));
+    addCandidate(join(root, "out", getManagedT3BundledWebDirectoryName(provider), "index.html"));
+    addCandidate(join(root, getManagedT3BundledWebDirectoryName(provider), "index.html"));
+    addCandidate(
+      join(
+        root,
+        "out",
+        getManagedT3BundledServerDirectoryName(provider),
+        "dist",
+        provider === "t3code" ? "bin.mjs" : "index.mjs",
+      ),
+    );
+    addCandidate(
+      join(
+        root,
+        getManagedT3BundledServerDirectoryName(provider),
+        "dist",
+        provider === "t3code" ? "bin.mjs" : "index.mjs",
+      ),
+    );
   }
 
-  addCandidate(getBundledT3ServerEntrypointPath(context));
-  addCandidate(join(getManagedT3WebDistPath(context), "index.html"));
-  addCandidate(getManagedT3WindowsEntrypointPath(context));
-  addCandidate(getManagedT3EntrypointPath(context));
+  addCandidate(getBundledT3ServerEntrypointPath(provider, context));
+  addCandidate(join(getManagedT3WebDistPath(provider, context), "index.html"));
+  addCandidate(getManagedT3WindowsEntrypointPath(provider, context));
+  addCandidate(getManagedT3EntrypointPath(provider, context));
 
   let latestTimestamp: number | undefined;
   for (const candidatePath of candidatePaths) {
@@ -1235,42 +1449,64 @@ async function getManagedRuntimeBuildTimestamp(
 }
 
 function resolveManagedT3RuntimeSource(
+  provider = getManagedT3Provider(),
   context?: Pick<vscode.ExtensionContext, "extensionPath">,
 ): ManagedT3RuntimeSource {
-  const explicitRepoRoot =
-    process.env.VSMUX_T3_REPO_ROOT?.trim() || getConfiguredManagedT3RepoRoot();
+  const explicitRepoRoot = getConfiguredManagedT3RepoRoot(provider);
   if (explicitRepoRoot) {
     return {
       entrypoint:
         process.platform === "win32"
-          ? join(explicitRepoRoot, "apps", "server", "dist", "index.mjs")
-          : join(explicitRepoRoot, "apps", "server", "src", "index.ts"),
+          ? getManagedRuntimeEntrypointAtRoot(explicitRepoRoot, provider, "windows")
+          : getManagedRuntimeEntrypointAtRoot(explicitRepoRoot, provider, "source"),
       kind: "external",
       nodeModulesPath: join(explicitRepoRoot, "node_modules"),
+      provider,
       repoRoot: explicitRepoRoot,
     };
   }
 
-  const bundledRoot = getBundledT3ServerRoot(context);
+  const bundledRoot = getBundledT3ServerRoot(provider, context);
   if (bundledRoot) {
     return {
-      entrypoint: join(bundledRoot, "dist", "index.mjs"),
+      entrypoint:
+        provider === "t3code"
+          ? join(bundledRoot, "dist", "bin.mjs")
+          : join(bundledRoot, "dist", "index.mjs"),
       kind: "bundled",
       nodeModulesPath: join(bundledRoot, "node_modules"),
+      provider,
       root: bundledRoot,
     };
   }
 
-  const repoRoot = getManagedT3RepoRoot(context);
+  const repoRoot = getManagedT3RepoRoot(provider, context);
   return {
     entrypoint:
       process.platform === "win32"
-        ? join(repoRoot, "apps", "server", "dist", "index.mjs")
-        : join(repoRoot, "apps", "server", "src", "index.ts"),
+        ? getManagedRuntimeEntrypointAtRoot(repoRoot, provider, "windows")
+        : getManagedRuntimeEntrypointAtRoot(repoRoot, provider, "source"),
     kind: "external",
     nodeModulesPath: join(repoRoot, "node_modules"),
+    provider,
     repoRoot,
   };
+}
+
+function getManagedRuntimeEntrypointAtRoot(
+  repoRoot: string,
+  provider: ManagedT3Provider,
+  kind: "source" | "windows",
+): string {
+  const fileName =
+    provider === "t3code"
+      ? kind === "source"
+        ? "bin.ts"
+        : "bin.mjs"
+      : kind === "source"
+        ? "index.ts"
+        : "index.mjs";
+  return join(repoRoot, "apps", "server", kind === "source" ? "src" : "dist", fileName);
 }
 
 function getListeningProcessId(port: number): number | undefined {

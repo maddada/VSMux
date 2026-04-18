@@ -253,13 +253,13 @@ describe("WorkspacePanelManager", () => {
     expect(panel).toBeDefined();
 
     panel.webview.messageListeners[0]?.({
-      reason: "typing",
+      reason: "escape",
       sessionId: "session-2",
       type: "acknowledgeSessionAttention",
     });
 
     expect(onMessage).toHaveBeenCalledWith({
-      reason: "typing",
+      reason: "escape",
       sessionId: "session-2",
       type: "acknowledgeSessionAttention",
     });
@@ -631,6 +631,9 @@ describe("WorkspacePanelManager", () => {
     expect(panel.webview.html).toContain("window.__VSMUX_WORKSPACE_BOOTSTRAP__ =");
     expect(panel.webview.html).toContain('"type":"sessionState"');
     expect(panel.webview.html).toContain('"sessionId":"session-1"');
+    expect(panel.webview.html).toMatch(
+      /<script nonce="[^"]+">window\.__VSMUX_WORKSPACE_BOOTSTRAP__/,
+    );
 
     manager.dispose();
   });

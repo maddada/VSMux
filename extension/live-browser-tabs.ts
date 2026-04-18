@@ -230,7 +230,7 @@ function isIgnoredNonBrowserWebviewViewType(viewType: string | undefined): boole
 }
 
 function isVSmuxLocalAssetUrl(url: string): boolean {
-  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/(?:workspace|t3-embed)(?:\/|$)/i.test(
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/(?:workspace|dpcode-embed|t3code-embed)(?:\/|$)/i.test(
     url,
   );
 }

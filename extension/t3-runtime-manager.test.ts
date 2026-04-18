@@ -106,6 +106,8 @@ describe("T3RuntimeManager", () => {
     vi.restoreAllMocks();
     workspaceState.configuration = {};
     workspaceState.workspaceFolders = undefined;
+    delete process.env.VSMUX_DPCODE_REPO_ROOT;
+    delete process.env.VSMUX_T3CODE_REPO_ROOT;
     delete process.env.VSMUX_T3_REPO_ROOT;
   });
 
@@ -115,6 +117,9 @@ describe("T3RuntimeManager", () => {
     const manager = new T3RuntimeManager({
       globalStorageUri: { fsPath: "/tmp/vsmux-test" },
     } as never);
+    (
+      manager as never as { getAuthenticatedWebSocketUrl: () => Promise<string> }
+    ).getAuthenticatedWebSocketUrl = vi.fn(async () => "ws://127.0.0.1:3774/ws?token=test");
 
     const connectPromise = (manager as never as { connect: () => Promise<WebSocket> }).connect();
 
@@ -127,7 +132,9 @@ describe("T3RuntimeManager", () => {
 
   test("should resolve the managed runtime entrypoint from the open workspace checkout", async () => {
     const repoRoot = await createManagedRepoFixture();
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "dpcode";
     workspaceState.workspaceFolders = [{ uri: { fsPath: repoRoot } }];
+    vi.spyOn(process, "cwd").mockReturnValue(join(repoRoot, ".tmp", "cwd"));
     const manager = new T3RuntimeManager({
       extensionPath: join(repoRoot, "out"),
       globalStorageUri: { fsPath: join(repoRoot, ".tmp", "storage") },
@@ -151,6 +158,7 @@ describe("T3RuntimeManager", () => {
 
   test("should prefer the bundled runtime when no explicit managed checkout is configured", async () => {
     const extensionRoot = await createBundledRuntimeFixture();
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "dpcode";
     const manager = new T3RuntimeManager({
       extensionPath: extensionRoot,
       globalStorageUri: { fsPath: join(extensionRoot, ".tmp", "storage") },
@@ -172,9 +180,11 @@ describe("T3RuntimeManager", () => {
     const parentDir = await mkdtemp(join(tmpdir(), "vsmux-parent-"));
     const workspaceRoot = join(parentDir, "VSmux");
     const dpcodeRoot = join(parentDir, "dpcode-embed");
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "dpcode";
     await mkdir(workspaceRoot, { recursive: true });
     await createManagedRepoFixture(dpcodeRoot);
     workspaceState.workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+    vi.spyOn(process, "cwd").mockReturnValue(workspaceRoot);
     const manager = new T3RuntimeManager({
       extensionPath: join(workspaceRoot, "out"),
       globalStorageUri: { fsPath: join(workspaceRoot, ".tmp", "storage") },
@@ -197,13 +207,39 @@ describe("T3RuntimeManager", () => {
     expect(startupCommand).not.toContain(join(workspaceRoot, "apps", "server", "src", "index.ts"));
   });
 
-  test("should honor the configured T3 repo root when provided", async () => {
-    const repoRoot = await createManagedRepoFixture();
-    workspaceState.configuration["VSmux.t3RepoRoot"] = repoRoot;
-    workspaceState.workspaceFolders = [{ uri: { fsPath: join(repoRoot, "..", "VSmux") } }];
+  test("should resolve the configured t3code provider from its bundled runtime", async () => {
+    const extensionRoot = await createBundledRuntimeFixture();
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "t3code";
+    vi.spyOn(process, "cwd").mockReturnValue(join(extensionRoot, ".tmp", "cwd"));
     const manager = new T3RuntimeManager({
-      extensionPath: join(repoRoot, "..", "VSmux", "out"),
-      globalStorageUri: { fsPath: join(repoRoot, ".tmp", "storage") },
+      extensionPath: extensionRoot,
+      globalStorageUri: { fsPath: join(extensionRoot, ".tmp", "storage") },
+    } as never);
+
+    const startupCommand = (
+      manager as never as {
+        resolveStartupCommand: (startupCommand: string) => string;
+      }
+    ).resolveStartupCommand("npx --yes t3");
+
+    expect(startupCommand).toContain(
+      join(extensionRoot, "out", "t3code-server", "dist", "bin.mjs"),
+    );
+    expect(startupCommand).toContain("--bootstrap-fd 3");
+  });
+
+  test("should resolve the configured t3code provider from its sibling checkout", async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), "vsmux-parent-"));
+    const workspaceRoot = join(parentDir, "VSmux");
+    const t3codeRoot = join(parentDir, "t3code-embed");
+    await mkdir(workspaceRoot, { recursive: true });
+    await createManagedT3CodeRepoFixture(t3codeRoot);
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "t3code";
+    workspaceState.workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+    vi.spyOn(process, "cwd").mockReturnValue(workspaceRoot);
+    const manager = new T3RuntimeManager({
+      extensionPath: join(workspaceRoot, "out"),
+      globalStorageUri: { fsPath: join(workspaceRoot, ".tmp", "storage") },
     } as never);
 
     await expect(
@@ -219,28 +255,68 @@ describe("T3RuntimeManager", () => {
         resolveStartupCommand: (startupCommand: string) => string;
       }
     ).resolveStartupCommand("npx --yes t3");
-    expect(startupCommand).toContain(join(repoRoot, "apps", "server", "src", "index.ts"));
+    expect(startupCommand).toContain(join(t3codeRoot, "apps", "server", "src", "bin.ts"));
+    expect(startupCommand).toContain("--bootstrap-fd 3");
   });
 
-  test("should prefer an explicit managed checkout over the bundled runtime", async () => {
-    const repoRoot = await createManagedRepoFixture();
-    const extensionRoot = await createBundledRuntimeFixture();
-    workspaceState.configuration["VSmux.t3RepoRoot"] = repoRoot;
+  test("should fetch orchestration snapshots over HTTP for t3code", async () => {
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "t3code";
     const manager = new T3RuntimeManager({
-      extensionPath: extensionRoot,
-      globalStorageUri: { fsPath: join(extensionRoot, ".tmp", "storage") },
+      globalStorageUri: { fsPath: "/tmp/vsmux-test" },
     } as never);
+    const runtime = manager as never as {
+      ensureAuthStateReady: () => Promise<{ ownerBearerToken: string }>;
+      getSnapshot: () => Promise<unknown>;
+    };
+    runtime.ensureAuthStateReady = vi.fn(async () => ({ ownerBearerToken: "owner-token" }));
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({ projects: [], threads: [] }),
+      ok: true,
+      status: 200,
+    }));
+    vi.stubGlobal("fetch", fetchMock as typeof globalThis.fetch);
 
-    const startupCommand = (
-      manager as never as {
-        resolveStartupCommand: (startupCommand: string) => string;
-      }
-    ).resolveStartupCommand("npx --yes t3");
-
-    expect(startupCommand).toContain(join(repoRoot, "apps", "server", "src", "index.ts"));
-    expect(startupCommand).not.toContain(
-      join(extensionRoot, "out", "dpcode-server", "dist", "index.mjs"),
+    await expect(runtime.getSnapshot()).resolves.toEqual({ projects: [], threads: [] });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/orchestration/snapshot", "http://127.0.0.1:3774"),
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
     );
+    const [, requestInit] = fetchMock.mock.calls[0] ?? [];
+    expect((requestInit?.headers as Headers).get("authorization")).toBe("Bearer owner-token");
+  });
+
+  test("should dispatch orchestration commands over HTTP for t3code", async () => {
+    workspaceState.configuration["VSmux.t3EmbedProvider"] = "t3code";
+    const manager = new T3RuntimeManager({
+      globalStorageUri: { fsPath: "/tmp/vsmux-test" },
+    } as never);
+    const runtime = manager as never as {
+      dispatchCommand: (command: Record<string, unknown>) => Promise<unknown>;
+      ensureAuthStateReady: () => Promise<{ ownerBearerToken: string }>;
+    };
+    runtime.ensureAuthStateReady = vi.fn(async () => ({ ownerBearerToken: "owner-token" }));
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({ sequence: 1 }),
+      ok: true,
+      status: 200,
+    }));
+    vi.stubGlobal("fetch", fetchMock as typeof globalThis.fetch);
+
+    await expect(runtime.dispatchCommand({ type: "project.create" })).resolves.toEqual({
+      sequence: 1,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/orchestration/dispatch", "http://127.0.0.1:3774"),
+      expect.objectContaining({
+        body: JSON.stringify({ type: "project.create" }),
+        headers: expect.any(Headers),
+        method: "POST",
+      }),
+    );
+    const [, requestInit] = fetchMock.mock.calls[0] ?? [];
+    expect((requestInit?.headers as Headers).get("authorization")).toBe("Bearer owner-token");
   });
 
   test("should reattach a restored thread to the project that already owns it", async () => {
@@ -315,9 +391,9 @@ describe("T3RuntimeManager", () => {
     const repoRoot = await createManagedDpRepoFixture();
     const extensionRoot = await mkdtemp(join(tmpdir(), "vsmux-extension-"));
     const workspaceHostPath = join(extensionRoot, "out", "workspace", "t3-frame-host.js");
-    const embedIndexPath = join(extensionRoot, "out", "t3-embed", "index.html");
+    const embedIndexPath = join(extensionRoot, "out", "dpcode-embed", "index.html");
     await mkdir(join(extensionRoot, "out", "workspace"), { recursive: true });
-    await mkdir(join(extensionRoot, "out", "t3-embed"), { recursive: true });
+    await mkdir(join(extensionRoot, "out", "dpcode-embed"), { recursive: true });
     await writeFile(workspaceHostPath, "export {};\n", "utf8");
     await writeFile(embedIndexPath, "<html></html>\n", "utf8");
 
@@ -375,10 +451,8 @@ describe("T3RuntimeManager", () => {
       ),
     ).resolves.toBe(false);
 
-    expect(killed).toEqual([
-      { pid: 44068, signal: "SIGTERM" },
-      { pid: 45620, signal: "SIGTERM" },
-    ]);
+    expect(killed).toContainEqual({ pid: 44068, signal: "SIGTERM" });
+    expect(killed).toContainEqual({ pid: 45620, signal: "SIGTERM" });
     await expect(access(join(runtimeStoragePath, "supervisor.json"))).rejects.toBeDefined();
   });
 });
@@ -402,13 +476,29 @@ async function createManagedDpRepoFixture(targetRoot?: string): Promise<string> 
   return repoRoot;
 }
 
+async function createManagedT3CodeRepoFixture(targetRoot?: string): Promise<string> {
+  const repoRoot = targetRoot ?? (await mkdtemp(join(tmpdir(), "vsmux-managed-t3code-")));
+  const sourceEntrypoint = join(repoRoot, "apps", "server", "src", "bin.ts");
+  const windowsEntrypoint = join(repoRoot, "apps", "server", "dist", "bin.mjs");
+  await mkdir(join(repoRoot, "apps", "server", "src"), { recursive: true });
+  await mkdir(join(repoRoot, "apps", "server", "dist"), { recursive: true });
+  await writeFile(sourceEntrypoint, "export {};\n", "utf8");
+  await writeFile(windowsEntrypoint, "export {};\n", "utf8");
+  return repoRoot;
+}
+
 async function createBundledRuntimeFixture(targetRoot?: string): Promise<string> {
   const extensionRoot = targetRoot ?? (await mkdtemp(join(tmpdir(), "vsmux-bundled-runtime-")));
   const bundledEntrypoint = join(extensionRoot, "out", "dpcode-server", "dist", "index.mjs");
   const bundledNodeModules = join(extensionRoot, "out", "dpcode-server", "node_modules");
+  const bundledT3CodeEntrypoint = join(extensionRoot, "out", "t3code-server", "dist", "bin.mjs");
+  const bundledT3CodeNodeModules = join(extensionRoot, "out", "t3code-server", "node_modules");
   await mkdir(join(extensionRoot, "out", "dpcode-server", "dist"), { recursive: true });
   await mkdir(bundledNodeModules, { recursive: true });
+  await mkdir(join(extensionRoot, "out", "t3code-server", "dist"), { recursive: true });
+  await mkdir(bundledT3CodeNodeModules, { recursive: true });
   await writeFile(bundledEntrypoint, "export {};\n", "utf8");
+  await writeFile(bundledT3CodeEntrypoint, "export {};\n", "utf8");
   return extensionRoot;
 }
 

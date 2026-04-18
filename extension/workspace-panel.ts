@@ -120,11 +120,6 @@ export class WorkspacePanelManager implements vscode.Disposable {
       return this.panel;
     }
 
-    const packagedEmbedRoot = vscode.Uri.joinPath(
-      this.options.context.extensionUri,
-      "out",
-      "t3-embed",
-    );
     const panel = vscode.window.createWebviewPanel(
       WORKSPACE_PANEL_TYPE,
       WORKSPACE_PANEL_TITLE,
@@ -134,8 +129,10 @@ export class WorkspacePanelManager implements vscode.Disposable {
         retainContextWhenHidden: false,
         localResourceRoots: [
           vscode.Uri.joinPath(this.options.context.extensionUri, "out", "workspace"),
-          packagedEmbedRoot,
-          vscode.Uri.file(getManagedT3WebDistPath(this.options.context)),
+          vscode.Uri.joinPath(this.options.context.extensionUri, "out", "dpcode-embed"),
+          vscode.Uri.joinPath(this.options.context.extensionUri, "out", "t3code-embed"),
+          vscode.Uri.file(getManagedT3WebDistPath("dpcode", this.options.context)),
+          vscode.Uri.file(getManagedT3WebDistPath("t3code", this.options.context)),
         ],
       },
     );
@@ -236,7 +233,7 @@ function getWorkspaceHtml(
     `connect-src ${webview.cspSource} ws://127.0.0.1:* http://127.0.0.1:*`,
     `frame-src ${webview.cspSource} data: blob:`,
   ].join("; ");
-  const bootstrapScript = getWorkspaceBootstrapScript(bootstrapMessage);
+  const bootstrapScript = getWorkspaceBootstrapScript(bootstrapMessage, nonce);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -264,7 +261,10 @@ function getWorkspaceHtml(
 </html>`;
 }
 
-function getWorkspaceBootstrapScript(message?: WorkspaceRenderableMessage): string {
+function getWorkspaceBootstrapScript(
+  message: WorkspaceRenderableMessage | undefined,
+  nonce: string,
+): string {
   const lines: string[] = [];
   if (message) {
     const serializedMessage = JSON.stringify(message).replace(/</g, "\\u003c");
@@ -274,7 +274,7 @@ function getWorkspaceBootstrapScript(message?: WorkspaceRenderableMessage): stri
     return "";
   }
 
-  return `<script>${lines.join("")}</script>`;
+  return `<script nonce="${nonce}">${lines.join("")}</script>`;
 }
 
 function isWorkspaceRenderableMessage(
@@ -350,6 +350,7 @@ function isWorkspaceMessage(candidate: unknown): candidate is WorkspacePanelToEx
       message.sessionId.length > 0 &&
       (message.type !== "acknowledgeSessionAttention" ||
         message.reason === "click" ||
+        message.reason === "escape" ||
         message.reason === "focusDwell" ||
         message.reason === "typing")
     );

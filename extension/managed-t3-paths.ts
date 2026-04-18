@@ -3,59 +3,181 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import * as vscode from "vscode";
 
-const MANAGED_T3_REPO_DIRECTORY_NAME = "dpcode-embed";
-const MANAGED_T3_ENTRYPOINT_SEGMENTS = ["apps", "server", "src", "index.ts"] as const;
-const MANAGED_T3_WINDOWS_ENTRYPOINT_SEGMENTS = ["apps", "server", "dist", "index.mjs"] as const;
-const MANAGED_T3_WEB_DIST_SEGMENTS = ["apps", "web", "dist"] as const;
-const DEFAULT_MANAGED_T3_REPO_ROOT = join(
-  homedir(),
-  "dev",
-  "_active",
-  MANAGED_T3_REPO_DIRECTORY_NAME,
-);
+export type ManagedT3Provider = "dpcode" | "t3code";
 
-export const MANAGED_T3_REPO_ROOT_SETTING = "VSmux.t3RepoRoot";
+const MANAGED_T3_WEB_DIST_SEGMENTS = ["apps", "web", "dist"] as const;
+
+const T3_PROVIDER_SETTING = "VSmux.t3EmbedProvider";
+
+const MANAGED_T3_PROVIDER_CONFIG: Record<
+  ManagedT3Provider,
+  {
+    sourceEntrypointSegments: readonly string[];
+    windowsEntrypointSegments: readonly string[];
+    bundledServerDirectoryName: string;
+    bundledWebDirectoryName: string;
+    displayName: string;
+    envVarName: string;
+    repoDirectoryName: string;
+    repoRootSetting?: string;
+  }
+> = {
+  dpcode: {
+    sourceEntrypointSegments: ["apps", "server", "src", "index.ts"],
+    windowsEntrypointSegments: ["apps", "server", "dist", "index.mjs"],
+    bundledServerDirectoryName: "dpcode-server",
+    bundledWebDirectoryName: "dpcode-embed",
+    displayName: "DP Code",
+    envVarName: "VSMUX_DPCODE_REPO_ROOT",
+    repoDirectoryName: "dpcode-embed",
+  },
+  t3code: {
+    sourceEntrypointSegments: ["apps", "server", "src", "bin.ts"],
+    windowsEntrypointSegments: ["apps", "server", "dist", "bin.mjs"],
+    bundledServerDirectoryName: "t3code-server",
+    bundledWebDirectoryName: "t3code-embed",
+    displayName: "T3 Code",
+    envVarName: "VSMUX_T3CODE_REPO_ROOT",
+    repoDirectoryName: "t3code-embed",
+    repoRootSetting: "VSmux.t3codeRepoRoot",
+  },
+};
+
+const DEFAULT_MANAGED_T3_PROVIDER: ManagedT3Provider = "t3code";
 
 type ManagedT3Context = Pick<vscode.ExtensionContext, "extensionPath">;
 
-export function getManagedT3RepoRoot(context?: ManagedT3Context): string {
-  const overrideRoot = process.env.VSMUX_T3_REPO_ROOT?.trim();
+export function isManagedT3Provider(candidate: unknown): candidate is ManagedT3Provider {
+  return candidate === "dpcode" || candidate === "t3code";
+}
+
+export function getManagedT3Provider(): ManagedT3Provider {
+  const configured = vscode.workspace
+    .getConfiguration()
+    .get<string>(T3_PROVIDER_SETTING)
+    ?.trim()
+    .toLowerCase();
+  return isManagedT3Provider(configured) ? configured : DEFAULT_MANAGED_T3_PROVIDER;
+}
+
+export function getManagedT3ProviderConfigurationKey(): string {
+  return T3_PROVIDER_SETTING;
+}
+
+export function getManagedT3ProviderDisplayName(provider: ManagedT3Provider): string {
+  return MANAGED_T3_PROVIDER_CONFIG[provider].displayName;
+}
+
+export function getManagedT3BundledServerDirectoryName(provider: ManagedT3Provider): string {
+  return MANAGED_T3_PROVIDER_CONFIG[provider].bundledServerDirectoryName;
+}
+
+export function getManagedT3BundledWebDirectoryName(provider: ManagedT3Provider): string {
+  return MANAGED_T3_PROVIDER_CONFIG[provider].bundledWebDirectoryName;
+}
+
+export function getManagedT3RepoRoot(
+  provider = getManagedT3Provider(),
+  context?: ManagedT3Context,
+): string {
+  const overrideRoot = getManagedT3RepoRootOverride(provider);
   if (overrideRoot) {
     return overrideRoot;
   }
 
-  const configuredRoot = getConfiguredManagedT3RepoRoot();
+  const configuredRoot = getConfiguredManagedT3RepoRoot(provider);
   if (configuredRoot) {
     return configuredRoot;
   }
 
-  const detectedRoot = getManagedT3RepoRootCandidates(context).find((candidate) =>
-    hasManagedT3Entrypoint(candidate),
+  const detectedRoot = getManagedT3RepoRootCandidates(provider, context).find((candidate) =>
+    hasManagedT3Entrypoint(candidate, provider),
   );
   if (detectedRoot) {
     return detectedRoot;
   }
 
-  return getDefaultManagedT3RepoRootCandidate(context) ?? DEFAULT_MANAGED_T3_REPO_ROOT;
+  return (
+    getDefaultManagedT3RepoRootCandidate(provider, context) ?? getDefaultManagedT3RepoRoot(provider)
+  );
 }
 
-export function getManagedT3EntrypointPath(context?: ManagedT3Context): string {
-  return join(getManagedT3RepoRoot(context), ...MANAGED_T3_ENTRYPOINT_SEGMENTS);
+export function getManagedT3EntrypointPath(
+  provider = getManagedT3Provider(),
+  context?: ManagedT3Context,
+): string {
+  return join(
+    getManagedT3RepoRoot(provider, context),
+    ...MANAGED_T3_PROVIDER_CONFIG[provider].sourceEntrypointSegments,
+  );
 }
 
-export function getManagedT3WindowsEntrypointPath(context?: ManagedT3Context): string {
-  return join(getManagedT3RepoRoot(context), ...MANAGED_T3_WINDOWS_ENTRYPOINT_SEGMENTS);
+export function getManagedT3WindowsEntrypointPath(
+  provider = getManagedT3Provider(),
+  context?: ManagedT3Context,
+): string {
+  return join(
+    getManagedT3RepoRoot(provider, context),
+    ...MANAGED_T3_PROVIDER_CONFIG[provider].windowsEntrypointSegments,
+  );
 }
 
-export function getManagedT3WebDistPath(context?: ManagedT3Context): string {
-  return join(getManagedT3RepoRoot(context), ...MANAGED_T3_WEB_DIST_SEGMENTS);
+export function getManagedT3WebDistPath(
+  provider = getManagedT3Provider(),
+  context?: ManagedT3Context,
+): string {
+  return join(getManagedT3RepoRoot(provider, context), ...MANAGED_T3_WEB_DIST_SEGMENTS);
 }
 
-export function hasManagedT3Entrypoint(repoRoot: string): boolean {
-  return existsSync(join(repoRoot, ...MANAGED_T3_ENTRYPOINT_SEGMENTS));
+export function hasManagedT3Entrypoint(
+  repoRoot: string,
+  provider = getManagedT3Provider(),
+): boolean {
+  return existsSync(
+    join(repoRoot, ...MANAGED_T3_PROVIDER_CONFIG[provider].sourceEntrypointSegments),
+  );
 }
 
-function getManagedT3RepoRootCandidates(context?: ManagedT3Context): string[] {
+export function getConfiguredManagedT3RepoRoot(
+  provider = getManagedT3Provider(),
+): string | undefined {
+  const providerSetting = MANAGED_T3_PROVIDER_CONFIG[provider].repoRootSetting;
+  if (!providerSetting) {
+    return undefined;
+  }
+
+  const configuredProviderRoot = vscode.workspace
+    .getConfiguration()
+    .get<string>(providerSetting)
+    ?.trim();
+  return configuredProviderRoot && configuredProviderRoot.length > 0
+    ? configuredProviderRoot
+    : undefined;
+}
+
+function getManagedT3RepoRootOverride(provider: ManagedT3Provider): string | undefined {
+  const providerEnv = process.env[MANAGED_T3_PROVIDER_CONFIG[provider].envVarName]?.trim();
+  if (providerEnv) {
+    return providerEnv;
+  }
+
+  if (provider !== "dpcode") {
+    return undefined;
+  }
+
+  const legacyEnv = process.env.VSMUX_T3_REPO_ROOT?.trim();
+  return legacyEnv && legacyEnv.length > 0 ? legacyEnv : undefined;
+}
+
+function getDefaultManagedT3RepoRoot(provider: ManagedT3Provider): string {
+  return join(homedir(), "dev", "_active", MANAGED_T3_PROVIDER_CONFIG[provider].repoDirectoryName);
+}
+
+function getManagedT3RepoRootCandidates(
+  provider: ManagedT3Provider,
+  context?: ManagedT3Context,
+): string[] {
+  const repoDirectoryName = MANAGED_T3_PROVIDER_CONFIG[provider].repoDirectoryName;
   const candidates: string[] = [];
   const seen = new Set<string>();
 
@@ -93,8 +215,8 @@ function getManagedT3RepoRootCandidates(context?: ManagedT3Context): string[] {
       return;
     }
 
-    addCandidate(join(trimmedCandidate, MANAGED_T3_REPO_DIRECTORY_NAME));
-    addCandidate(join(dirname(trimmedCandidate), MANAGED_T3_REPO_DIRECTORY_NAME));
+    addCandidate(join(trimmedCandidate, repoDirectoryName));
+    addCandidate(join(dirname(trimmedCandidate), repoDirectoryName));
   };
 
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
@@ -113,44 +235,40 @@ function getManagedT3RepoRootCandidates(context?: ManagedT3Context): string[] {
   addWithParents(dirname(process.cwd()));
   addSiblingCandidates(process.cwd());
   addSiblingCandidates(dirname(process.cwd()));
-  addCandidate(DEFAULT_MANAGED_T3_REPO_ROOT);
+  addCandidate(getDefaultManagedT3RepoRoot(provider));
 
   return candidates;
 }
 
-function getDefaultManagedT3RepoRootCandidate(context?: ManagedT3Context): string | undefined {
+function getDefaultManagedT3RepoRootCandidate(
+  provider: ManagedT3Provider,
+  context?: ManagedT3Context,
+): string | undefined {
+  const repoDirectoryName = MANAGED_T3_PROVIDER_CONFIG[provider].repoDirectoryName;
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceFolder) {
-    if (basename(workspaceFolder) === MANAGED_T3_REPO_DIRECTORY_NAME) {
+    if (basename(workspaceFolder) === repoDirectoryName) {
       return workspaceFolder;
     }
 
-    return join(dirname(workspaceFolder), MANAGED_T3_REPO_DIRECTORY_NAME);
+    return join(dirname(workspaceFolder), repoDirectoryName);
   }
 
   if (context?.extensionPath) {
-    if (basename(context.extensionPath) === MANAGED_T3_REPO_DIRECTORY_NAME) {
+    if (basename(context.extensionPath) === repoDirectoryName) {
       return context.extensionPath;
     }
 
     if (basename(context.extensionPath) === "out") {
-      return join(dirname(dirname(context.extensionPath)), MANAGED_T3_REPO_DIRECTORY_NAME);
+      return join(dirname(dirname(context.extensionPath)), repoDirectoryName);
     }
 
-    return join(dirname(context.extensionPath), MANAGED_T3_REPO_DIRECTORY_NAME);
+    return join(dirname(context.extensionPath), repoDirectoryName);
   }
 
-  if (basename(process.cwd()) === MANAGED_T3_REPO_DIRECTORY_NAME) {
+  if (basename(process.cwd()) === repoDirectoryName) {
     return process.cwd();
   }
 
-  return join(dirname(process.cwd()), MANAGED_T3_REPO_DIRECTORY_NAME);
-}
-
-export function getConfiguredManagedT3RepoRoot(): string | undefined {
-  const configured = vscode.workspace
-    .getConfiguration()
-    .get<string>(MANAGED_T3_REPO_ROOT_SETTING)
-    ?.trim();
-  return configured && configured.length > 0 ? configured : undefined;
+  return join(dirname(process.cwd()), repoDirectoryName);
 }

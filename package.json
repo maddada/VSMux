@@ -32,8 +32,10 @@
     "out/sidebar/**/*.css",
     "out/sidebar/**/*.html",
     "out/sidebar/**/*.js",
+    "out/dpcode-embed/**",
     "out/dpcode-server/**",
-    "out/t3-embed/**",
+    "out/t3code-embed/**",
+    "out/t3code-server/**",
     "out/workspace/**/*.css",
     "out/workspace/**/*.html",
     "out/workspace/**/*.ico",
@@ -369,11 +371,25 @@
           "default": false,
           "description": "When enabled, VS Code startup automatically reveals the VSmux sidebar and reopens the VSmux Sessions view if it is not already open."
         },
-        "VSmux.t3RepoRoot": {
-          "title": "T3 Repo Root",
+        "VSmux.t3EmbedProvider": {
+          "title": "T3 Embed Provider",
+          "type": "string",
+          "default": "t3code",
+          "enum": [
+            "dpcode",
+            "t3code"
+          ],
+          "enumItemLabels": [
+            "DP Code",
+            "T3 Code"
+          ],
+          "description": "Which embedded T3-compatible app VSmux launches when you click the T3 Code sidebar agent."
+        },
+        "VSmux.t3codeRepoRoot": {
+          "title": "T3 Code Repo Root",
           "type": "string",
           "default": "",
-          "description": "Absolute path to the dpcode-embed checkout. Use this when the managed DP Code runtime source lives outside the default sibling path."
+          "description": "Absolute path to the t3code-embed checkout. Use this when the managed T3 Code runtime source lives outside the default sibling path."
         },
         "VSmux.sidebarTheme": {
           "title": "Sidebar Theme",
