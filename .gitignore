@@ -24,3 +24,4 @@ docs/*
 .tmp/supervisor-repro4/
 .publish-tokens.local
 PUBLISHING.md
+.vsmux/
