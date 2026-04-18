@@ -8,25 +8,15 @@ Download links:
 
 ---
 
-### Latest Release: 4.3.1
+### Recent updates!
 
-- Idle T3 sessions can now join Claude and Codex in the opt-in auto-sleep flow when you set `VSmux.backgroundSessionTimeoutMinutes` to a non-zero value.
-- Sleeping embedded T3 panes now tear down their cached runtimes more cleanly, which helps avoid stale iframe state when a session goes to sleep and wakes back up later.
-- The workspace now keeps T3 threads projected even when they belong to an inactive group, so embedded browser threads stay available while you focus other terminal groups.
-
-### Previous Release: 4.3.0
-
-- Idle Claude and Codex sessions can auto-sleep now, but only when you opt in by setting `VSmux.backgroundSessionTimeoutMinutes` to a value like `20`, so the default behavior stays conservative.
-- Attention and working indicators feel calmer now: terminal sessions only clear done states after real interaction, and embedded T3 panes can track "working for..." timers more steadily instead of bouncing their last-activity timestamps.
-- Session cards can now open rename on double-click when you enable it in settings, and T3 cards now keep their context menu focused on remote access instead of exposing the old manual thread-ID action.
-- Codex can auto-title new sessions from the first real prompt, and `Copy Resume Command` now falls back to the original launch command for custom agents that do not have a known resume syntax.
-
-### Earlier Release: 4.2.0
-
-- T3 browser access is sturdier now: VSmux can reuse shared browser-access session state across windows, recover more gracefully when the shared access port is already in use, and keep remote-share links working with less manual setup.
-- T3 paste handling is stronger on macOS now, with a native clipboard fallback for pasted images, files, and text when the browser clipboard APIs come back empty.
-- Workspace readability controls are smoother now: terminal font size and T3 zoom preferences stay in sync more reliably, pane zoom controls support quick reset, and thread navigation inside T3 preserves session bindings more cleanly.
-- The sidebar has another polish pass, including clearer top-toolbar actions for search/history/pinned prompts, calmer group header interactions, a larger pinned-prompt editor, and tidier icon/header styling.
+- T3 remote access has grown into a much smoother workflow: VSmux can open embedded T3 sessions outside the editor, reuse shared browser-access state, and now prefers simple same-network LAN links before falling back to Tailscale when that is the better path.
+- You can keep reusable prompts pinned in the sidebar, and the surrounding sidebar workflow has kept getting cleaner with steadier collapse state, calmer controls, smarter search/history entry points, and more readable session cards.
+- Workspace readability is much stronger now, with pane zoom controls, better cached appearance preferences, smoother terminal font-size and T3 zoom syncing, and a roomier commit-message editor for built-in Git actions.
+- Auto-sleep coverage is broader: Claude, Codex, and now idle T3 sessions can all participate when you opt in with `VSmux.backgroundSessionTimeoutMinutes`.
+- Embedded T3 handling is sturdier across the board, including native macOS clipboard fallback, cleaner runtime teardown after sleep, stronger thread projection across inactive groups, and explicit confirmation before a pane switches to a different bound thread.
+- VSmux can now launch either bundled DP Code or T3 Code as the managed embedded provider, with better bundled-versus-checkout resolution so local dev setups and packaged installs behave more predictably.
+- Codex and shell-hook integrations are smarter too, with first-prompt auto-titling, better resume-command fallbacks for custom agents, and duplicate prompt-hook deliveries filtered out before they can spam session state.
 
 Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 

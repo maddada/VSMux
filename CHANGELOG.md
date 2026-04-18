@@ -2,6 +2,14 @@
 
 All notable user-facing changes are documented in this file.
 
+## 4.4.0 - 2026-04-19
+
+- Managed embedded T3 launches are more flexible now: VSmux can run either bundled DP Code or bundled T3 Code, and it is better at resolving whether to use packaged assets, sibling checkouts, or configured repo roots for each provider.
+- Embedded T3 sessions are much safer during close, reload, and restore flows now, with stronger bound-thread tracking, cleaner reload lifecycle handling, and better protection against stray thread changes while sessions are still starting or shutting down.
+- Workspace and sidebar T3 surfaces are clearer now: reloading sessions can show their transient state directly in the UI, thread changes require confirmation before rebinding a live pane, and close/reload behavior is steadier while grouped sessions move around.
+- T3 browser access links now prefer the local network path before Tailscale when both are available, which makes same-network phone testing faster while still keeping the Tailscale route available when you need it.
+- Codex shell-hook delivery is more reliable now because prompt-submit hooks are deduplicated before they mutate session state, and older versioned VSmux hook command paths are normalized back onto the current hook runner automatically.
+
 ## 4.3.1 - 2026-04-17
 
 - Idle T3 sessions now participate in the opt-in auto-sleep flow alongside Claude and Codex when `VSmux.backgroundSessionTimeoutMinutes` is set to a non-zero value.
