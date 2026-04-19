@@ -14,10 +14,10 @@ Download links:
       </a>
     </td>
     <td align="center" width="50%">      
-      <img src="./media/readme-download-cursor-tile.png" alt="Cursor" width="80" />
-      <img src="./media/readme-download-antigravity-tile.png" alt="Antigravity" width="80" />
-      <br />
       <a href="https://open-vsx.org/extension/maddada/VSmux">
+        <img src="./media/readme-download-cursor-tile.png" alt="Cursor" width="80" />
+        <img src="./media/readme-download-antigravity-tile.png" alt="Antigravity" width="80" />
+        <br />      
         <strong>Download for Cursor / Antigravity / Others</strong><br />
       </a>
     </td>
