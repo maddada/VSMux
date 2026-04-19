@@ -34,13 +34,13 @@ Download links:
 
 https://github.com/user-attachments/assets/5b41df9a-bb2e-45f3-b8bd-ed3d6b7e2968
 
----
+
 
 ## Companion App
 
 VSmux works great with my other tool that shows all running agent sessions in a mini floating bar on macOS (with running/waiting/done indicators). Check it out here: https://github.com/maddada/agent-manager-x
 
----
+
 
 ## Recent Updates
 
@@ -55,7 +55,7 @@ VSmux works great with my other tool that shows all running agent sessions in a 
 
 Full release notes: [CHANGELOG.md](./CHANGELOG.md)
 
----
+
 
 ## Who Is This For?
 
@@ -71,7 +71,7 @@ Then this is the extension for you! You get a very nice interface to work with y
 
 > Inspired by Antigravity agent panel, Codex app, T3Code, CMux, and Superset + many more.
 
----
+
 
 ## Main Features at a Glance
 
@@ -92,7 +92,7 @@ Then this is the extension for you! You get a very nice interface to work with y
 - Change Monitoring: Track AI-driven code edits in a dedicated panel while working on other tasks.
 - Advanced Settings: Highly configure the tool to match your exact workflow needs.
 
----
+
 
 ## Getting Started
 
@@ -101,7 +101,7 @@ Then this is the extension for you! You get a very nice interface to work with y
 3. Create your first session.
 4. Use the sidebar and hotkeys to change the visible split count and jump between sessions and groups.
 
----
+
 
 ## Recommended VS Code Setup for Worktrees & Parallel Agents
 
@@ -124,7 +124,7 @@ No more [50 lines pasted] nonsense. Paste all the lines you want and even select
 
 Gist on how to do this: https://gist.github.com/maddada/6eec96f4c8b467b81d69d291d4ac130e
 
----
+
 
 ## Contributions Welcome
 
