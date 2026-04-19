@@ -38,14 +38,8 @@ Download links:
 
 - Managed embedded sessions can launch with bundled DP Code or bundled T3 Code, with better packaged-versus-checkout resolution.
 - Embedded T3 reload, close, and thread-binding flows are safer and clearer, including visible reload state and confirmation before rebinding a live pane.
-
-### 4.3.1
-
 - Idle T3 sessions can join the opt-in auto-sleep flow.
 - Sleeping T3 panes now tear down stale runtimes more cleanly and stay projected across inactive groups more reliably.
-
-### 4.3.0
-
 - Auto-sleep expanded to Claude and Codex sessions when `VSmux.backgroundSessionTimeoutMinutes` is enabled.
 - Session handling is calmer overall, with double-click rename, steadier attention state, and better resume-command fallbacks for custom agents.
 
@@ -75,22 +69,22 @@ Then this is the extension for you! You get a very nice interface to work with y
 
 ## Main Features at a Glance
 
-- **Remote access**: Access your T3code & Agent CLI sessions from your phone/another machine (Overflow menu -> Remote Access)
-- **Multiplexed Split Views**: Split your workspace into multiple panes (e.g., view 2 up to 9 sessions at once) to monitor and interact with several tasks simultaneously, complete with per-pane zoom controls for easier reading.
-- **Unified Session Search & History**: Quickly search across all your sessions from various tools (WSL, Cloud Code, Codex) in one centralized location, rather than hunting through different tabs.
-- **Session Management & Organization**: Group, sort manually, or organize your sessions by recent activity to maintain a tidy workspace.
-- **Session Resumption**: Click on any past session from the history to instantly reload it and pick up exactly where you left off with the original AI agent.
-- **Quick Search & Launch**: Start typing the name of a closed session to quickly locate and reload it using just your arrow keys and the Enter button.
-- **Session Forking**: Branch off from an active session to retain its current context, allowing you to explore a new task or idea in a separate pane without altering the original chat.
-- **RAM/Resource Saver (Sleep Mode)**: Put inactive sessions to sleep to instantly free up memory (noted as roughly a 25% drop in RAM usage), ensuring background tasks don't slow down your machine.
-- **Customizable AI Agents**: Add, configure, and modify distinct profiles for various AI models. You can set up custom paths, run different agents side-by-side, or create specific profiles (like "work" vs. "personal").
-- **Cross-Agent Context Handoff**: Transfer the context of an active conversation from one AI model (e.g., GPT) directly to another (e.g., Claude) to continue the work seamlessly.
-- **Custom Action Buttons**: Map any terminal command to a clickable, draggable button. These custom actions can be configured to execute commands automatically, play a notification sound upon completion, or close when finished.
-- **Pinned Prompts**: Save reusable prompts directly in the sidebar so common instructions stay available across projects without digging through old notes.
-- **Integrated Browser**: Open web environments (like your localhost) directly within a VSmux pane. The browser remembers login states and includes a DevTools console, allowing you to select and send specific HTML elements directly to your AI agents.
-- **Automated Git Operations**: Built-in actions to automatically generate commit messages and push code changes.
-- **Code Change Monitoring**: Keep an eye on the codebase modifications your agents are making in a dedicated bottom-left panel while simultaneously directing other agents on separate tasks.
-- **Customizable Settings**: A robust settings menu that allows you to heavily configure the extension to fit your specific workflow preferences.
+- Remote Access: Control your sessions from your phone or another computer.
+- Split Views: View and zoom up to 9 sessions side-by-side to monitor multiple tasks at once.
+- Universal Search: Find and access all your tool sessions from one central location.
+- Session Organization: Group and sort your workspace to keep it clutter-free.
+- Resume Sessions: Instantly reload past sessions to pick up exactly where you left off.
+- Quick Launch: Quickly find and reopen closed sessions using just your keyboard.
+- Session Forking: Branch off an active session into a new pane to test ideas without losing your original context.
+- Sleep Mode: Suspend inactive sessions to free up memory and boost system performance.
+- Custom AI Profiles: Create and manage distinct profiles for different AI models and specific use cases.
+- Agent Handoff: Seamlessly transfer a conversation's context from one AI model directly to another.
+- Custom Action Buttons: Turn any terminal command into a clickable, customizable shortcut.
+- Pinned Prompts: Save frequently used instructions in the sidebar for quick access across projects.
+- Integrated Browser: View web environments, use DevTools, and send webpage elements directly to your AI from within your workspace.
+- Automated Git: Use built-in tools to automatically generate commit messages and push code.
+- Change Monitoring: Track AI-driven code edits in a dedicated panel while working on other tasks.
+- Advanced Settings: Highly configure the tool to match your exact workflow needs.
 
 ---
 
